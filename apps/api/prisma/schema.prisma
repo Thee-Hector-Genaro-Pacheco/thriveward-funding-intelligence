@@ -1,0 +1,203 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum EligibilityStatus {
+  HIGH_PRIORITY
+  INVESTIGATE
+  FUTURE_OPPORTUNITY
+  NOT_ELIGIBLE
+}
+
+enum TriStateStatus {
+  YES
+  NO
+  CONDITIONAL
+  UNKNOWN
+}
+
+enum OpportunityStatus {
+  EXTRACTED
+  PENDING_HUMAN_REVIEW
+  VERIFIED
+  ARCHIVED
+}
+
+model OrganizationProfile {
+  id                 String   @id @default(uuid())
+  name               String   @default("Bridge Forward Foundation")
+  status             String   @default("PRE_INCORPORATION")
+  taxStatus          String   @default("NOT_OBTAINED")
+  primaryPopulations String[]
+  primaryOutcome     String
+  coreModel          String
+  limitations        String[]
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  programs Program[]
+}
+
+model Program {
+  id                    String              @id @default(uuid())
+  organizationProfileId String
+  organizationProfile   OrganizationProfile @relation(fields: [organizationProfileId], references: [id])
+  name                  String
+  description           String
+  isOperational         Boolean             @default(true)
+  keyFocus              String?
+}
+
+model FundingSource {
+  id          String   @id @default(uuid())
+  name        String
+  agencyType  String
+  websiteUrl  String?
+  description String?
+  createdAt   DateTime @default(now())
+
+  opportunities FundingOpportunity[]
+}
+
+model FundingOpportunity {
+  id                           String            @id @default(uuid())
+  fundingSourceId              String?
+  fundingSource                FundingSource?    @relation(fields: [fundingSourceId], references: [id])
+  title                        String
+  fundingAgency                String
+  program                      String?
+  description                  String
+  sourceUrl                    String
+  status                       OpportunityStatus @default(PENDING_HUMAN_REVIEW)
+  openingDate                  String            @default("UNKNOWN")
+  deadline                     String            @default("UNKNOWN")
+  awardMin                     String            @default("UNKNOWN")
+  awardMax                     String            @default("UNKNOWN")
+  totalAvailableFunding        String            @default("UNKNOWN")
+  geography                    String            @default("UNKNOWN")
+  eligibleApplicantTypes       String[]
+  eligiblePopulations          String[]
+  matchRequirement             String            @default("UNKNOWN")
+  periodOfPerformance          String            @default("UNKNOWN")
+  allowableCosts               String[]
+  prohibitedCosts              String[]
+  participantCompensationRules String?
+  requiredPartnerships         String?
+  operatingHistoryRequirements String?
+  lastVerifiedTimestamp        DateTime          @default(now())
+  createdAt                    DateTime          @default(now())
+  updatedAt                    DateTime          @updatedAt
+
+  // Participant Support Allowability Matrix
+  supportTrainingStipends     TriStateStatus @default(UNKNOWN)
+  supportNeedsRelatedPayments TriStateStatus @default(UNKNOWN)
+  supportTransportation       TriStateStatus @default(UNKNOWN)
+  supportMeals                TriStateStatus @default(UNKNOWN)
+  supportChildcare            TriStateStatus @default(UNKNOWN)
+  supportTools                TriStateStatus @default(UNKNOWN)
+  supportPPE                  TriStateStatus @default(UNKNOWN)
+  supportWorkClothing         TriStateStatus @default(UNKNOWN)
+  supportLaptops              TriStateStatus @default(UNKNOWN)
+  supportTrainingEquipment    TriStateStatus @default(UNKNOWN)
+  supportCertifications       TriStateStatus @default(UNKNOWN)
+  supportPaidWorkExperience   TriStateStatus @default(UNKNOWN)
+  supportSubsidizedEmployment TriStateStatus @default(UNKNOWN)
+  supportOnTheJobTraining     TriStateStatus @default(UNKNOWN)
+  supportEmergencyAssistance  TriStateStatus @default(UNKNOWN)
+
+  // Relations
+  eligibilityRequirements EligibilityRequirement[]
+  allowableCostItems      AllowableCost[]
+  requiredDocuments       RequiredDocument[]
+  scoringCriteria         ScoringCriterion[]
+  sourceCitations         SourceCitation[]
+  opportunityAnalyses     OpportunityAnalysis[]
+}
+
+model EligibilityRequirement {
+  id                   String             @id @default(uuid())
+  fundingOpportunityId String
+  fundingOpportunity   FundingOpportunity @relation(fields: [fundingOpportunityId], references: [id])
+  criteriaCategory     String
+  description          String
+  isMandatory          Boolean            @default(true)
+  verifiedStatus       TriStateStatus     @default(UNKNOWN)
+  notes                String?
+}
+
+model AllowableCost {
+  id                   String             @id @default(uuid())
+  fundingOpportunityId String
+  fundingOpportunity   FundingOpportunity @relation(fields: [fundingOpportunityId], references: [id])
+  costCategory         String
+  isAllowable          TriStateStatus     @default(UNKNOWN)
+  restrictions         String?
+  citationRefId        String?
+}
+
+model RequiredDocument {
+  id                   String             @id @default(uuid())
+  fundingOpportunityId String
+  fundingOpportunity   FundingOpportunity @relation(fields: [fundingOpportunityId], references: [id])
+  documentName         String
+  description          String?
+  isMandatory          Boolean            @default(true)
+}
+
+model ScoringCriterion {
+  id                   String             @id @default(uuid())
+  fundingOpportunityId String
+  fundingOpportunity   FundingOpportunity @relation(fields: [fundingOpportunityId], references: [id])
+  criterionName        String
+  maxPoints            Int?
+  description          String?
+  evaluationFocus      String?
+}
+
+model SourceCitation {
+  id                   String             @id @default(uuid())
+  fundingOpportunityId String
+  fundingOpportunity   FundingOpportunity @relation(fields: [fundingOpportunityId], references: [id])
+  sourceUrl            String
+  sourceTitle          String?
+  sourceOrganization   String?
+  verificationDate     DateTime           @default(now())
+  quotedSection        String?
+  extractedClaim       String
+}
+
+model OpportunityAnalysis {
+  id                             String             @id @default(uuid())
+  fundingOpportunityId           String
+  fundingOpportunity             FundingOpportunity @relation(fields: [fundingOpportunityId], references: [id])
+  overallFitScore                Int // 0 - 100
+  eligibilityStatus              EligibilityStatus
+  missingEligibilityRequirements String[]
+  missingCapabilities            String[]
+  reasoningSummary               String
+
+  // Dimensional Scores (0 - 100)
+  missionAlignmentScore       Int @default(0)
+  populationAlignmentScore    Int @default(0)
+  programAlignmentScore       Int @default(0)
+  geographicEligibilityScore  Int @default(0)
+  applicantEligibilityScore   Int @default(0)
+  taxStatusEligibilityScore   Int @default(0)
+  organizationalMaturityScore Int @default(0)
+  requiredPartnershipsScore   Int @default(0)
+  allowableCostAlignmentScore Int @default(0)
+  awardSizeSuitabilityScore   Int @default(0)
+  deadlineFeasibilityScore    Int @default(0)
+  evidenceTrackRecordScore    Int @default(0)
+
+  // Governance
+  humanReviewRequired Boolean   @default(true)
+  humanReviewedAt     DateTime?
+  humanReviewedBy     String?
+  createdAt           DateTime  @default(now())
+}

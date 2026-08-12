@@ -1,0 +1,26 @@
+{
+  "name": "bridge-ai",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AI-assisted funding intelligence and nonprofit operations platform for Bridge Forward Foundation",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev --workspace=apps/web",
+    "dev:api": "npm run dev --workspace=apps/api",
+    "build": "npm run build --workspace=packages/shared && npm run build --workspace=apps/api && npm run build --workspace=apps/web",
+    "test": "npm run test --workspaces --if-present",
+    "db:generate": "npm run prisma:generate --workspace=apps/api",
+    "db:push": "npm run prisma:push --workspace=apps/api"
+  },
+  "keywords": [
+    "bridge-ai",
+    "funding-intelligence",
+    "reentry",
+    "nonprofit-operations"
+  ],
+  "author": "Bridge Forward Foundation",
+  "license": "UNLICENSED"
+}

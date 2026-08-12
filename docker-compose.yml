@@ -1,0 +1,61 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: bridge-ai-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bridge_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bridge_secure_pass_2026}
+      POSTGRES_DB: ${POSTGRES_DB:-bridge_ai_db}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-bridge_admin} -d ${POSTGRES_DB:-bridge_ai_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: bridge-ai-api
+    restart: unless-stopped
+    ports:
+      - "${PORT:-4000}:4000"
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      PORT: 4000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-bridge_admin}:${POSTGRES_PASSWORD:-bridge_secure_pass_2026}@postgres:5432/${POSTGRES_DB:-bridge_ai_db}?schema=public
+      FUNDING_AGENT_URL: http://funding-agent:8000
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  funding-agent:
+    build:
+      context: ./services/funding-agent
+    container_name: bridge-ai-funding-agent
+    restart: unless-stopped
+    ports:
+      - "${PYTHON_AGENT_PORT:-8000}:8000"
+    environment:
+      PORT: 8000
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: bridge-ai-web
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-3000}:80"
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:
