@@ -22,6 +22,8 @@ env/
 *.sqlite
 *.sqlite-journal
 prisma/migrations/
+.pgdata/
+
 
 # Logs
 logs

@@ -81,8 +81,38 @@ No claim may exist in the system without an associated citation or an explicit t
 
 ---
 
-## Security & Environment Integrity
+## Phase 1A Architecture — Database Persistence & Read APIs
 
-- Secrets and environment-specific configs are managed strictly through standard environment variables (`.env`).
-- Database credentials and API keys are strictly excluded from source repositories (`.gitignore`).
-- All API endpoints strictly audit human review actions (`humanReviewedAt`, `humanReviewedBy`).
+```
+[ HTTP GET /api/opportunities ]
+               │
+               ▼
+   [ Opportunity Router ]  ── (Validates query params: status, minimumFitScore, limit, page)
+               │
+               ▼
+   [ Opportunity Service ] ── (Executes Prisma relation queries with pagination)
+               │
+               ▼
+   [ Singleton Prisma Client ]
+               │
+               ▼
+   [ PostgreSQL Database ] ── (Holds seeded DEMO fixtures & migration 20260812003912_init_phase1a)
+```
+
+### 1. Prisma Persistence Layer
+- **Singleton Management**: Singleton instance in `apps/api/src/lib/prisma.ts` attached to `globalThis` in development to prevent hot-reload connection leaks, handling disconnect gracefully on `SIGINT` / `SIGTERM`.
+- **Database Schema**: Managed via Prisma migrations (`prisma/migrations/20260812003912_init_phase1a/migration.sql`), enforcing relational integrity across opportunities, sources, requirements, allowable costs, scoring criteria, participant support matrices, and citations.
+
+### 2. Service / Repository Boundary
+- `OpportunityService` (`apps/api/src/services/opportunityService.ts`) encapsulates all database interaction logic, query construction, filtering (`status`, `fundingType`, `minimumFitScore`), and pagination metadata generation.
+- Express route handlers delegate directly to `OpportunityService`, keeping HTTP transport concerns separate from data persistence.
+
+### 3. Read-Only Opportunity API
+- **`GET /api/opportunities`**: Returns paginated opportunity summaries including latest fit score analysis. Rejects invalid or unexpected query parameters with HTTP 400.
+- **`GET /api/opportunities/:id`**: Returns complete relation graph for deep review. Returns structured HTTP 404 error payload for non-existent IDs.
+
+### 4. Fixture-Versus-Verified Data Distinction
+- All synthetic demonstration records carry `isDemo: true` in the database schema and explicit `[DEMO]` prefix in titles.
+- Provenance citations for demo records explicitly state their synthetic nature.
+- The API and React UI enforce visual distinction (`DEMO FIXTURE` badges) so demonstration data is never blurred with future verified live opportunities.
+

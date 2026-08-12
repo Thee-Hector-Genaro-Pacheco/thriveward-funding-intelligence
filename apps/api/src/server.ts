@@ -2,6 +2,7 @@ import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import { healthRouter } from './routes/health';
+import { opportunitiesRouter } from './routes/opportunities';
 import { BRIDGE_FORWARD_PROFILE } from '@bridge-ai/shared';
 
 dotenv.config();
@@ -14,6 +15,7 @@ app.use(express.json());
 
 // Routes
 app.use('/health', healthRouter);
+app.use('/api/opportunities', opportunitiesRouter);
 
 // Organization profile route
 app.get('/api/profile', (req: Request, res: Response) => {
@@ -39,7 +41,11 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`🚀 Bridge AI Core API active on http://localhost:${PORT}`);
-  console.log(`🔍 Health check: http://localhost:${PORT}/health`);
-});
+if (process.env.NODE_ENV !== 'test') {
+  app.listen(PORT, () => {
+    console.log(`🚀 Bridge AI Core API active on http://localhost:${PORT}`);
+    console.log(`🔍 Health check: http://localhost:${PORT}/health`);
+  });
+}
+
+export { app };

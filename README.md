@@ -38,52 +38,99 @@ BridgeAI/
 
 ---
 
-## Quick Start (Phase 0 Foundation)
+## Quick Start & Verification (Phase 1A)
 
 ### Prerequisites
 - **Node.js**: `v18+`
 - **npm**: `v9+`
+- **PostgreSQL**: `v16+` (Native or Docker Compose)
 - **Python**: `3.10+`
-- **Docker & Docker Compose** (Optional for local containerized DB)
 
-### Installation & Build
+---
 
-1. **Install Node dependencies across workspace**:
+### Step-by-Step Execution Guide
+
+1. **Install Monorepo Dependencies**:
    ```bash
    npm install
    ```
 
-2. **Build Shared Package**:
+2. **Build Shared Types**:
    ```bash
    npm run build --workspace=packages/shared
    ```
 
-3. **Configure Environment**:
+3. **Configure Environment Variables**:
    ```bash
    cp .env.example .env
+   cp apps/api/.env.example apps/api/.env
    ```
 
-4. **Run Backend API**:
+4. **Database Startup & Migration**:
+   - *Option A (Docker Compose)*:
+     ```bash
+     docker-compose up -d postgres
+     ```
+   - *Option B (Local PostgreSQL)*:
+     Ensure PostgreSQL service is active listening on `localhost:5432` with database `bridge_ai_db`.
+
+   - *Run Migration*:
+     ```bash
+     npm run prisma:migrate --workspace=apps/api
+     ```
+
+5. **Seed Demonstration Records**:
+   ```bash
+   npm run prisma:seed --workspace=apps/api
+   ```
+
+6. **Run Automated Test Suite**:
+   ```bash
+   npm run test --workspace=apps/api
+   ```
+
+7. **Run Backend REST API**:
    ```bash
    npm run dev:api
    ```
-   *Health Check*: `http://localhost:4000/health`
+   *Health Check*: `http://localhost:4000/health`  
+   *List Opportunities*: `http://localhost:4000/api/opportunities`
 
-5. **Run Python Funding Agent**:
+8. **Run Python Funding Agent**:
    ```bash
-   cd services/funding-agent
-   python3 -m venv venv
-   source venv/bin/activate
-   pip install -r requirements.txt
-   python main.py
+   python3 services/funding-agent/main.py
    ```
    *Health Check*: `http://localhost:8000/health`
 
-6. **Run Frontend Web Shell**:
+9. **Run Web Dashboard Shell**:
    ```bash
    npm run dev:web
    ```
    *Web Dashboard*: `http://localhost:3000`
+
+---
+
+### Example cURL Verification Commands
+
+```bash
+# 1. Core API System Health Check
+curl -s http://localhost:4000/health
+
+# 2. List Demonstration Opportunities (Default Pagination)
+curl -s http://localhost:4000/api/opportunities
+
+# 3. Filter Opportunities by Minimum Fit Score (>= 80)
+curl -s "http://localhost:4000/api/opportunities?minimumFitScore=80"
+
+# 4. Filter Opportunities by Status
+curl -s "http://localhost:4000/api/opportunities?status=PENDING_HUMAN_REVIEW"
+
+# 5. Retrieve Complete Opportunity Review Record by ID
+curl -s http://localhost:4000/api/opportunities/demo-opp-001
+
+# 6. Verify 404 Error Payload for Non-Existent ID
+curl -s http://localhost:4000/api/opportunities/unknown-id-9999
+```
 
 ---
 

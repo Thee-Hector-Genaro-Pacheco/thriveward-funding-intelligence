@@ -70,6 +70,7 @@ model FundingOpportunity {
   fundingSource                FundingSource?    @relation(fields: [fundingSourceId], references: [id])
   title                        String
   fundingAgency                String
+  isDemo                       Boolean           @default(false)
   program                      String?
   description                  String
   sourceUrl                    String
