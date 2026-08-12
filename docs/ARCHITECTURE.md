@@ -159,3 +159,22 @@ No claim may exist in the system without an associated citation or an explicit t
 - **`IngestionRun`**: Tracks execution metadata (`searchParameters`, `startTime`, `completionTime`, `status`, `recordsDiscovered`, `recordsCreated`, `recordsUpdated`, `recordsUnchanged`, `recordsFailed`, `errorSummary`).
 - **`SourceSnapshot`**: Preserves complete raw JSON payload, SHA-256 payload hash, and retrieval timestamp for every imported/updated record.
 
+---
+
+## Phase 1C Architecture — Eligibility and Fit Analysis Foundation
+
+```
+[ POST /api/opportunities/:id/analyze ] ──> [ AnalysisService ] ──> Reads BRIDGE_FORWARD_PROFILE
+                                                                ──> Computes sourceFingerprint & profileHash
+                                                                ──> Calculates 12 Dimension Scores (Weights sum to 100)
+                                                                ──> Calculates 15 Participant Support Findings
+                                                                ──> Links SourceCitation records
+                                                                ──> Creates/Updates OpportunityAnalysis (isCurrent=true)
+
+[ POST /api/opportunities/:id/analysis/review ] ──> [ Auth Check: Bearer <BRIDGE_REVIEW_TOKEN> ]
+                                                  ──> [ AnalysisService.reviewAnalysis ]
+                                                  ──> Transactionally creates immutable AnalysisReview audit record
+                                                  ──> Updates OpportunityAnalysis reviewStatus = "HUMAN_REVIEWED"
+                                                  ──> Preserves Phase 1B FundingOpportunity.verificationStatus & lastVerifiedTimestamp
+```
+

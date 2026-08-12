@@ -173,7 +173,12 @@ async function main() {
       opportunityAnalyses: {
         create: [
           {
-            id: 'demo-analysis-001',
+            sourceFingerprint: 'e7f97d76262778912c9d819a78882fffbe77af5040f55771a2c7d7b5237dfb9e',
+            profileVersion: '1.0.0-phase0',
+            profileHash: '0678e0eab1d44e84e03dcb9b3df20ce9476d89a8bd9da48fff81af9050007e3e',
+            profileSnapshot: { profileId: 'bridge-forward-org-profile', version: '1.0.0-phase0' },
+            eligibilityDecision: 'ELIGIBLE',
+            recommendation: 'HIGH_PRIORITY',
             overallFitScore: 88,
             eligibilityStatus: EligibilityStatus.HIGH_PRIORITY,
             missingEligibilityRequirements: ['Requires finalized Fiscal Sponsor agreement prior to formal submission'],
@@ -289,6 +294,12 @@ async function main() {
         create: [
           {
             id: 'demo-analysis-002',
+            sourceFingerprint: 'e7f97d76262778912c9d819a78882fffbe77af5040f55771a2c7d7b5237dfb9e',
+            profileVersion: '1.0.0-phase0',
+            profileHash: '0678e0eab1d44e84e03dcb9b3df20ce9476d89a8bd9da48fff81af9050007e3e',
+            profileSnapshot: { profileId: 'bridge-forward-org-profile', version: '1.0.0-phase0' },
+            eligibilityDecision: 'NOT_ELIGIBLE',
+            recommendation: 'NOT_ELIGIBLE',
             overallFitScore: 42,
             eligibilityStatus: EligibilityStatus.NOT_ELIGIBLE,
             missingEligibilityRequirements: [
@@ -406,6 +417,12 @@ async function main() {
         create: [
           {
             id: 'demo-analysis-003',
+            sourceFingerprint: 'e7f97d76262778912c9d819a78882fffbe77af5040f55771a2c7d7b5237dfb9e',
+            profileVersion: '1.0.0-phase0',
+            profileHash: '0678e0eab1d44e84e03dcb9b3df20ce9476d89a8bd9da48fff81af9050007e3e',
+            profileSnapshot: { profileId: 'bridge-forward-org-profile', version: '1.0.0-phase0' },
+            eligibilityDecision: 'ELIGIBLE',
+            recommendation: 'HIGH_PRIORITY',
             overallFitScore: 94,
             eligibilityStatus: EligibilityStatus.HIGH_PRIORITY,
             missingEligibilityRequirements: ['Fiscal Sponsor agreement signature pending'],

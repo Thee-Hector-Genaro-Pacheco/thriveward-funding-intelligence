@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { OpportunityService } from '../services/opportunityService';
+import { AnalysisService } from '../services/analysisService';
 
 export const opportunitiesRouter = Router();
 
@@ -113,6 +114,101 @@ opportunitiesRouter.get('/:id', async (req: Request, res: Response) => {
     return res.status(500).json({
       error: 'Internal Server Error',
       message: err.message || 'Error retrieving opportunity',
+    });
+  }
+});
+
+/**
+ * POST /api/opportunities/:id/analyze
+ * Empty body only. Evaluates opportunity against Bridge Forward profile and creates/returns deterministic analysis.
+ */
+opportunitiesRouter.post('/:id/analyze', async (req: Request, res: Response) => {
+  try {
+    if (req.body && typeof req.body === 'object' && Object.keys(req.body).length > 0) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: `POST /api/opportunities/:id/analyze accepts an empty request body only. Unknown properties: ${Object.keys(req.body).join(', ')}`,
+      });
+    }
+
+    const { id } = req.params;
+    const analysis = await AnalysisService.analyzeOpportunity(id);
+    return res.status(200).json(analysis);
+  } catch (err: any) {
+    const statusCode = err.statusCode || 500;
+    return res.status(statusCode).json({
+      error: statusCode === 404 ? 'Not Found' : statusCode === 400 ? 'Bad Request' : 'Internal Server Error',
+      message: err.message || 'Error running opportunity analysis',
+    });
+  }
+});
+
+/**
+ * GET /api/opportunities/:id/analysis
+ * Returns current analysis, historical analysis versions, dimensions, findings, and reviews graph.
+ */
+opportunitiesRouter.get('/:id/analysis', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const result = await AnalysisService.getOpportunityAnalysis(id);
+    return res.status(200).json(result);
+  } catch (err: any) {
+    const statusCode = err.statusCode || 500;
+    return res.status(statusCode).json({
+      error: statusCode === 404 ? 'Not Found' : 'Internal Server Error',
+      message: err.message || 'Error retrieving opportunity analysis',
+    });
+  }
+});
+
+/**
+ * POST /api/opportunities/:id/analysis/review
+ * Submit human review decision on current analysis version. Requires Bearer Token.
+ */
+opportunitiesRouter.post('/:id/analysis/review', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const authHeader = req.headers.authorization;
+
+    const ALLOWED_REVIEW_PROPERTIES = new Set([
+      'analysisId',
+      'decision',
+      'reviewerId',
+      'reviewerNotes',
+      'allowabilityOverrides',
+    ]);
+    const unknownBodyKeys = Object.keys(req.body || {}).filter((k) => !ALLOWED_REVIEW_PROPERTIES.has(k));
+    if (unknownBodyKeys.length > 0) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: `Unknown property in review request body: ${unknownBodyKeys.join(', ')}`,
+      });
+    }
+
+    const { analysisId, decision, reviewerId, reviewerNotes, allowabilityOverrides } = req.body || {};
+
+    const updatedAnalysis = await AnalysisService.reviewAnalysis({
+      fundingOpportunityId: id,
+      analysisId,
+      decision,
+      reviewerId,
+      reviewerNotes,
+      allowabilityOverrides,
+      authHeader,
+    });
+
+    return res.status(200).json(updatedAnalysis);
+  } catch (err: any) {
+    const statusCode = err.statusCode || 500;
+    let errorTitle = 'Internal Server Error';
+    if (statusCode === 401) errorTitle = 'Unauthorized';
+    if (statusCode === 400) errorTitle = 'Bad Request';
+    if (statusCode === 404) errorTitle = 'Not Found';
+    if (statusCode === 409) errorTitle = 'Conflict';
+
+    return res.status(statusCode).json({
+      error: errorTitle,
+      message: err.message || 'Error processing analysis review',
     });
   }
 });

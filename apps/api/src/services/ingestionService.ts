@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
 import { GrantsGovClient } from '../integrations/grantsGov/grantsGovClient';
 import { GrantsGovMapper } from '../integrations/grantsGov/grantsGovMapper';
+import { getProfileHash, getCanonicalProfileJson } from '../config/bridgeForwardProfile';
 
 export interface IngestionOptions {
   keyword?: string;
@@ -214,6 +215,10 @@ export class IngestionService {
                 opportunityAnalyses: {
                   create: [
                     {
+                      sourceFingerprint: payloadHash,
+                      profileVersion: '1.0.0-phase0',
+                      profileHash: getProfileHash(),
+                      profileSnapshot: JSON.parse(getCanonicalProfileJson()),
                       overallFitScore: 0,
                       eligibilityStatus: 'INVESTIGATE',
                       missingEligibilityRequirements: ['Official source record imported via Grants.gov API pending human review'],

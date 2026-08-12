@@ -75,20 +75,23 @@ Each funding opportunity evaluates allowable participant supports across 15 stru
 
 ## 3. Bridge Fit Scoring & Classification Engine
 
-Bridge AI evaluates opportunities along **12 core dimensions**:
+### Phase 1C 12-Dimension Scoring Weights (Total = 100)
 
-1. **Mission Alignment**: Fit with reentry and independence goals.
-2. **Population Alignment**: Fit with justice-involved adults / system-impacted youth.
-3. **Program Alignment**: Fit with Controls to Code, Bridge Reentry, Bridge Work, etc.
-4. **Geographic Eligibility**: California / target region match.
-5. **Applicant Eligibility**: Pre-incorporation entity compatibility.
-6. **Tax-Status Eligibility**: Non-501(c)(3) / fiscal sponsor compatibility.
-7. **Organizational Maturity**: Track record and operating history requirements.
-8. **Required Partnerships**: Feasibility of mandatory MOUs.
-9. **Allowable-Cost Alignment**: Program cost eligibility.
-10. **Award-Size Suitability**: Budget size vs. pilot capacity (~15 participants).
-11. **Deadline Feasibility**: Application preparation timeframe.
-12. **Evidence / Track-Record Requirements**: Required prior cohort outcome metrics.
+| Dimension Key | Weight | Critical Eligibility Dimension |
+| :--- | :---: | :---: |
+| `applicantTypeTaxStatus` | 15 | Yes |
+| `operatingHistoryReadiness` | 10 | Yes |
+| `geographicEligibility` | 10 | Yes |
+| `targetPopulationAlignment` | 15 | Yes |
+| `programActivityAlignment` | 15 | No |
+| `participantSupportAlignment` | 10 | No |
+| `awardSizeBudgetFit` | 5 | No |
+| `matchCostShareFeasibility` | 5 | No |
+| `deadlineApplicationReadiness` | 5 | No |
+| `partnershipRequirements` | 3 | No |
+| `complianceReportingCapacity` | 3 | No |
+| `strategicMissionAlignment` | 4 | No |
+
 
 ### Classification Categories
 

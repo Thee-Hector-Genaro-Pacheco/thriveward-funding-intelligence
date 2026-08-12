@@ -86,12 +86,17 @@ BridgeAI/
      npm run ingest:grants-gov --workspace=apps/api -- --keyword "reentry" --limit 3 --persist
      ```
 
-7. **Run Automated Test Suite (15 Tests)**:
+7. **Phase 1C Eligibility & Fit Analysis Foundation**:
+   - *Trigger Deterministic Analysis*: `POST http://localhost:4000/api/opportunities/:id/analyze`
+   - *Retrieve Full Analysis Breakdown*: `GET http://localhost:4000/api/opportunities/:id/analysis`
+   - *Submit Human Review Decision*: `POST http://localhost:4000/api/opportunities/:id/analysis/review` (Requires `Authorization: Bearer <BRIDGE_REVIEW_TOKEN>`)
+
+8. **Run Automated Test Suite (93 Tests)**:
    ```bash
    npm run test --workspace=apps/api
    ```
 
-8. **Run Backend REST API**:
+9. **Run Backend REST API**:
    ```bash
    npm run dev:api
    ```

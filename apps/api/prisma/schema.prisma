@@ -182,17 +182,29 @@ model SourceCitation {
   verificationDate     DateTime           @default(now())
   quotedSection        String?
   extractedClaim       String
+
+  eligibilityFindings        EligibilityFinding[]
+  analysisDimensions         AnalysisDimension[]
+  participantSupportFindings ParticipantSupportFinding[]
 }
 
 model OpportunityAnalysis {
   id                             String             @id @default(uuid())
   fundingOpportunityId           String
-  fundingOpportunity             FundingOpportunity @relation(fields: [fundingOpportunityId], references: [id])
-  overallFitScore                Int // 0 - 100
-  eligibilityStatus              EligibilityStatus
+  fundingOpportunity             FundingOpportunity @relation(fields: [fundingOpportunityId], references: [id], onDelete: Cascade)
+  analysisVersion                String             @default("1.0")
+  sourceFingerprint              String
+  profileVersion                 String             @default("1.0.0-phase0")
+  profileHash                    String
+  profileSnapshot                Json
+  eligibilityDecision            String             @default("INVESTIGATE") // ELIGIBLE, INVESTIGATE, NOT_ELIGIBLE
+  recommendation                 String             @default("INVESTIGATE") // HIGH_PRIORITY, INVESTIGATE, FUTURE_OPPORTUNITY, NOT_ELIGIBLE
+  overallFitScore                Int                @default(0) // 0 - 100
+  evidenceCoverage               Int                @default(0) // 0 - 100
+  eligibilityStatus              EligibilityStatus  @default(INVESTIGATE)
   missingEligibilityRequirements String[]
   missingCapabilities            String[]
-  reasoningSummary               String
+  reasoningSummary               String             @default("Analysis pending.")
 
   // Dimensional Scores (0 - 100)
   missionAlignmentScore       Int @default(0)
@@ -208,11 +220,84 @@ model OpportunityAnalysis {
   deadlineFeasibilityScore    Int @default(0)
   evidenceTrackRecordScore    Int @default(0)
 
-  // Governance
+  // Governance & Review
+  reviewStatus        String    @default("PENDING_HUMAN_REVIEW") // PENDING_HUMAN_REVIEW, HUMAN_REVIEWED
+  reviewedAt          DateTime?
+  reviewerId          String?
+  reviewerNotes       String?
+  isCurrent           Boolean   @default(true)
   humanReviewRequired Boolean   @default(true)
   humanReviewedAt     DateTime?
   humanReviewedBy     String?
   createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  // Phase 1C Relations
+  eligibilityFindings        EligibilityFinding[]
+  analysisDimensions         AnalysisDimension[]
+  participantSupportFindings ParticipantSupportFinding[]
+  analysisReviews            AnalysisReview[]
+}
+
+model EligibilityFinding {
+  id                    String              @id @default(uuid())
+  opportunityAnalysisId String
+  opportunityAnalysis   OpportunityAnalysis @relation(fields: [opportunityAnalysisId], references: [id], onDelete: Cascade)
+  criterionKey          String
+  criterionText         String
+  outcome               String // SATISFIED, FAILED, UNKNOWN
+  remediable            Boolean             @default(false)
+  rationale             String
+  evidenceStatus        String // EVIDENCE_PRESENT, MISSING_EVIDENCE
+  sourceCitationId      String?
+  sourceCitation        SourceCitation?     @relation(fields: [sourceCitationId], references: [id])
+  evidenceQuote         String?
+}
+
+model AnalysisDimension {
+  id                    String              @id @default(uuid())
+  opportunityAnalysisId String
+  opportunityAnalysis   OpportunityAnalysis @relation(fields: [opportunityAnalysisId], references: [id], onDelete: Cascade)
+  dimensionKey          String
+  weight                Int
+  matchStatus           String // MATCH, PARTIAL, MISMATCH, UNKNOWN
+  scoreAwarded          Int
+  rationale             String
+  evidenceStatus        String // EVIDENCE_PRESENT, MISSING_EVIDENCE
+  sourceCitationId      String?
+  sourceCitation        SourceCitation?     @relation(fields: [sourceCitationId], references: [id])
+  evidenceQuote         String?
+
+  @@unique([opportunityAnalysisId, dimensionKey])
+}
+
+model ParticipantSupportFinding {
+  id                      String              @id @default(uuid())
+  opportunityAnalysisId   String
+  opportunityAnalysis     OpportunityAnalysis @relation(fields: [opportunityAnalysisId], references: [id], onDelete: Cascade)
+  category                String
+  automatedStatus         TriStateStatus      @default(UNKNOWN) // YES, NO, CONDITIONAL, UNKNOWN
+  automatedRationale      String
+  evidenceStatus          String // EVIDENCE_PRESENT, MISSING_EVIDENCE
+  sourceCitationId        String?
+  sourceCitation          SourceCitation?     @relation(fields: [sourceCitationId], references: [id])
+  evidenceQuote           String?
+  humanOverrideStatus     TriStateStatus?
+  humanOverrideNotes      String?
+  humanOverrideReviewerId String?
+  humanOverrideAt         DateTime?
+
+  @@unique([opportunityAnalysisId, category])
+}
+
+model AnalysisReview {
+  id                    String              @id @default(uuid())
+  opportunityAnalysisId String
+  opportunityAnalysis   OpportunityAnalysis @relation(fields: [opportunityAnalysisId], references: [id], onDelete: Cascade)
+  decision              String // APPROVED, REJECTED, FLAGGED
+  reviewerId            String
+  reviewerNotes         String
+  reviewedAt            DateTime            @default(now())
 }
 
 model IngestionRun {
