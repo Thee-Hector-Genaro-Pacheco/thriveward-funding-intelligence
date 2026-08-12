@@ -24,6 +24,9 @@
 The primary phase of Bridge AI focuses on **Funding Intelligence**, transforming unstructured funding opportunities into structured, verifiable insights.
 
 ### Functional Capabilities
+- **Official Grants.gov REST Ingestion**: Ingest official federal grant notices directly from the Grants.gov API using unauthenticated `search2` and `fetchOpportunity` endpoints, preserving exact source provenance and official URLs (`https://www.grants.gov/search-results-detail/{opportunityId}`).
+- **Source-Owned vs. Human-Owned Field Isolation**: Re-ingestion updates official source fields (title, agency, deadlines, amounts, synopsis) while preserving human notes, determinations, and scoring reviews intact.
+- **Audit Logging & Payload Hashing**: Store SHA-256 payload hashes and raw JSON snapshots (`SourceSnapshot`) for every imported or updated official opportunity.
 - **Opportunity Extraction**: Extract grant titles, funding agencies, programs, deadlines, award floors/ceilings, total program funding, geographic restrictions, match requirements, allowable/prohibited costs, and required application documents.
 - **Participant Support Analysis**: Explicitly identify allowable participant support categories:
   - Training stipends

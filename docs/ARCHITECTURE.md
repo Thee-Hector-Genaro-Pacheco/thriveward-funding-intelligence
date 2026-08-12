@@ -116,3 +116,46 @@ No claim may exist in the system without an associated citation or an explicit t
 - Provenance citations for demo records explicitly state their synthetic nature.
 - The API and React UI enforce visual distinction (`DEMO FIXTURE` badges) so demonstration data is never blurred with future verified live opportunities.
 
+---
+
+## Phase 1B Architecture — Verified Grants.gov Ingestion & Field Ownership
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│                   Grants.gov Official REST API                         │
+│   POST /v1/api/search2  │  POST /v1/api/fetchOpportunity               │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │ Unauthenticated HTTP REST
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                 GrantsGovClient & GrantsGovMapper                      │
+│   • Timeout (15s) & Exponential Backoff Retry (HTTP 429/5xx)           │
+│   • Zod Runtime Payload Validation (grantsGovSchemas.ts)               │
+│   • Pure Mapper: Null safety, strict date parsing, no invented claims  │
+└───────────────────────────────────┬────────────────────────────────────┘
+                                    │
+                                    ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│                    IngestionService & Storage                          │
+│   • IngestionRun Audit Logging                                         │
+│   • SHA-256 Payload Hash Comparison (Idempotent execution)             │
+│   • Field Ownership Boundary Enforcement                               │
+│   • Transactional Upsert & SourceSnapshot Creation                     │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+### 1. Grants.gov Integration Layer
+- **Client (`GrantsGovClient`)**: Executes unauthenticated REST POST requests to Grants.gov (`/v1/api/search2`, `/v1/api/fetchOpportunity`). Retries transient 429/5xx failures up to 3 times with exponential delay. Sends custom `User-Agent: BridgeAI-FundingIntelligence/1.0`.
+- **Validation (`grantsGovSchemas`)**: Uses Zod runtime schemas to validate external API responses before processing.
+- **Mapper (`GrantsGovMapper`)**: Normalizes external fields to `FundingOpportunity` schema. Preserves missing/null values as `UNKNOWN` or `null`. Official human-readable URLs are constructed as `https://www.grants.gov/search-results-detail/{opportunityId}`.
+
+### 2. Field Ownership Boundary (Source-Owned vs. Human-Owned)
+- **Source-Owned Fields** (Overwritten on re-ingestion if SHA-256 payload hash changes):
+  - `title`, `fundingOpportunityNumber`, `fundingAgency`, `program`, `description`, `sourceUrl`, `openingDate`, `deadline`, `awardMin`, `awardMax`, `totalAvailableFunding`, `eligibleApplicantTypes`, `allowableCosts`, `sourceLastUpdatedTimestamp`, `sourcePayloadHash`.
+- **Human-Owned Protected Fields** (NEVER overwritten by automated re-ingestion):
+  - `verificationStatus` (when updated to `HUMAN_VERIFIED` or `REJECTED`), human review notes, manual eligibility determinations, human-entered participant support allowability, locally authored analyses.
+
+### 3. Provenance & Audit Logging
+- **`IngestionRun`**: Tracks execution metadata (`searchParameters`, `startTime`, `completionTime`, `status`, `recordsDiscovered`, `recordsCreated`, `recordsUpdated`, `recordsUnchanged`, `recordsFailed`, `errorSummary`).
+- **`SourceSnapshot`**: Preserves complete raw JSON payload, SHA-256 payload hash, and retrieval timestamp for every imported/updated record.
+

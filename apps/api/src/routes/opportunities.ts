@@ -4,11 +4,20 @@ import { OpportunityService } from '../services/opportunityService';
 export const opportunitiesRouter = Router();
 
 // Allowed query parameters for GET /api/opportunities validation
-const ALLOWED_QUERY_PARAMS = new Set(['status', 'fundingType', 'minimumFitScore', 'page', 'limit']);
+const ALLOWED_QUERY_PARAMS = new Set([
+  'status',
+  'fundingType',
+  'minimumFitScore',
+  'dataKind',
+  'sourceSystem',
+  'verificationStatus',
+  'page',
+  'limit',
+]);
 
 /**
  * GET /api/opportunities
- * Query params: status, fundingType, minimumFitScore, page, limit
+ * Query params: status, fundingType, minimumFitScore, dataKind, sourceSystem, verificationStatus, page, limit
  */
 opportunitiesRouter.get('/', async (req: Request, res: Response) => {
   try {
@@ -21,7 +30,7 @@ opportunitiesRouter.get('/', async (req: Request, res: Response) => {
       });
     }
 
-    const { status, fundingType, minimumFitScore, page, limit } = req.query;
+    const { status, fundingType, minimumFitScore, dataKind, sourceSystem, verificationStatus, page, limit } = req.query;
 
     // Validate numeric parameters
     let parsedMinimumFitScore: number | undefined;
@@ -67,6 +76,9 @@ opportunitiesRouter.get('/', async (req: Request, res: Response) => {
       status: status ? String(status) : undefined,
       fundingType: fundingType ? String(fundingType) : undefined,
       minimumFitScore: parsedMinimumFitScore,
+      dataKind: dataKind ? String(dataKind) : undefined,
+      sourceSystem: sourceSystem ? String(sourceSystem) : undefined,
+      verificationStatus: verificationStatus ? String(verificationStatus) : undefined,
       page: parsedPage,
       limit: parsedLimit,
     });

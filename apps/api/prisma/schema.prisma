@@ -71,6 +71,13 @@ model FundingOpportunity {
   title                        String
   fundingAgency                String
   isDemo                       Boolean           @default(false)
+  sourceSystem                 String            @default("DEMO_FIXTURE")
+  externalOpportunityId        String?
+  fundingOpportunityNumber     String?
+  sourceLastUpdatedTimestamp   DateTime?
+  sourcePayloadHash            String?
+  officialSourceAuthority      String?
+  verificationStatus           String            @default("PENDING_HUMAN_REVIEW")
   program                      String?
   description                  String
   sourceUrl                    String
@@ -90,7 +97,9 @@ model FundingOpportunity {
   participantCompensationRules String?
   requiredPartnerships         String?
   operatingHistoryRequirements String?
-  lastVerifiedTimestamp        DateTime          @default(now())
+  firstRetrievedAt             DateTime?
+  lastRetrievedAt              DateTime?
+  lastVerifiedTimestamp        DateTime?
   createdAt                    DateTime          @default(now())
   updatedAt                    DateTime          @updatedAt
 
@@ -118,6 +127,9 @@ model FundingOpportunity {
   scoringCriteria         ScoringCriterion[]
   sourceCitations         SourceCitation[]
   opportunityAnalyses     OpportunityAnalysis[]
+  snapshots               SourceSnapshot[]
+
+  @@unique([sourceSystem, externalOpportunityId])
 }
 
 model EligibilityRequirement {
@@ -201,4 +213,35 @@ model OpportunityAnalysis {
   humanReviewedAt     DateTime?
   humanReviewedBy     String?
   createdAt           DateTime  @default(now())
+}
+
+model IngestionRun {
+  id                String    @id @default(uuid())
+  sourceSystem      String    @default("GRANTS_GOV")
+  searchParameters  Json
+  startTime         DateTime  @default(now())
+  completionTime    DateTime?
+  status            String    @default("IN_PROGRESS") // IN_PROGRESS, COMPLETED, FAILED, PARTIAL_SUCCESS
+  recordsDiscovered Int       @default(0)
+  recordsCreated    Int       @default(0)
+  recordsUpdated    Int       @default(0)
+  recordsUnchanged  Int       @default(0)
+  recordsFailed     Int       @default(0)
+  errorSummary      String?
+  createdAt         DateTime  @default(now())
+
+  snapshots SourceSnapshot[]
+}
+
+model SourceSnapshot {
+  id                    String              @id @default(uuid())
+  ingestionRunId        String?
+  ingestionRun          IngestionRun?       @relation(fields: [ingestionRunId], references: [id])
+  fundingOpportunityId  String?
+  fundingOpportunity    FundingOpportunity? @relation(fields: [fundingOpportunityId], references: [id])
+  externalOpportunityId String
+  retrievalTimestamp    DateTime            @default(now())
+  payloadHash           String
+  schemaVersion         String              @default("1.0")
+  rawPayload            Json
 }

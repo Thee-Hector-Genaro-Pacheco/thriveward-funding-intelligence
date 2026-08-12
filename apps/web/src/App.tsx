@@ -12,14 +12,20 @@ interface OpportunityItem {
   id: string;
   title: string;
   fundingAgency: string;
-  program?: string;
+  fundingOpportunityNumber?: string;
+  sourceSystem?: string;
+  externalOpportunityId?: string;
   isDemo: boolean;
+  verificationStatus?: string;
+  program?: string;
   description: string;
   sourceUrl: string;
   status: string;
+  openingDate: string;
   deadline: string;
   awardMin: string;
   awardMax: string;
+  totalAvailableFunding: string;
   geography: string;
   supportTrainingStipends: string;
   supportTransportation: string;
@@ -29,6 +35,7 @@ interface OpportunityItem {
   supportTrainingEquipment: string;
   supportCertifications: string;
   supportPaidWorkExperience: string;
+  lastVerifiedTimestamp?: string;
   fundingSource?: {
     name: string;
     agencyType: string;
@@ -59,10 +66,6 @@ interface OpportunityItem {
     overallFitScore: number;
     eligibilityStatus: string;
     reasoningSummary: string;
-    missionAlignmentScore: number;
-    populationAlignmentScore: number;
-    programAlignmentScore: number;
-    organizationalMaturityScore: number;
   }>;
 }
 
@@ -75,6 +78,7 @@ export default function App() {
   });
 
   const [opportunities, setOpportunities] = useState<OpportunityItem[]>([]);
+  const [activeFilter, setActiveFilter] = useState<'all' | 'demo' | 'official'>('all');
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedOpp, setSelectedOpp] = useState<OpportunityItem | null>(null);
@@ -103,7 +107,14 @@ export default function App() {
       setLoading(true);
       setError(null);
       try {
-        const res = await fetch('http://localhost:4000/api/opportunities');
+        let url = 'http://localhost:4000/api/opportunities';
+        if (activeFilter === 'demo') {
+          url += '?dataKind=demo';
+        } else if (activeFilter === 'official') {
+          url += '?dataKind=official';
+        }
+
+        const res = await fetch(url);
         if (res.ok) {
           const json = await res.json();
           setOpportunities(json.data || []);
@@ -121,16 +132,16 @@ export default function App() {
     fetchOpportunities();
     const interval = setInterval(checkHealth, 15000);
     return () => clearInterval(interval);
-  }, []);
+  }, [activeFilter]);
 
   return (
     <div className="container">
       {/* Header */}
       <header>
-        <div className="header-badge">Phase 1A • Database Persistence & APIs Active</div>
+        <div className="header-badge">Phase 1B • Verified Grants.gov Ingestion Active</div>
         <h1 className="brand-title">Bridge AI</h1>
         <p className="brand-subtitle">
-          Funding Intelligence for Bridge Forward Foundation
+          Funding Intelligence & Grants.gov Provenance for Bridge Forward Foundation
         </p>
       </header>
 
@@ -173,7 +184,7 @@ export default function App() {
             Python Funding Agent
           </div>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-            Port 8000 • FastAPI / Python Service
+            Port 8000 • FastAPI Service
           </p>
           <div style={{ marginTop: '0.75rem' }}>
             <span className="badge badge-purple">{health.pythonAgentStatus}</span>
@@ -183,10 +194,10 @@ export default function App() {
         <div className="card">
           <div className="section-title">
             <span className="status-indicator status-active"></span>
-            PostgreSQL Database
+            PostgreSQL DB & Ingestion
           </div>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>
-            Port 5432 • Prisma Migration 1A Applied
+            Grants.gov Ingestion Engine Active
           </p>
           <div style={{ marginTop: '0.75rem' }}>
             <span className="badge badge-amber">{health.dbStatus}</span>
@@ -196,23 +207,44 @@ export default function App() {
 
       {/* Funding Opportunities Review Section */}
       <div className="card" style={{ marginBottom: '2.5rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
           <div>
             <h2 className="section-title" style={{ marginBottom: '0.25rem' }}>
               🎯 Funding Opportunities Review Feed
             </h2>
             <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-              Structured grant opportunities evaluated against Bridge Forward Foundation ground-truth profile.
+              Official Grants.gov notices & demonstration fixtures evaluated against Bridge Forward ground truth.
             </p>
           </div>
-          <span className="badge badge-purple">DEMO FIXTURE ISOLATION ACTIVE</span>
+
+          {/* Filter Tabs */}
+          <div style={{ display: 'flex', gap: '0.5rem', background: 'rgba(0,0,0,0.3)', padding: '0.3rem', borderRadius: '0.6rem' }}>
+            <button
+              className={`filter-btn ${activeFilter === 'all' ? 'active' : ''}`}
+              onClick={() => setActiveFilter('all')}
+            >
+              All Records
+            </button>
+            <button
+              className={`filter-btn ${activeFilter === 'official' ? 'active' : ''}`}
+              onClick={() => setActiveFilter('official')}
+            >
+              Official Grants.gov
+            </button>
+            <button
+              className={`filter-btn ${activeFilter === 'demo' ? 'active' : ''}`}
+              onClick={() => setActiveFilter('demo')}
+            >
+              Demo Fixtures
+            </button>
+          </div>
         </div>
 
         {/* Loading State */}
         {loading && (
           <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
             <div className="spinner"></div>
-            <p style={{ marginTop: '1rem', fontWeight: 600 }}>Loading funding intelligence records...</p>
+            <p style={{ marginTop: '1rem', fontWeight: 600 }}>Loading funding opportunities...</p>
           </div>
         )}
 
@@ -221,7 +253,7 @@ export default function App() {
           <div className="error-banner">
             <strong>⚠️ Error Fetching Opportunities:</strong> {error}
             <p style={{ fontSize: '0.85rem', marginTop: '0.5rem' }}>
-              Make sure the API server is running on port 4000 (`npm run dev:api`).
+              Make sure the API server is active on port 4000.
             </p>
           </div>
         )}
@@ -229,23 +261,19 @@ export default function App() {
         {/* Empty State */}
         {!loading && !error && opportunities.length === 0 && (
           <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-            <p style={{ fontSize: '1.1rem', fontWeight: 600 }}>No funding opportunities found.</p>
-            <p style={{ fontSize: '0.9rem' }}>Run <code>npm run prisma:seed</code> in apps/api to seed demonstration records.</p>
+            <p style={{ fontSize: '1.1rem', fontWeight: 600 }}>No opportunities matching current filter.</p>
+            <p style={{ fontSize: '0.9rem', marginTop: '0.35rem' }}>
+              Run <code>npm run ingest:grants-gov --workspace=apps/api -- --keyword "reentry" --limit 3 --persist</code> to import live records.
+            </p>
           </div>
         )}
 
         {/* Opportunity Cards List */}
         {!loading && !error && opportunities.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginTop: '1.5rem' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginTop: '1.25rem' }}>
             {opportunities.map((opp) => {
               const analysis = opp.opportunityAnalyses?.[0];
               const fitScore = analysis?.overallFitScore ?? 0;
-              const statusClass =
-                analysis?.eligibilityStatus === 'HIGH_PRIORITY'
-                  ? 'badge-blue'
-                  : analysis?.eligibilityStatus === 'NOT_ELIGIBLE'
-                  ? 'badge-rose'
-                  : 'badge-amber';
 
               return (
                 <div
@@ -253,7 +281,7 @@ export default function App() {
                   className="opp-card"
                   onClick={() => setSelectedOpp(opp)}
                   style={{
-                    background: 'rgba(15, 23, 42, 0.6)',
+                    background: 'rgba(15, 23, 42, 0.65)',
                     border: selectedOpp?.id === opp.id ? '2px solid #3b82f6' : '1px solid var(--border-color)',
                     borderRadius: '0.85rem',
                     padding: '1.35rem',
@@ -263,24 +291,45 @@ export default function App() {
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem' }}>
                     <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
-                        {opp.isDemo && <span className="badge badge-amber">DEMO FIXTURE</span>}
-                        <span className={`badge ${statusClass}`}>{analysis?.eligibilityStatus || opp.status}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem', flexWrap: 'wrap' }}>
+                        {opp.isDemo ? (
+                          <span className="badge badge-amber">DEMO FIXTURE</span>
+                        ) : (
+                          <span className="badge badge-purple">OFFICIAL SOURCE — PENDING HUMAN REVIEW</span>
+                        )}
+
+                        {opp.fundingOpportunityNumber && (
+                          <span className="badge badge-blue">#{opp.fundingOpportunityNumber}</span>
+                        )}
                       </div>
+
                       <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#f8fafc' }}>{opp.title}</h3>
                       <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
                         <strong>Agency:</strong> {opp.fundingAgency} • <strong>Geography:</strong> {opp.geography}
                       </p>
                     </div>
 
-                    {/* Fit Score Badge */}
-                    <div style={{ textAlign: 'right', minWidth: '110px' }}>
-                      <div style={{ fontSize: '1.8rem', fontWeight: 800, color: fitScore >= 80 ? '#60a5fa' : fitScore >= 50 ? '#fbbf24' : '#f87171' }}>
-                        {fitScore}<span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>/100</span>
-                      </div>
-                      <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase' }}>
-                        Bridge Fit Score
-                      </div>
+                    {/* Fit Score or Verification Badge */}
+                    <div style={{ textAlign: 'right', minWidth: '130px' }}>
+                      {opp.isDemo ? (
+                        <>
+                          <div style={{ fontSize: '1.8rem', fontWeight: 800, color: fitScore >= 80 ? '#60a5fa' : fitScore >= 50 ? '#fbbf24' : '#f87171' }}>
+                            {fitScore}<span style={{ fontSize: '1rem', color: 'var(--text-muted)' }}>/100</span>
+                          </div>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase' }}>
+                            Bridge Fit Score
+                          </div>
+                        </>
+                      ) : (
+                        <>
+                          <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#c084fc' }}>
+                            UNREVIEWED
+                          </div>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase' }}>
+                            Review Status
+                          </div>
+                        </>
+                      )}
                     </div>
                   </div>
 
@@ -288,12 +337,18 @@ export default function App() {
                     {opp.description}
                   </p>
 
+                  {!opp.isDemo && (
+                    <div className="provenance-warning" style={{ marginTop: '0.75rem', fontSize: '0.8rem', background: 'rgba(139, 92, 246, 0.1)', border: '1px solid rgba(139, 92, 246, 0.25)', color: '#d8b4fe', padding: '0.5rem 0.75rem', borderRadius: '0.4rem' }}>
+                      ℹ️ Official Grants.gov provenance confirmed. Opportunity relevance does not constitute Bridge Forward eligibility until reviewed by authorized personnel.
+                    </div>
+                  )}
+
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)', fontSize: '0.825rem', color: 'var(--text-muted)' }}>
                     <span>💰 Range: <strong>{opp.awardMin} – {opp.awardMax}</strong></span>
                     {opp.deadline && opp.deadline !== 'UNKNOWN' && (
-                      <span>🗓️ Deadline: <strong>{opp.deadline}</strong></span>
+                      <span>🗓️ Closing Date: <strong>{opp.deadline}</strong></span>
                     )}
-                    <span style={{ color: '#60a5fa', fontWeight: 600 }}>Click to review details →</span>
+                    <span style={{ color: '#60a5fa', fontWeight: 600 }}>Review Details →</span>
                   </div>
                 </div>
               );
@@ -302,16 +357,26 @@ export default function App() {
         )}
       </div>
 
-      {/* Expandable Detail View Drawer / Card */}
+      {/* Expandable Detail View Drawer */}
       {selectedOpp && (
         <div className="card" style={{ border: '2px solid #3b82f6', background: 'rgba(15, 23, 42, 0.95)', marginBottom: '2.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem', marginBottom: '1.25rem' }}>
             <div>
               <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.35rem' }}>
-                {selectedOpp.isDemo && <span className="badge badge-amber">DEMO FIXTURE DATA</span>}
-                <span className="badge badge-blue">ID: {selectedOpp.id}</span>
+                {selectedOpp.isDemo ? (
+                  <span className="badge badge-amber">DEMO FIXTURE</span>
+                ) : (
+                  <span className="badge badge-purple">OFFICIAL GRANTS.GOV RECORD</span>
+                )}
+                <span className="badge badge-blue">ID: {selectedOpp.externalOpportunityId || selectedOpp.id}</span>
               </div>
               <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#ffffff' }}>{selectedOpp.title}</h2>
+              <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: '0.25rem' }}>
+                Official Source Link:{' '}
+                <a href={selectedOpp.sourceUrl} target="_blank" rel="noreferrer" style={{ color: '#38bdf8', textDecoration: 'underline' }}>
+                  {selectedOpp.sourceUrl}
+                </a>
+              </p>
             </div>
             <button
               onClick={() => setSelectedOpp(null)}
@@ -321,39 +386,22 @@ export default function App() {
             </button>
           </div>
 
-          {/* Analysis & Fit Score Detail */}
-          {selectedOpp.opportunityAnalyses?.[0] && (
-            <div style={{ background: 'rgba(30, 41, 59, 0.5)', padding: '1.25rem', borderRadius: '0.75rem', marginBottom: '1.5rem', borderLeft: '4px solid #3b82f6' }}>
-              <h3 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#60a5fa', marginBottom: '0.5rem' }}>
-                🧠 Fit Score Reasoning Summary ({selectedOpp.opportunityAnalyses[0].overallFitScore}/100 • {selectedOpp.opportunityAnalyses[0].eligibilityStatus})
-              </h3>
-              <p style={{ fontSize: '0.95rem', color: '#e2e8f0' }}>{selectedOpp.opportunityAnalyses[0].reasoningSummary}</p>
-            </div>
-          )}
-
           <div className="grid-2" style={{ marginBottom: '1.5rem' }}>
-            {/* Eligibility Requirements */}
             <div>
               <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#f1f5f9', marginBottom: '0.75rem' }}>
-                📋 Eligibility Requirements ({selectedOpp.eligibilityRequirements?.length || 0})
+                📄 Official Notice Details
               </h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
-                {selectedOpp.eligibilityRequirements?.map((req, idx) => (
-                  <div key={idx} style={{ background: 'rgba(0,0,0,0.3)', padding: '0.75rem', borderRadius: '0.5rem', fontSize: '0.85rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                      <strong style={{ color: '#93c5fd' }}>{req.criteriaCategory}</strong>
-                      <span className={`badge ${req.verifiedStatus === 'YES' ? 'badge-blue' : req.verifiedStatus === 'NO' ? 'badge-rose' : 'badge-amber'}`}>
-                        {req.verifiedStatus}
-                      </span>
-                    </div>
-                    <p style={{ color: '#cbd5e1' }}>{req.description}</p>
-                    {req.notes && <p style={{ color: '#f87171', fontSize: '0.8rem', marginTop: '0.25rem' }}>Note: {req.notes}</p>}
-                  </div>
-                ))}
-              </div>
+              <p style={{ fontSize: '0.9rem', color: '#cbd5e1', marginBottom: '0.75rem' }}>{selectedOpp.description}</p>
+              <ul style={{ paddingLeft: '1.2rem', fontSize: '0.85rem', color: '#94a3b8' }}>
+                <li><strong>Agency:</strong> {selectedOpp.fundingAgency}</li>
+                <li><strong>Opportunity #:</strong> {selectedOpp.fundingOpportunityNumber || 'N/A'}</li>
+                <li><strong>Post Date:</strong> {selectedOpp.openingDate}</li>
+                <li><strong>Closing Date:</strong> {selectedOpp.deadline}</li>
+                <li><strong>Award Range:</strong> {selectedOpp.awardMin} – {selectedOpp.awardMax}</li>
+                <li><strong>Total Program Budget:</strong> {selectedOpp.totalAvailableFunding}</li>
+              </ul>
             </div>
 
-            {/* Participant Support Allowability Matrix */}
             <div>
               <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#f1f5f9', marginBottom: '0.75rem' }}>
                 🛠️ Participant Support Allowability Matrix
@@ -368,77 +416,32 @@ export default function App() {
                 <span className="pill">Certifications: <strong>{selectedOpp.supportCertifications}</strong></span>
                 <span className="pill">Paid Work Experience: <strong>{selectedOpp.supportPaidWorkExperience}</strong></span>
               </div>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-dim)', marginTop: '0.75rem' }}>
+                *Official-source imports set participant support categories to UNKNOWN until human review.
+              </p>
             </div>
           </div>
-
-          {/* Source Provenance Citation */}
-          {selectedOpp.sourceCitations?.[0] && (
-            <div style={{ background: '#090d16', padding: '1rem', borderRadius: '0.5rem', border: '1px solid var(--border-color)', fontSize: '0.85rem', color: '#94a3b8' }}>
-              <strong style={{ color: '#38bdf8' }}>📌 Source Provenance Citation (Fixture):</strong>
-              <p style={{ fontStyle: 'italic', marginTop: '0.25rem', color: '#cbd5e1' }}>"{selectedOpp.sourceCitations[0].quotedSection}"</p>
-              <p style={{ marginTop: '0.25rem', fontSize: '0.8rem' }}>Claim: {selectedOpp.sourceCitations[0].extractedClaim}</p>
-            </div>
-          )}
         </div>
       )}
 
-      {/* Main Content Split */}
-      <div className="grid-2">
-        {/* Profile Card */}
-        <div className="card">
-          <h2 className="section-title">🏢 Ground-Truth Organization Profile</h2>
-          <p style={{ color: '#e2e8f0', fontWeight: 600, fontSize: '1.05rem' }}>
-            {BRIDGE_FORWARD_PROFILE.name}
-          </p>
-          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', marginBottom: '1rem' }}>
-            <span className="badge badge-rose">{BRIDGE_FORWARD_PROFILE.status}</span>
-            <span className="badge badge-amber">501(c)(3) {BRIDGE_FORWARD_PROFILE.taxStatus}</span>
-          </div>
-
-          <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
-            <strong>Primary Outcome:</strong> {BRIDGE_FORWARD_PROFILE.primaryOutcome}
-          </p>
-
-          <h3 style={{ fontSize: '0.95rem', color: '#cbd5e1', marginTop: '1rem' }}>
-            Program Pillars & Core Pathways
-          </h3>
-          <div className="pill-list">
-            {BRIDGE_FORWARD_PROFILE.programs.map((prog, idx) => (
-              <span
-                key={idx}
-                className="pill"
-                style={{
-                  borderLeft: prog.isOperational ? '3px solid #3b82f6' : '3px solid #64748b',
-                }}
-              >
-                {prog.name} {!prog.isOperational && '(Planned)'}
-              </span>
-            ))}
-          </div>
+      {/* Profile Card */}
+      <div className="card" style={{ marginBottom: '2.5rem' }}>
+        <h2 className="section-title">🏢 Ground-Truth Organization Profile</h2>
+        <p style={{ color: '#e2e8f0', fontWeight: 600, fontSize: '1.05rem' }}>
+          {BRIDGE_FORWARD_PROFILE.name}
+        </p>
+        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', marginBottom: '1rem' }}>
+          <span className="badge badge-rose">{BRIDGE_FORWARD_PROFILE.status}</span>
+          <span className="badge badge-amber">501(c)(3) {BRIDGE_FORWARD_PROFILE.taxStatus}</span>
         </div>
-
-        {/* Scoring System Summary */}
-        <div className="card">
-          <h2 className="section-title">📊 Bridge Fit Scoring Engine Taxonomy</h2>
-          <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '1rem' }}>
-            Transparent 0–100 scoring across 12 dimensions. Disqualifying eligibility failures override fit scores to yield <code>NOT ELIGIBLE</code> status.
-          </p>
-
-          <h3 style={{ fontSize: '0.95rem', color: '#cbd5e1', marginBottom: '0.5rem' }}>
-            Classification Status Taxonomy
-          </h3>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '1.25rem' }}>
-            <span className="badge badge-blue">HIGH PRIORITY</span>
-            <span className="badge badge-purple">INVESTIGATE</span>
-            <span className="badge badge-amber">FUTURE OPPORTUNITY</span>
-            <span className="badge badge-rose">NOT ELIGIBLE</span>
-          </div>
-        </div>
+        <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
+          <strong>Primary Outcome:</strong> {BRIDGE_FORWARD_PROFILE.primaryOutcome}
+        </p>
       </div>
 
       {/* Footer */}
       <footer>
-        <p>Bridge AI Foundation Platform • Phase 1A Database Persistence & Read APIs • Bridge Forward Foundation</p>
+        <p>Bridge AI Platform • Phase 1B Verified Grants.gov Ingestion • Bridge Forward Foundation</p>
       </footer>
     </div>
   );

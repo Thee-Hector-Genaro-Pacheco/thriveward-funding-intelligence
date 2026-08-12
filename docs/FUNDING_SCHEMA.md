@@ -16,11 +16,18 @@ Represents the organization against which opportunities are evaluated.
 ### FundingOpportunity
 Primary entity representing a grant or funding notice.
 - `id`: UUID
+- `sourceSystem`: System origin (`GRANTS_GOV` or `DEMO_FIXTURE`)
+- `externalOpportunityId`: Official external ID (e.g. `350123`)
+- `fundingOpportunityNumber`: Official opportunity number (e.g. `ETA-2026-REENTRY-01`)
 - `title`: Opportunity title
 - `fundingAgency`: Agency or foundation name
-- `program`: Sub-program name
-- `description`: Complete overview
-- `sourceUrl`: URL to original RFP / notice
+- `isDemo`: Boolean flag (`false` for official API imports, `true` for fixtures)
+- `verificationStatus`: Audit review state (`PENDING_HUMAN_REVIEW`, `HUMAN_VERIFIED`, `REJECTED`, `STALE`)
+- `sourcePayloadHash`: SHA-256 hash of latest raw JSON payload
+- `sourceLastUpdatedTimestamp`: Date provided by official source
+- `program`: Sub-program or ALN/CFDA identifier
+- `description`: Complete overview / synopsis
+- `sourceUrl`: Official human-readable URL (`https://www.grants.gov/search-results-detail/{opportunityId}`)
 - `status`: Extraction/verification state (`EXTRACTED`, `PENDING_HUMAN_REVIEW`, `VERIFIED`, `ARCHIVED`)
 - `openingDate`: Date string (ISO 8601) or `UNKNOWN`
 - `deadline`: Date string (ISO 8601) or `UNKNOWN`

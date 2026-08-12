@@ -5,6 +5,9 @@ export interface OpportunityQueryOptions {
   status?: string;
   fundingType?: string;
   minimumFitScore?: number;
+  dataKind?: string;
+  sourceSystem?: string;
+  verificationStatus?: string;
   page?: number;
   limit?: number;
 }
@@ -42,6 +45,28 @@ export class OpportunityService {
     const skip = (page - 1) * limit;
 
     const where: Prisma.FundingOpportunityWhereInput = {};
+
+    // Filter by dataKind (demo vs official)
+    if (options.dataKind) {
+      const kind = options.dataKind.toLowerCase();
+      if (kind === 'demo') {
+        where.isDemo = true;
+      } else if (kind === 'official') {
+        where.isDemo = false;
+      } else {
+        throw new Error(`Invalid dataKind parameter: '${options.dataKind}'. Allowed values: 'demo', 'official'`);
+      }
+    }
+
+    // Filter by sourceSystem (e.g. GRANTS_GOV, DEMO_FIXTURE)
+    if (options.sourceSystem) {
+      where.sourceSystem = options.sourceSystem.toUpperCase();
+    }
+
+    // Filter by verificationStatus
+    if (options.verificationStatus) {
+      where.verificationStatus = options.verificationStatus.toUpperCase();
+    }
 
     // Filter by OpportunityStatus enum
     if (options.status) {

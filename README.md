@@ -67,40 +67,36 @@ BridgeAI/
    ```
 
 4. **Database Startup & Migration**:
-   - *Option A (Docker Compose)*:
-     ```bash
-     docker-compose up -d postgres
-     ```
-   - *Option B (Local PostgreSQL)*:
-     Ensure PostgreSQL service is active listening on `localhost:5432` with database `bridge_ai_db`.
-
-   - *Run Migration*:
-     ```bash
-     npm run prisma:migrate --workspace=apps/api
-     ```
+   ```bash
+   npm run prisma:migrate --workspace=apps/api
+   ```
 
 5. **Seed Demonstration Records**:
    ```bash
    npm run prisma:seed --workspace=apps/api
    ```
 
-6. **Run Automated Test Suite**:
+6. **Controlled Grants.gov Ingestion CLI (Phase 1B)**:
+   - *Dry-Run (Simulate API search & detail parsing without DB mutation)*:
+     ```bash
+     npm run ingest:grants-gov --workspace=apps/api -- --keyword "reentry" --limit 3 --dry-run
+     ```
+   - *Persist Import (Transactionally save official Grants.gov records & snapshots)*:
+     ```bash
+     npm run ingest:grants-gov --workspace=apps/api -- --keyword "reentry" --limit 3 --persist
+     ```
+
+7. **Run Automated Test Suite (15 Tests)**:
    ```bash
    npm run test --workspace=apps/api
    ```
 
-7. **Run Backend REST API**:
+8. **Run Backend REST API**:
    ```bash
    npm run dev:api
    ```
    *Health Check*: `http://localhost:4000/health`  
    *List Opportunities*: `http://localhost:4000/api/opportunities`
-
-8. **Run Python Funding Agent**:
-   ```bash
-   python3 services/funding-agent/main.py
-   ```
-   *Health Check*: `http://localhost:8000/health`
 
 9. **Run Web Dashboard Shell**:
    ```bash
@@ -113,23 +109,23 @@ BridgeAI/
 ### Example cURL Verification Commands
 
 ```bash
-# 1. Core API System Health Check
+# 1. Core API Health Check
 curl -s http://localhost:4000/health
 
-# 2. List Demonstration Opportunities (Default Pagination)
+# 2. List All Opportunities (Default Pagination)
 curl -s http://localhost:4000/api/opportunities
 
-# 3. Filter Opportunities by Minimum Fit Score (>= 80)
-curl -s "http://localhost:4000/api/opportunities?minimumFitScore=80"
+# 3. Filter Official Grants.gov Ingested Records Only
+curl -s "http://localhost:4000/api/opportunities?dataKind=official"
 
-# 4. Filter Opportunities by Status
+# 4. Filter Demonstration Fixtures Only
+curl -s "http://localhost:4000/api/opportunities?dataKind=demo"
+
+# 5. Filter Opportunities by Status
 curl -s "http://localhost:4000/api/opportunities?status=PENDING_HUMAN_REVIEW"
 
-# 5. Retrieve Complete Opportunity Review Record by ID
+# 6. Retrieve Complete Opportunity Record by ID
 curl -s http://localhost:4000/api/opportunities/demo-opp-001
-
-# 6. Verify 404 Error Payload for Non-Existent ID
-curl -s http://localhost:4000/api/opportunities/unknown-id-9999
 ```
 
 ---
