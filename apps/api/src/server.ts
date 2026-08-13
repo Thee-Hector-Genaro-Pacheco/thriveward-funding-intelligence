@@ -1,6 +1,8 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { execSync } from 'child_process';
+import path from 'path';
 import { healthRouter } from './routes/health';
 import { opportunitiesRouter } from './routes/opportunities';
 import { BRIDGE_FORWARD_PROFILE } from '@bridge-ai/shared';
@@ -15,6 +17,7 @@ app.use(express.json());
 
 // Routes
 app.use('/health', healthRouter);
+app.use('/api/health', healthRouter);
 app.use('/api/opportunities', opportunitiesRouter);
 
 // Organization profile route
@@ -42,6 +45,19 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 });
 
 if (process.env.NODE_ENV !== 'test') {
+  try {
+    const schemaPath = path.resolve(__dirname, '../prisma/schema.prisma');
+    console.log(`🔄 Running database migrations (prisma migrate deploy with schema: ${schemaPath})...`);
+    execSync(`npx prisma migrate deploy --schema="${schemaPath}"`, {
+      stdio: 'inherit',
+      env: process.env,
+    });
+    console.log('✅ Database migrations applied successfully.');
+  } catch (migErr: any) {
+    console.error('❌ Database migration deployment failed:', migErr.message);
+    process.exit(1);
+  }
+
   app.listen(PORT, () => {
     console.log(`🚀 Bridge AI Core API active on http://localhost:${PORT}`);
     console.log(`🔍 Health check: http://localhost:${PORT}/health`);

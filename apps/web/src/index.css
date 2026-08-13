@@ -4,18 +4,18 @@
   --bg-card-hover: rgba(26, 35, 54, 0.85);
   --border-color: rgba(255, 255, 255, 0.08);
   --border-glow: rgba(59, 130, 246, 0.3);
-  
+
   --primary: #3b82f6;
   --primary-glow: rgba(59, 130, 246, 0.25);
   --accent: #8b5cf6;
   --teal-accent: #14b8a6;
   --amber-accent: #f59e0b;
   --rose-accent: #f43f5e;
-  
+
   --text-main: #f8fafc;
   --text-muted: #94a3b8;
   --text-dim: #64748b;
-  
+
   --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 }
@@ -223,21 +223,110 @@ header {
   font-size: 0.95rem;
 }
 
-.filter-btn {
-  background: transparent;
-  border: none;
+/* Tabs & Filter Toolbar Styling */
+.tabs {
+  display: flex;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.tab, .filter-btn {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border-color);
   color: var(--text-muted);
-  padding: 0.4rem 0.85rem;
-  border-radius: 0.4rem;
-  font-size: 0.8rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 0.5rem;
+  font-size: 0.825rem;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  outline: none;
+  appearance: none;
+  -webkit-appearance: none;
 }
 
-.filter-btn.active, .filter-btn:hover {
+.tab:hover, .filter-btn:hover {
+  background: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+  border-color: rgba(59, 130, 246, 0.3);
+}
+
+.tab:focus-visible, .filter-btn:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.tab.active, .filter-btn.active {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.25) 0%, rgba(139, 92, 246, 0.25) 100%);
+  color: #ffffff;
+  border-color: rgba(59, 130, 246, 0.5);
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.2);
+}
+
+/* General Button Styling */
+button {
+  font-family: var(--font-sans);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.45rem 0.85rem;
+  border-radius: 0.45rem;
+  font-size: 0.825rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: 1px solid transparent;
+  outline: none;
+}
+
+.btn-primary {
   background: rgba(59, 130, 246, 0.2);
-  color: #60a5fa;
+  border-color: #3b82f6;
+  color: #93c5fd;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.35);
+  color: #ffffff;
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.3);
+}
+
+.btn-success {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: #10b981;
+  color: #6ee7b7;
+}
+
+.btn-success:hover:not(:disabled) {
+  background: rgba(16, 185, 129, 0.35);
+  color: #ffffff;
+}
+
+.btn-purple {
+  background: rgba(139, 92, 246, 0.2);
+  border-color: #8b5cf6;
+  color: #c084fc;
+}
+
+.btn-purple:hover:not(:disabled) {
+  background: rgba(139, 92, 246, 0.35);
+  color: #ffffff;
+}
+
+.btn:disabled, button:disabled {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+  color: #64748b !important;
+  cursor: not-allowed !important;
+  opacity: 0.6;
+  box-shadow: none !important;
 }
 
 .spinner {
@@ -263,6 +352,14 @@ header {
   padding: 1.25rem;
   border-radius: 0.75rem;
   margin-top: 1rem;
+}
+
+.empty-state {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: 1rem;
+  padding: 3rem 1.5rem;
+  text-align: center;
 }
 
 footer {

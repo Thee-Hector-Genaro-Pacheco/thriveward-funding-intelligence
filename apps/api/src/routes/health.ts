@@ -1,11 +1,14 @@
 import { Router, Request, Response } from 'express';
 import { BRIDGE_FORWARD_PROFILE } from '@bridge-ai/shared';
+import { prisma } from '../lib/prisma';
 
 export const healthRouter = Router();
 
 healthRouter.get('/', async (req: Request, res: Response) => {
   const pythonAgentUrl = process.env.FUNDING_AGENT_URL || 'http://localhost:8000';
   let pythonAgentStatus = 'UNKNOWN';
+  let dbStatus = 'UNKNOWN';
+  let isDbHealthy = false;
 
   try {
     const controller = new AbortController();
@@ -22,8 +25,20 @@ healthRouter.get('/', async (req: Request, res: Response) => {
     pythonAgentStatus = `UNREACHABLE (${err.message || 'Offline'})`;
   }
 
-  res.json({
-    status: 'UP',
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    const oppCount = await prisma.fundingOpportunity.count();
+    dbStatus = `UP (PostgreSQL 16, ${oppCount} opportunities persisted)`;
+    isDbHealthy = true;
+  } catch (err: any) {
+    dbStatus = `UNHEALTHY (${err.message || 'Database query failed'})`;
+    isDbHealthy = false;
+  }
+
+  const statusCode = isDbHealthy ? 200 : 500;
+
+  res.status(statusCode).json({
+    status: isDbHealthy ? 'UP' : 'DOWN',
     service: 'Bridge AI Core API',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
@@ -38,8 +53,9 @@ healthRouter.get('/', async (req: Request, res: Response) => {
         status: pythonAgentStatus,
       },
       database: {
-        status: 'CONFIGURED',
+        status: dbStatus,
         provider: 'PostgreSQL + Prisma ORM',
+        healthy: isDbHealthy,
       },
     },
     governance: {

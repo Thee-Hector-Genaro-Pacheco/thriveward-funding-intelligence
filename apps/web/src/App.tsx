@@ -92,7 +92,7 @@ export function App() {
       } else if (activeFilter === 'qualified') {
         url = '/api/opportunities?pursuitStage=QUALIFIED';
       } else if (activeFilter === 'locked') {
-        url = '/api/opportunities/locked-matches';
+        url = '/api/opportunities?pursuitStage=LOCKED';
       } else if (activeFilter === 'dismissed') {
         url = '/api/opportunities?pursuitStage=DISMISSED';
       }
@@ -260,10 +260,7 @@ export function App() {
               🚫 Dismissed / Routed
             </button>
 
-            <button
-              onClick={() => fetchOpportunities()}
-              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: '#94a3b8', padding: '0.4rem 0.75rem', borderRadius: '0.4rem', cursor: 'pointer', fontSize: '0.85rem' }}
-            >
+            <button className="tab" onClick={() => fetchOpportunities()}>
               🔄 Refresh
             </button>
           </div>
@@ -286,10 +283,13 @@ export function App() {
 
         {/* Empty State */}
         {!loading && !error && opportunities.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-            <p style={{ fontSize: '1.1rem', fontWeight: 600 }}>No active candidates matching filter ('{activeFilter}').</p>
-            <p style={{ fontSize: '0.9rem', marginTop: '0.35rem' }}>
-              Bridge Forward is currently <strong>PRE_INCORPORATION</strong>. Federal grant applications require formed entity, EIN, SAM.gov, UEI, and Grants.gov AOR registrations. Mission-aligned federal notices are safely routed to <em>Fiscal Sponsor Required</em>, <em>Partnership Required</em>, or <em>Future Opportunity</em>.
+          <div className="empty-state" style={{ marginTop: '1.25rem' }}>
+            <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🔍</div>
+            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#f1f5f9', marginBottom: '0.5rem' }}>
+              No opportunities matching this filter
+            </h3>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.925rem', maxWidth: '640px', margin: '0 auto' }}>
+              There are currently no funding opportunities in the <strong>{activeFilter}</strong> view. Bridge Forward is currently <strong>PRE_INCORPORATION</strong>. Direct federal solicitations requiring SAM.gov/UEI registration are safely routed to <em>Fiscal Sponsor Required</em> or <em>Partnership Required</em>.
             </p>
           </div>
         )}
