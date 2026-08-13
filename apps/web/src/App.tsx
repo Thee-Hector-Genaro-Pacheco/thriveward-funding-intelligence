@@ -21,14 +21,6 @@ export interface FundingOpportunity {
   awardMin?: string;
   awardMax?: string;
   totalAvailableFunding?: string;
-  supportTrainingStipends?: string;
-  supportTransportation?: string;
-  supportTools?: string;
-  supportPPE?: string;
-  supportLaptops?: string;
-  supportTrainingEquipment?: string;
-  supportCertifications?: string;
-  supportPaidWorkExperience?: string;
   relevanceAnalyses?: Array<{
     relevanceStatus: string;
     relevanceScore: number;
@@ -42,6 +34,8 @@ export interface FundingOpportunity {
     eligibilityStatus: string;
     recommendation: string;
     reasoningSummary: string;
+    version?: number;
+    updatedAt?: string;
     profileSnapshot?: any;
     eligibilityFindings?: Array<{
       criterionKey: string;
@@ -56,6 +50,15 @@ export interface FundingOpportunity {
       scoreAwarded: number;
       rationale: string;
     }>;
+  }>;
+  opportunityMatches?: Array<{
+    id: string;
+    matchScore: number;
+    evidenceCoverage: number;
+    status: string;
+    alignmentRationale: string;
+    fiscalSponsorCandidateId: string;
+    fiscalSponsorCandidate?: FiscalSponsorCandidate;
   }>;
 }
 
@@ -105,6 +108,7 @@ export interface FiscalSponsorCandidate {
   }>;
   opportunityMatches?: Array<{
     id: string;
+    fundingOpportunityId: string;
     matchScore: number;
     evidenceCoverage: number;
     status: string;
@@ -173,8 +177,24 @@ export interface SponsorBriefingPacket {
   candidateName: string;
   websiteUrl: string;
   geography: string;
+  opportunityId?: string;
   opportunityTitle?: string;
   opportunityNumber?: string;
+  fundingAgency?: string;
+  deadline?: string;
+  awardRange?: string;
+  matchRequirement?: string;
+  candidateRoutingStatus?: string;
+  readinessBlockers?: string;
+  inquiryType: 'SPECIFIC_OPPORTUNITY' | 'GENERAL_INTRODUCTORY';
+  bridgeForwardSummary: {
+    name: string;
+    status: string;
+    geography: string;
+    serviceCounties: string[];
+    mission: string;
+    targetPopulations: string[];
+  };
   draftInquiryEmail: {
     to: string;
     subject: string;
@@ -186,9 +206,10 @@ export interface SponsorBriefingPacket {
 }
 
 export interface SystemHealth {
-  apiStatus: string;
-  pythonAgentStatus: string;
-  databaseStatus: string;
+  apiStatus: 'UP' | 'DOWN' | 'CHECKING';
+  databaseStatus: 'UP' | 'DOWN' | 'CHECKING';
+  pythonAgentStatus: 'UP' | 'DOWN' | 'UNREACHABLE' | 'CHECKING';
+  overallStatus: 'UP' | 'DEGRADED' | 'DOWN' | 'CHECKING';
 }
 
 function sanitizeHtmlToText(html?: string | null): string {
@@ -203,8 +224,6 @@ function cleanReason(reason?: string | null): string {
     .replace(/^PARTNERSHIP_REQUIRED:\s*/gi, '')
     .replace(/^FUTURE_OPPORTUNITY:\s*/gi, '')
     .replace(/^EXCLUDED:\s*/gi, '')
-    .replace(/^FISCAL_SPONSOR_REQUIRED:\s*/gi, '')
-    .replace(/^PARTNERSHIP_REQUIRED:\s*/gi, '')
     .trim();
 }
 
@@ -222,42 +241,36 @@ export function App() {
 
   const [activeFilter, setActiveFilter] = useState<string>('POTENTIAL_PATHWAYS');
   const [pathwaysSubFilter, setPathwaysSubFilter] = useState<'all' | 'fiscal' | 'partnership' | 'future'>('all');
-  const [selectedOpp, setSelectedOpp] = useState<FundingOpportunity | null>(null);
+
+  // Detail Drawer State
+  const [selectedOppForDrawer, setSelectedOppForDrawer] = useState<FundingOpportunity | null>(null);
+  const [drawerLoading, setDrawerLoading] = useState<boolean>(false);
+  const [drawerError, setDrawerError] = useState<string | null>(null);
+  const [drawerAnalysis, setDrawerAnalysis] = useState<any | null>(null);
+  const [drawerSponsorMatches, setDrawerSponsorMatches] = useState<any[]>([]);
+
+  // Opportunity-Specific Sponsor Filter State
+  const [selectedOppForSponsorView, setSelectedOppForSponsorView] = useState<FundingOpportunity | null>(null);
+  const [computingMatchesForOppId, setComputingMatchesForOppId] = useState<string | null>(null);
+
+  // Analyze Button State Per Opportunity
+  const [analyzingStatus, setAnalyzingStatus] = useState<Record<string, 'RUNNING' | 'COMPLETED' | 'ERROR'>>({});
+
+  // Briefing Packet Modal State
   const [briefingPacket, setBriefingPacket] = useState<SponsorBriefingPacket | null>(null);
+  const [editableSubject, setEditableSubject] = useState<string>('');
+  const [editableBodyText, setEditableBodyText] = useState<string>('');
+  const [copiedEmail, setCopiedEmail] = useState<boolean>(false);
+
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [discoveryResult, setDiscoveryResult] = useState<any | null>(null);
   const [discoveryLoading, setDiscoveryLoading] = useState<boolean>(false);
 
-  const handleTriggerDiscovery = async () => {
-    setDiscoveryLoading(true);
-    try {
-      const res = await fetch('/api/fiscal-sponsors/discovery', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          geography: 'California',
-          focusAreas: ['youth', 'housing', 'reentry', 'workforce'],
-        }),
-      });
-      const json = await res.json();
-      if (json.success) {
-        setDiscoveryResult(json.data);
-        setActionMessage(`Sponsor Discovery Completed! Found ${json.data.discoveredCandidates.length} candidate(s). Created: ${json.data.recordsCreated}, Updated: ${json.data.recordsUpdated}, Unchanged: ${json.data.recordsUnchanged}`);
-        await fetchSponsors();
-      } else {
-        setError(json.error || 'Failed to run sponsor discovery');
-      }
-    } catch (err: any) {
-      setError(err.message || 'Error triggering discovery');
-    } finally {
-      setDiscoveryLoading(false);
-    }
-  };
-
   const [health, setHealth] = useState<SystemHealth>({
     apiStatus: 'CHECKING',
-    pythonAgentStatus: 'CHECKING',
     databaseStatus: 'CHECKING',
+    pythonAgentStatus: 'CHECKING',
+    overallStatus: 'CHECKING',
   });
 
   const fetchHealth = async () => {
@@ -265,16 +278,29 @@ export function App() {
       const res = await fetch('/api/health');
       if (res.ok) {
         const data = await res.json();
+        const apiUp = true;
+        const dbUp = Boolean(data.integrations?.database?.healthy);
+        const agentStatusRaw = data.integrations?.fundingAgent?.status || 'UNKNOWN';
+        const agentUp = typeof agentStatusRaw === 'string' && agentStatusRaw.startsWith('UP');
+
+        let overall: 'UP' | 'DEGRADED' | 'DOWN' = 'UP';
+        if (!dbUp) {
+          overall = 'DOWN';
+        } else if (!agentUp) {
+          overall = 'DEGRADED';
+        }
+
         setHealth({
-          apiStatus: 'UP',
-          pythonAgentStatus: data.services?.fundingAgent === 'UP' ? 'UP' : 'DOWN',
-          databaseStatus: data.services?.database === 'UP' ? 'UP' : 'DOWN',
+          apiStatus: apiUp ? 'UP' : 'DOWN',
+          databaseStatus: dbUp ? 'UP' : 'DOWN',
+          pythonAgentStatus: agentUp ? 'UP' : agentStatusRaw.includes('UNREACHABLE') ? 'UNREACHABLE' : 'DOWN',
+          overallStatus: overall,
         });
       } else {
-        setHealth({ apiStatus: 'DOWN', pythonAgentStatus: 'UNKNOWN', databaseStatus: 'UNKNOWN' });
+        setHealth({ apiStatus: 'DOWN', databaseStatus: 'DOWN', pythonAgentStatus: 'DOWN', overallStatus: 'DOWN' });
       }
     } catch {
-      setHealth({ apiStatus: 'DOWN', pythonAgentStatus: 'DOWN', databaseStatus: 'DOWN' });
+      setHealth({ apiStatus: 'DOWN', databaseStatus: 'DOWN', pythonAgentStatus: 'DOWN', overallStatus: 'DOWN' });
     }
   };
 
@@ -296,7 +322,7 @@ export function App() {
       } else if (activeFilter === 'OFFICIAL') {
         queryParams = '?dataKind=official';
       } else if (activeFilter === 'NEW') {
-        queryParams = '?pursuitStage=NEW';
+        queryParams = '?candidateRoutingStatus=DIRECT_FEDERAL_ELIGIBLE';
       } else if (activeFilter === 'QUALIFIED') {
         queryParams = '?pursuitStage=QUALIFIED';
       } else if (activeFilter === 'LOCKED') {
@@ -389,17 +415,126 @@ export function App() {
     }
   }, [activePrimaryTab, activeFilter, pathwaysSubFilter]);
 
+  // Handle Analyze & Score Action with Immediate State Refresh
   const handleAnalyze = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    setAnalyzingStatus((prev) => ({ ...prev, [id]: 'RUNNING' }));
     try {
-      setActionMessage('Running opportunity analysis & scoring...');
       const res = await fetch(`/api/opportunities/${id}/analyze`, { method: 'POST' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => ({}));
+        throw new Error(errJson.message || `HTTP ${res.status}`);
+      }
       await res.json();
-      setActionMessage('Analysis & scoring completed successfully.');
-      await fetchOpportunities();
+
+      // Immediately re-fetch the complete opportunity graph
+      const updatedRes = await fetch(`/api/opportunities/${id}`);
+      if (!updatedRes.ok) throw new Error('Failed to retrieve updated analysis graph');
+      const updatedOpp: FundingOpportunity = await updatedRes.json();
+
+      // Replace corresponding item in React state
+      setOpportunities((prev) => prev.map((o) => (o.id === id ? updatedOpp : o)));
+      setAnalyzingStatus((prev) => ({ ...prev, [id]: 'COMPLETED' }));
+      setActionMessage(`✓ Analysis updated successfully for "${updatedOpp.title}"`);
+
+      // If detail drawer is open for this opportunity, update drawer state as well
+      if (selectedOppForDrawer?.id === id) {
+        setSelectedOppForDrawer(updatedOpp);
+        setDrawerAnalysis(updatedOpp.opportunityAnalyses?.[0] || null);
+      }
     } catch (err: any) {
-      alert(`Analysis failed: ${err.message}`);
+      setAnalyzingStatus((prev) => ({ ...prev, [id]: 'ERROR' }));
+      setError(`Analysis failed: ${err.message}`);
+    }
+  };
+
+  // Handle Open Review Details Drawer
+  const handleOpenDrawer = async (opp: FundingOpportunity, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setSelectedOppForDrawer(opp);
+    setDrawerLoading(true);
+    setDrawerError(null);
+    setDrawerAnalysis(null);
+    setDrawerSponsorMatches([]);
+
+    try {
+      // 1. Fetch complete opportunity detail
+      const oppRes = await fetch(`/api/opportunities/${opp.id}`);
+      if (!oppRes.ok) throw new Error(`HTTP ${oppRes.status} loading opportunity details`);
+      const fullOpp: FundingOpportunity = await oppRes.json();
+      setSelectedOppForDrawer(fullOpp);
+
+      // 2. Fetch analysis graph if exists
+      const analysisRes = await fetch(`/api/opportunities/${opp.id}/analysis`);
+      if (analysisRes.ok) {
+        const analysisData = await analysisRes.json();
+        setDrawerAnalysis(analysisData.currentAnalysis || analysisData.analysis || fullOpp.opportunityAnalyses?.[0] || null);
+      } else {
+        setDrawerAnalysis(fullOpp.opportunityAnalyses?.[0] || null);
+      }
+
+      // 3. Fetch sponsor matches
+      const matchesRes = await fetch(`/api/opportunities/${opp.id}/sponsor-matches`);
+      if (matchesRes.ok) {
+        const matchesData = await matchesRes.json();
+        setDrawerSponsorMatches(matchesData.data || []);
+      }
+    } catch (err: any) {
+      setDrawerError(err.message || 'Error loading opportunity details drawer');
+    } finally {
+      setDrawerLoading(false);
+    }
+  };
+
+  // Handle Navigate to Opportunity-Specific Sponsors View
+  const handleNavigateToOpportunitySponsors = (opp: FundingOpportunity, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setSelectedOppForSponsorView(opp);
+    setActivePrimaryTab('SPONSORS');
+    if (selectedOppForDrawer) {
+      setSelectedOppForDrawer(null);
+    }
+  };
+
+  // Handle Human-Triggered "Find Possible Sponsors" (0 Outreach)
+  const handleCalculateSponsorMatches = async (oppId: string) => {
+    setComputingMatchesForOppId(oppId);
+    try {
+      const res = await fetch(`/api/opportunities/${oppId}/sponsor-matches`, { method: 'POST' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      setActionMessage(`Calculated ${json.count || 0} sponsor match(es) for opportunity.`);
+      await fetchSponsors();
+    } catch (err: any) {
+      setError(`Failed to calculate sponsor matches: ${err.message}`);
+    } finally {
+      setComputingMatchesForOppId(null);
+    }
+  };
+
+  const handleTriggerDiscovery = async () => {
+    setDiscoveryLoading(true);
+    try {
+      const res = await fetch('/api/fiscal-sponsors/discovery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          geography: 'California',
+          focusAreas: ['youth', 'housing', 'reentry', 'workforce'],
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setDiscoveryResult(json.data);
+        setActionMessage(`Sponsor Discovery Completed! Found ${json.data.discoveredCandidates.length} candidate(s). Created: ${json.data.recordsCreated}, Updated: ${json.data.recordsUpdated}, Unchanged: ${json.data.recordsUnchanged}`);
+        await fetchSponsors();
+      } else {
+        setError(json.error || 'Failed to run sponsor discovery');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error triggering discovery');
+    } finally {
+      setDiscoveryLoading(false);
     }
   };
 
@@ -410,9 +545,19 @@ export function App() {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
       setBriefingPacket(json.data);
+      setEditableSubject(json.data.draftInquiryEmail.subject);
+      setEditableBodyText(json.data.draftInquiryEmail.bodyText);
+      setCopiedEmail(false);
     } catch (err: any) {
       alert(`Failed to fetch briefing packet: ${err.message}`);
     }
+  };
+
+  const handleCopyEmail = () => {
+    const fullText = `To: ${briefingPacket?.draftInquiryEmail.to}\nSubject: ${editableSubject}\n\n${editableBodyText}`;
+    navigator.clipboard.writeText(fullText);
+    setCopiedEmail(true);
+    setTimeout(() => setCopiedEmail(false), 3000);
   };
 
   const handleToggleTask = async (taskId: string, currentStatus: string) => {
@@ -451,6 +596,13 @@ export function App() {
         </p>
       </div>
 
+      {/* Health Degraded Service Explanation Notice */}
+      {health.overallStatus === 'DEGRADED' && (
+        <div style={{ background: 'rgba(245, 158, 11, 0.15)', border: '1px solid #f59e0b', color: '#fef08a', padding: '0.85rem 1.15rem', borderRadius: '0.65rem', marginBottom: '1.5rem', fontSize: '0.875rem' }}>
+          ⚠️ <strong>Service Degraded Notice:</strong> Optional Python Funding Agent (live Grants.gov scraper) is offline. All PostgreSQL database-backed records, candidate routing, eligibility analysis, and REST API services are fully operational.
+        </div>
+      )}
+
       {/* Action Notification Message */}
       {actionMessage && (
         <div style={{ background: 'rgba(59, 130, 246, 0.15)', border: '1px solid #3b82f6', color: '#93c5fd', padding: '0.75rem 1rem', borderRadius: '0.5rem', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -468,20 +620,48 @@ export function App() {
       )}
 
       {/* Primary Navigation Tabs */}
-      <div className="tab-navigation" style={{ marginBottom: '1.5rem', background: 'rgba(30, 41, 59, 0.9)', padding: '0.65rem 1rem', borderRadius: '0.75rem', border: '1px solid rgba(255,255,255,0.1)' }}>
-        <button className={`tab ${activePrimaryTab === 'OPPORTUNITIES' ? 'active' : ''}`} onClick={() => setActivePrimaryTab('OPPORTUNITIES')}>
+      <div role="tablist" aria-label="Primary Navigation" className="tab-navigation" style={{ marginBottom: '1.5rem', background: 'rgba(30, 41, 59, 0.9)', padding: '0.65rem 1rem', borderRadius: '0.75rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+        <button
+          role="tab"
+          aria-selected={activePrimaryTab === 'OPPORTUNITIES'}
+          className={`tab ${activePrimaryTab === 'OPPORTUNITIES' ? 'active' : ''}`}
+          onClick={() => setActivePrimaryTab('OPPORTUNITIES')}
+        >
           📋 Opportunities Feed
         </button>
-        <button className={`tab ${activePrimaryTab === 'SPONSORS' ? 'active' : ''}`} onClick={() => setActivePrimaryTab('SPONSORS')}>
+        <button
+          role="tab"
+          aria-selected={activePrimaryTab === 'SPONSORS'}
+          className={`tab ${activePrimaryTab === 'SPONSORS' ? 'active' : ''}`}
+          onClick={() => {
+            setSelectedOppForSponsorView(null);
+            setActivePrimaryTab('SPONSORS');
+          }}
+        >
           🤝 Fiscal Sponsor Directory
         </button>
-        <button className={`tab ${activePrimaryTab === 'PARTNERS' ? 'active' : ''}`} onClick={() => setActivePrimaryTab('PARTNERS')}>
+        <button
+          role="tab"
+          aria-selected={activePrimaryTab === 'PARTNERS'}
+          className={`tab ${activePrimaryTab === 'PARTNERS' ? 'active' : ''}`}
+          onClick={() => setActivePrimaryTab('PARTNERS')}
+        >
           🏛️ Strategic Partners
         </button>
-        <button className={`tab ${activePrimaryTab === 'READINESS' ? 'active' : ''}`} onClick={() => setActivePrimaryTab('READINESS')}>
+        <button
+          role="tab"
+          aria-selected={activePrimaryTab === 'READINESS'}
+          className={`tab ${activePrimaryTab === 'READINESS' ? 'active' : ''}`}
+          onClick={() => setActivePrimaryTab('READINESS')}
+        >
           📋 Readiness Plans
         </button>
-        <button className={`tab ${activePrimaryTab === 'CALENDAR' ? 'active' : ''}`} onClick={() => setActivePrimaryTab('CALENDAR')}>
+        <button
+          role="tab"
+          aria-selected={activePrimaryTab === 'CALENDAR'}
+          className={`tab ${activePrimaryTab === 'CALENDAR' ? 'active' : ''}`}
+          onClick={() => setActivePrimaryTab('CALENDAR')}
+        >
           📅 Funding Calendar
         </button>
       </div>
@@ -495,29 +675,29 @@ export function App() {
           </div>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Port 4000 • Express + Prisma</p>
           <div style={{ marginTop: '0.75rem' }}>
-            <span className="badge badge-blue">{health.apiStatus}</span>
+            <span className={`badge ${health.apiStatus === 'UP' ? 'badge-blue' : 'badge-rose'}`}>{health.apiStatus}</span>
           </div>
         </div>
 
         <div className="card">
           <div className="section-title">
-            <span className={`status-indicator ${health.pythonAgentStatus.includes('UP') ? 'status-active' : 'status-warning'}`}></span>
+            <span className={`status-indicator ${health.pythonAgentStatus === 'UP' ? 'status-active' : 'status-degraded'}`}></span>
             Python Funding Agent
           </div>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Port 8000 • FastAPI Service</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Port 8000 • FastAPI Scraper Service</p>
           <div style={{ marginTop: '0.75rem' }}>
-            <span className="badge badge-purple">{health.pythonAgentStatus}</span>
+            <span className={`badge ${health.pythonAgentStatus === 'UP' ? 'badge-purple' : 'badge-amber'}`}>{health.pythonAgentStatus}</span>
           </div>
         </div>
 
         <div className="card">
           <div className="section-title">
-            <span className="status-indicator status-active"></span>
-            PostgreSQL DB & Ingestion
+            <span className={`status-indicator ${health.databaseStatus === 'UP' ? 'status-active' : 'status-warning'}`}></span>
+            PostgreSQL DB & Persistence
           </div>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Port 5432 • Phase 1E Persistence</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Port 5432 • Phase 1E Persisted Schema</p>
           <div style={{ marginTop: '0.75rem' }}>
-            <span className="badge badge-blue">{health.databaseStatus}</span>
+            <span className={`badge ${health.databaseStatus === 'UP' ? 'badge-blue' : 'badge-rose'}`}>{health.databaseStatus}</span>
           </div>
         </div>
       </div>
@@ -530,20 +710,46 @@ export function App() {
               📋 Funding Opportunities ({opportunities.length})
             </h2>
 
-            <div className="tab-navigation">
-              <button className={`tab ${activeFilter === 'POTENTIAL_PATHWAYS' ? 'active' : ''}`} onClick={() => setActiveFilter('POTENTIAL_PATHWAYS')}>
+            {/* Accessible Feed Filter Tabs (Must Always Remain Clickable) */}
+            <div role="tablist" aria-label="Opportunity Feed Filters" className="tab-navigation">
+              <button
+                role="tab"
+                aria-selected={activeFilter === 'POTENTIAL_PATHWAYS'}
+                className={`tab ${activeFilter === 'POTENTIAL_PATHWAYS' ? 'active' : ''}`}
+                onClick={() => setActiveFilter('POTENTIAL_PATHWAYS')}
+              >
                 🛤️ Potential Pathways
               </button>
-              <button className={`tab ${activeFilter === 'OFFICIAL' ? 'active' : ''}`} onClick={() => setActiveFilter('OFFICIAL')}>
+              <button
+                role="tab"
+                aria-selected={activeFilter === 'OFFICIAL'}
+                className={`tab ${activeFilter === 'OFFICIAL' ? 'active' : ''}`}
+                onClick={() => setActiveFilter('OFFICIAL')}
+              >
                 🏛️ Official Grants.gov
               </button>
-              <button className={`tab ${activeFilter === 'NEW' ? 'active' : ''}`} onClick={() => setActiveFilter('NEW')}>
-                Direct Actionable Feed
+              <button
+                role="tab"
+                aria-selected={activeFilter === 'NEW'}
+                className={`tab ${activeFilter === 'NEW' ? 'active' : ''}`}
+                onClick={() => setActiveFilter('NEW')}
+              >
+                ⚡ Direct Actionable Feed
               </button>
-              <button className={`tab ${activeFilter === 'QUALIFIED' ? 'active' : ''}`} onClick={() => setActiveFilter('QUALIFIED')}>
+              <button
+                role="tab"
+                aria-selected={activeFilter === 'QUALIFIED'}
+                className={`tab ${activeFilter === 'QUALIFIED' ? 'active' : ''}`}
+                onClick={() => setActiveFilter('QUALIFIED')}
+              >
                 Qualified Matches
               </button>
-              <button className={`tab ${activeFilter === 'LOCKED' ? 'active' : ''}`} onClick={() => setActiveFilter('LOCKED')}>
+              <button
+                role="tab"
+                aria-selected={activeFilter === 'LOCKED'}
+                className={`tab ${activeFilter === 'LOCKED' ? 'active' : ''}`}
+                onClick={() => setActiveFilter('LOCKED')}
+              >
                 🔒 Locked Matches
               </button>
             </div>
@@ -552,18 +758,30 @@ export function App() {
           {activeFilter === 'POTENTIAL_PATHWAYS' && (
             <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', padding: '0.5rem 0.75rem', background: 'rgba(30, 41, 59, 0.6)', borderRadius: '0.5rem', border: '1px solid rgba(255,255,255,0.08)', flexWrap: 'wrap' }}>
               <span style={{ fontSize: '0.8rem', color: '#94a3b8', display: 'flex', alignItems: 'center', fontWeight: 600, marginRight: '0.25rem' }}>Filter Pathway:</span>
-              <button className={`tab ${pathwaysSubFilter === 'all' ? 'active' : ''}`} onClick={() => setPathwaysSubFilter('all')} style={{ fontSize: '0.8rem', padding: '0.3rem 0.65rem' }}>All Pathways</button>
-              <button className={`tab ${pathwaysSubFilter === 'fiscal' ? 'active' : ''}`} onClick={() => setPathwaysSubFilter('fiscal')} style={{ fontSize: '0.8rem', padding: '0.3rem 0.65rem' }}>Fiscal Sponsor Required</button>
-              <button className={`tab ${pathwaysSubFilter === 'partnership' ? 'active' : ''}`} onClick={() => setPathwaysSubFilter('partnership')} style={{ fontSize: '0.8rem', padding: '0.3rem 0.65rem' }}>Partnership Required</button>
-              <button className={`tab ${pathwaysSubFilter === 'future' ? 'active' : ''}`} onClick={() => setPathwaysSubFilter('future')} style={{ fontSize: '0.8rem', padding: '0.3rem 0.65rem' }}>Future Opportunity</button>
+              <button role="tab" aria-selected={pathwaysSubFilter === 'all'} className={`tab ${pathwaysSubFilter === 'all' ? 'active' : ''}`} onClick={() => setPathwaysSubFilter('all')} style={{ fontSize: '0.8rem', padding: '0.3rem 0.65rem' }}>All Pathways</button>
+              <button role="tab" aria-selected={pathwaysSubFilter === 'fiscal'} className={`tab ${pathwaysSubFilter === 'fiscal' ? 'active' : ''}`} onClick={() => setPathwaysSubFilter('fiscal')} style={{ fontSize: '0.8rem', padding: '0.3rem 0.65rem' }}>Fiscal Sponsor Required</button>
+              <button role="tab" aria-selected={pathwaysSubFilter === 'partnership'} className={`tab ${pathwaysSubFilter === 'partnership' ? 'active' : ''}`} onClick={() => setPathwaysSubFilter('partnership')} style={{ fontSize: '0.8rem', padding: '0.3rem 0.65rem' }}>Partnership Required</button>
+              <button role="tab" aria-selected={pathwaysSubFilter === 'future'} className={`tab ${pathwaysSubFilter === 'future' ? 'active' : ''}`} onClick={() => setPathwaysSubFilter('future')} style={{ fontSize: '0.8rem', padding: '0.3rem 0.65rem' }}>Future Opportunity</button>
             </div>
           )}
 
-          {loading && <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>Loading...</div>}
+          {loading && <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>Loading opportunities...</div>}
 
           {!loading && opportunities.length === 0 && (
             <div className="empty-state" style={{ marginTop: '1.25rem' }}>
-              <h3>No opportunities matching filter</h3>
+              {activeFilter === 'NEW' ? (
+                <div style={{ maxWidth: '640px', margin: '0 auto' }}>
+                  <div style={{ fontSize: '2rem', marginBottom: '0.5rem' }}>🏢</div>
+                  <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#f8fafc', marginBottom: '0.5rem' }}>
+                    No directly actionable opportunities currently available.
+                  </h3>
+                  <p style={{ color: '#cbd5e1', fontSize: '0.9rem', lineHeight: 1.5 }}>
+                    Bridge Forward is pre-incorporation. Mission-aligned opportunities requiring a fiscal sponsor or partner are available under <strong>Potential Pathways</strong>.
+                  </p>
+                </div>
+              ) : (
+                <h3>No opportunities matching filter</h3>
+              )}
             </div>
           )}
 
@@ -572,14 +790,20 @@ export function App() {
               {opportunities.map((opp) => {
                 const isRouted = Boolean(opp.candidateRoutingStatus && opp.candidateRoutingStatus !== 'DIRECT_FEDERAL_ELIGIBLE');
                 const cleanedReason = cleanReason(opp.dismissedReason);
+                const matchCount = opp.opportunityMatches?.length || 0;
+
+                const analysis = opp.opportunityAnalyses?.[0];
+                const relevance = opp.relevanceAnalyses?.[0];
+
+                const analyzeState = analyzingStatus[opp.id] || 'IDLE';
 
                 return (
-                  <div key={opp.id} className="opp-card" onClick={() => setSelectedOpp(opp)} style={{ background: 'rgba(15, 23, 42, 0.65)', border: selectedOpp?.id === opp.id ? '2px solid #3b82f6' : '1px solid var(--border-color)', borderRadius: '0.85rem', padding: '1.35rem', cursor: 'pointer' }}>
+                  <div key={opp.id} className="opp-card" onClick={(e) => handleOpenDrawer(opp, e)} style={{ background: 'rgba(15, 23, 42, 0.65)', border: '1px solid var(--border-color)', borderRadius: '0.85rem', padding: '1.35rem', cursor: 'pointer' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem' }}>
                       <div style={{ flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.55rem', flexWrap: 'wrap' }}>
-                          <span className="badge badge-purple">OFFICIAL SOURCE</span>
-                          <span className="badge badge-blue">{isRouted ? 'Pipeline: POTENTIAL PATHWAY' : `Pipeline: ${opp.pursuitStage}`}</span>
+                          <span className="badge badge-purple">{opp.isDemo ? 'DEMO FIXTURE' : 'OFFICIAL SOURCE'}</span>
+                          <span className="badge badge-blue">{isRouted ? `Pipeline: ${opp.candidateRoutingStatus || 'POTENTIAL PATHWAY'}` : `Pipeline: ${opp.pursuitStage}`}</span>
                           <span className="badge badge-amber" style={{ background: '#78350f' }}>Readiness: PRE-INCORPORATION</span>
                         </div>
                         <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#f8fafc' }}>{sanitizeHtmlToText(opp.title)}</h3>
@@ -597,11 +821,79 @@ export function App() {
                       </div>
                     )}
 
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                      <button onClick={(e) => handleAnalyze(opp.id, e)} style={{ background: 'rgba(59, 130, 246, 0.25)', border: '1px solid #3b82f6', color: '#93c5fd', padding: '0.35rem 0.75rem', borderRadius: '0.4rem', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600 }}>
-                        ⚡ Analyze & Score
+                    {/* Rendered Analysis Metrics Card Summary */}
+                    {analysis ? (
+                      <div style={{ marginTop: '0.85rem', padding: '0.75rem 0.9rem', background: 'rgba(30, 41, 59, 0.65)', borderRadius: '0.5rem', border: '1px solid rgba(59, 130, 246, 0.2)', fontSize: '0.825rem', color: '#cbd5e1' }}>
+                        <div style={{ display: 'flex', gap: '1.2rem', flexWrap: 'wrap', fontWeight: 600 }}>
+                          <div>🎯 Relevance: <strong style={{ color: '#60a5fa' }}>{relevance?.relevanceScore ?? 95}%</strong></div>
+                          <div>📊 Org Fit Score: <strong style={{ color: '#34d399' }}>{analysis.overallFitScore}%</strong></div>
+                          <div>📋 Evidence Coverage: <strong style={{ color: '#c084fc' }}>{analysis.evidenceCoverage}%</strong></div>
+                          <div>⚖️ Decision: <strong style={{ color: '#fbbf24' }}>{analysis.eligibilityDecision}</strong></div>
+                        </div>
+                        {analysis.updatedAt && (
+                          <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.3rem' }}>
+                            Analysis v{analysis.version || 1} • Updated {new Date(analysis.updatedAt).toLocaleTimeString()}
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div style={{ marginTop: '0.85rem', fontSize: '0.8rem', color: '#94a3b8', fontStyle: 'italic' }}>
+                        Not analyzed yet. Click "Analyze & Score" to calculate decision support metrics.
+                      </div>
+                    )}
+
+                    {/* Action Toolbar with Pursuit Safeguards */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                        <button
+                          onClick={(e) => handleAnalyze(opp.id, e)}
+                          disabled={analyzeState === 'RUNNING'}
+                          style={{
+                            background: analyzeState === 'COMPLETED' ? 'rgba(16, 185, 129, 0.25)' : 'rgba(59, 130, 246, 0.25)',
+                            border: analyzeState === 'COMPLETED' ? '1px solid #10b981' : '1px solid #3b82f6',
+                            color: analyzeState === 'COMPLETED' ? '#6ee7b7' : '#93c5fd',
+                            padding: '0.35rem 0.75rem',
+                            borderRadius: '0.4rem',
+                            fontSize: '0.8rem',
+                            cursor: analyzeState === 'RUNNING' ? 'wait' : 'pointer',
+                            fontWeight: 600,
+                          }}
+                        >
+                          {analyzeState === 'RUNNING' ? 'Analyzing…' : analyzeState === 'COMPLETED' ? '✓ Analysis Updated' : '⚡ Analyze & Score'}
+                        </button>
+
+                        <button
+                          onClick={(e) => handleNavigateToOpportunitySponsors(opp, e)}
+                          style={{
+                            background: 'rgba(139, 92, 246, 0.2)',
+                            border: '1px solid #8b5cf6',
+                            color: '#c084fc',
+                            padding: '0.35rem 0.75rem',
+                            borderRadius: '0.4rem',
+                            fontSize: '0.8rem',
+                            cursor: 'pointer',
+                            fontWeight: 600,
+                          }}
+                        >
+                          🤝 View Possible Sponsors ({matchCount})
+                        </button>
+
+                        {/* Disabled Qualification / Lock Safeguards for Routed Opportunities */}
+                        {isRouted && (
+                          <>
+                            <button disabled title="Direct qualification disabled for routed opportunities." style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem' }}>
+                              Mark Qualified
+                            </button>
+                            <button disabled title="Direct match locking disabled for routed opportunities." style={{ fontSize: '0.8rem', padding: '0.35rem 0.75rem' }}>
+                              🔒 Lock Match
+                            </button>
+                          </>
+                        )}
+                      </div>
+
+                      <button onClick={(e) => handleOpenDrawer(opp, e)} style={{ background: 'transparent', border: 'none', color: '#60a5fa', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer' }}>
+                        Review Details →
                       </button>
-                      <span style={{ color: '#60a5fa', fontWeight: 600, fontSize: '0.85rem' }}>Review Details →</span>
                     </div>
                   </div>
                 );
@@ -614,6 +906,38 @@ export function App() {
       {/* TAB 2: FISCAL SPONSOR DIRECTORY */}
       {activePrimaryTab === 'SPONSORS' && (
         <div className="card" style={{ marginTop: '1.5rem' }}>
+          {/* Opportunity-Specific Filter Header Banner */}
+          {selectedOppForSponsorView && (
+            <div style={{ background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.9) 0%, rgba(15, 23, 42, 0.9) 100%)', border: '1px solid #3b82f6', borderRadius: '0.75rem', padding: '1rem 1.25rem', marginBottom: '1.5rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem' }}>
+                <div>
+                  <span className="badge badge-purple" style={{ marginBottom: '0.25rem' }}>Filtered for Opportunity</span>
+                  <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#f8fafc' }}>
+                    {selectedOppForSponsorView.title} ({selectedOppForSponsorView.fundingOpportunityNumber})
+                  </h3>
+                  <p style={{ fontSize: '0.85rem', color: '#93c5fd', marginTop: '0.15rem' }}>
+                    <strong>Requirement:</strong> {selectedOppForSponsorView.candidateRoutingStatus || selectedOppForSponsorView.dismissedReason}
+                  </p>
+                </div>
+                <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                  <button
+                    onClick={() => handleCalculateSponsorMatches(selectedOppForSponsorView.id)}
+                    disabled={computingMatchesForOppId === selectedOppForSponsorView.id}
+                    style={{ background: 'rgba(139, 92, 246, 0.25)', border: '1px solid #8b5cf6', color: '#c084fc', padding: '0.4rem 0.85rem', borderRadius: '0.4rem', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600 }}
+                  >
+                    {computingMatchesForOppId === selectedOppForSponsorView.id ? 'Calculating…' : '⚡ Find Possible Sponsors (0 Outreach)'}
+                  </button>
+                  <button
+                    onClick={() => setSelectedOppForSponsorView(null)}
+                    style={{ background: 'rgba(59, 130, 246, 0.2)', border: '1px solid #3b82f6', color: '#93c5fd', padding: '0.4rem 0.85rem', borderRadius: '0.4rem', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600 }}
+                  >
+                    ← Show All Directory Sponsors
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
             <div>
               <h2 className="section-title" style={{ margin: 0 }}>🤝 Fiscal Sponsor Directory & Evidence-Backed Match Finder</h2>
@@ -653,32 +977,6 @@ export function App() {
                 <div><strong>Merged:</strong> {discoveryResult.recordsMerged || 0}</div>
                 <div><strong>Rejected:</strong> {discoveryResult.recordsRejected}</div>
               </div>
-              {discoveryResult.sourcesQueried && discoveryResult.sourcesQueried.length > 0 && (
-                <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '0.5rem', fontSize: '0.78rem', color: '#94a3b8' }}>
-                  <strong>HTTP Transport Evidence ({discoveryResult.sourcesQueried.length} sources):</strong>
-                  <ul style={{ margin: '0.25rem 0 0 1.25rem', padding: 0 }}>
-                    {discoveryResult.sourcesQueried.map((sq: any, idx: number) => (
-                      <li key={idx} style={{ marginBottom: '0.25rem' }}>
-                        {typeof sq === 'string'
-                          ? sq
-                          : `${sq.sourceName} • HTTP ${sq.httpStatus} • ${sq.responseByteCount?.toLocaleString()} bytes • Mode: ${sq.fetchMode || 'LIVE_HTTP'} • SHA-256: ${sq.responseHash?.substring(0, 16)}...`}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {discoveryResult.parsedCandidateAccounting && discoveryResult.parsedCandidateAccounting.length > 0 && (
-                <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '0.5rem', marginTop: '0.5rem', fontSize: '0.78rem', color: '#94a3b8' }}>
-                  <strong>Parsed Candidate Accounting ({discoveryResult.parsedCandidateAccounting.length} entries):</strong>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', marginTop: '0.25rem' }}>
-                    {discoveryResult.parsedCandidateAccounting.map((pca: any, idx: number) => (
-                      <div key={idx} style={{ color: '#cbd5e1' }}>
-                        • <strong>{pca.parsedName}</strong> ({pca.parsedDomain}) → <span style={{ color: pca.disposition === 'ACCEPTED_CANONICAL' ? '#4ade80' : '#f59e0b' }}>{pca.disposition}</span> ({pca.reason})
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
             </div>
           )}
 
@@ -691,22 +989,12 @@ export function App() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem' }}>
                     <div>
                       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.4rem', flexWrap: 'wrap' }}>
-                        {/* Section 2 UI Badges */}
-                        {s.isFixture && !s.hasLiveVerification && (
-                          <span className="badge badge-amber">🧪 Seed-only example</span>
-                        )}
-                        {!s.isFixture && s.hasLiveVerification && (
-                          <span className="badge badge-purple">🌐 Live verified</span>
-                        )}
-                        {s.isFixture && s.hasLiveVerification && (
-                          <span className="badge badge-blue">🔄 Seeded identity with live verification</span>
-                        )}
-                        {s.verificationLevel === 'DIRECTORY_REPORTED' && (
-                          <span className="badge badge-amber">📋 Directory-reported / not independently verified</span>
-                        )}
-                        <span className="badge badge-purple">
-                          Possible sponsor — research and human confirmation required
-                        </span>
+                        {s.isFixture && !s.hasLiveVerification && <span className="badge badge-amber">🧪 Seed-only example</span>}
+                        {!s.isFixture && s.hasLiveVerification && <span className="badge badge-purple">🌐 Live verified</span>}
+                        {s.isFixture && s.hasLiveVerification && <span className="badge badge-blue">🔄 Seeded identity with live verification</span>}
+                        {s.verificationLevel === 'DIRECTORY_REPORTED' && <span className="badge badge-amber">📋 Directory-reported</span>}
+                        <span className="badge badge-purple">Possible sponsor — human confirmation required</span>
+                        <span className="badge badge-blue" style={{ background: '#1e293b' }}>Status: NOT CONTACTED</span>
                       </div>
                       <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#f8fafc' }}>{s.name}</h3>
                       <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: '0.2rem' }}>
@@ -717,14 +1005,16 @@ export function App() {
                       </p>
                     </div>
 
-                    <button onClick={() => handleFetchBriefing(s.id)} style={{ background: 'rgba(59, 130, 246, 0.2)', border: '1px solid #3b82f6', color: '#93c5fd', padding: '0.4rem 0.85rem', borderRadius: '0.4rem', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600 }}>
-                      📄 Draft Inquiry Briefing
+                    <button
+                      onClick={() => handleFetchBriefing(s.id, selectedOppForSponsorView?.id)}
+                      style={{ background: 'rgba(59, 130, 246, 0.2)', border: '1px solid #3b82f6', color: '#93c5fd', padding: '0.4rem 0.85rem', borderRadius: '0.4rem', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600 }}
+                    >
+                      {selectedOppForSponsorView ? '📄 Draft Inquiry Briefing for Opportunity' : '📄 Draft General Introductory Briefing'}
                     </button>
                   </div>
 
                   <p style={{ fontSize: '0.9rem', color: '#cbd5e1', marginTop: '0.75rem' }}>{s.mission}</p>
 
-                  {/* Section 6 Granular Coverage Metrics */}
                   <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', margin: '0.75rem 0', fontSize: '0.8rem', color: '#94a3b8' }}>
                     <div>🆔 Identity Evidence: <strong style={{ color: '#60a5fa' }}>{s.identityEvidenceCoverage ?? 100}%</strong></div>
                     <div>⚙️ Operational Evidence: <strong style={{ color: '#f59e0b' }}>{s.operationalEvidenceCoverage ?? 67}%</strong></div>
@@ -739,6 +1029,12 @@ export function App() {
                     <div><strong>Federal Capability:</strong> {s.federalGrantCapability}</div>
                     <div><strong>SAM/UEI Status:</strong> {s.samUeiStatus}</div>
                   </div>
+
+                  {s.internalNotes && (
+                    <div style={{ marginTop: '0.75rem', fontSize: '0.825rem', background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.3)', color: '#fde68a', padding: '0.5rem 0.75rem', borderRadius: '0.4rem' }}>
+                      ⚠️ <strong>Compatibility Concerns:</strong> {s.internalNotes}
+                    </div>
+                  )}
 
                   {s.citations && s.citations.length > 0 && (
                     <div style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: '#94a3b8', background: 'rgba(139, 92, 246, 0.1)', padding: '0.5rem 0.75rem', borderRadius: '0.4rem', border: '1px solid rgba(139, 92, 246, 0.2)' }}>
@@ -889,14 +1185,142 @@ export function App() {
         </div>
       )}
 
-      {/* Briefing Packet Modal */}
+      {/* Review Details Drawer Modal */}
+      {selectedOppForDrawer && (
+        <div className="drawer-overlay" onClick={() => setSelectedOppForDrawer(null)}>
+          <div className="drawer-content" onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem' }}>
+              <div>
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.35rem', flexWrap: 'wrap' }}>
+                  <span className="badge badge-purple">{selectedOppForDrawer.isDemo ? 'DEMO FIXTURE' : 'VERIFIED OFFICIAL NOTICE'}</span>
+                  <span className="badge badge-blue">Pipeline: {selectedOppForDrawer.candidateRoutingStatus || selectedOppForDrawer.pursuitStage}</span>
+                </div>
+                <h2 style={{ fontSize: '1.35rem', fontWeight: 800, color: '#f8fafc' }}>
+                  {sanitizeHtmlToText(selectedOppForDrawer.title)}
+                </h2>
+                <p style={{ fontSize: '0.875rem', color: '#94a3b8', marginTop: '0.2rem' }}>
+                  <strong>Agency:</strong> {selectedOppForDrawer.fundingAgency} • <strong>Notice ID:</strong> {selectedOppForDrawer.fundingOpportunityNumber}
+                </p>
+              </div>
+              <button onClick={() => setSelectedOppForDrawer(null)} style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: '1.4rem', cursor: 'pointer' }}>✕</button>
+            </div>
+
+            {drawerLoading && <div style={{ padding: '2rem', textAlign: 'center', color: '#93c5fd' }}>Loading full opportunity details...</div>}
+
+            {drawerError && (
+              <div style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid #ef4444', color: '#fca5a5', padding: '0.85rem', borderRadius: '0.5rem', fontSize: '0.875rem' }}>
+                ⚠️ Error loading drawer details: {drawerError}
+              </div>
+            )}
+
+            {!drawerLoading && (
+              <>
+                {/* View Official Notice Link */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(30, 41, 59, 0.7)', padding: '0.85rem 1.1rem', borderRadius: '0.5rem', border: '1px solid rgba(59, 130, 246, 0.25)' }}>
+                  <div>
+                    <span style={{ fontSize: '0.85rem', color: '#94a3b8' }}>Official Source URL:</span>
+                  </div>
+                  <a
+                    href={selectedOppForDrawer.sourceUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    style={{ background: '#2563eb', color: '#fff', padding: '0.4rem 0.9rem', borderRadius: '0.4rem', fontWeight: 700, fontSize: '0.85rem', textDecoration: 'none' }}
+                  >
+                    🔗 View Official Notice on Grants.gov →
+                  </a>
+                </div>
+
+                {/* Direct Application Blocking Reason */}
+                {selectedOppForDrawer.dismissedReason && (
+                  <div style={{ background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#fca5a5', padding: '0.85rem 1rem', borderRadius: '0.5rem', fontSize: '0.875rem' }}>
+                    🔒 <strong>Direct Application Blocking Reason:</strong> {cleanReason(selectedOppForDrawer.dismissedReason)}
+                  </div>
+                )}
+
+                {/* Analysis Graph Section */}
+                <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: '1px solid var(--border-color)', borderRadius: '0.75rem', padding: '1.25rem' }}>
+                  <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#60a5fa', marginBottom: '0.75rem' }}>
+                    📊 Opportunity Eligibility & Decision Support Analysis
+                  </h3>
+
+                  {drawerAnalysis ? (
+                    <div>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '0.75rem', marginBottom: '1rem' }}>
+                        <div style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '0.75rem', borderRadius: '0.4rem' }}>
+                          <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Overall Fit Score</div>
+                          <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#34d399' }}>{drawerAnalysis.overallFitScore}%</div>
+                        </div>
+                        <div style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '0.75rem', borderRadius: '0.4rem' }}>
+                          <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Evidence Coverage</div>
+                          <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#c084fc' }}>{drawerAnalysis.evidenceCoverage}%</div>
+                        </div>
+                        <div style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '0.75rem', borderRadius: '0.4rem' }}>
+                          <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>Eligibility Decision</div>
+                          <div style={{ fontSize: '1.1rem', fontWeight: 800, color: '#fbbf24' }}>{drawerAnalysis.eligibilityDecision}</div>
+                        </div>
+                      </div>
+
+                      <div style={{ fontSize: '0.875rem', color: '#cbd5e1', marginBottom: '0.85rem' }}>
+                        <strong>Reasoning Summary:</strong> {drawerAnalysis.reasoningSummary}
+                      </div>
+
+                      {drawerAnalysis.analysisDimensions && drawerAnalysis.analysisDimensions.length > 0 && (
+                        <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '0.75rem' }}>
+                          <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#93c5fd', marginBottom: '0.5rem' }}>Dimension Scores</div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                            {drawerAnalysis.analysisDimensions.map((dim: any, idx: number) => (
+                              <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#cbd5e1' }}>
+                                <span>• {dim.dimensionKey} ({dim.matchStatus})</span>
+                                <strong style={{ color: '#38bdf8' }}>{dim.scoreAwarded} / 100</strong>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <div style={{ padding: '1rem', fontStyle: 'italic', color: '#94a3b8' }}>
+                      Not analyzed yet. Click "Analyze & Score" on the opportunity card to generate decision support analysis.
+                    </div>
+                  )}
+                </div>
+
+                {/* Possible Sponsors Navigation Action */}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(139, 92, 246, 0.12)', border: '1px solid #8b5cf6', padding: '1rem', borderRadius: '0.65rem' }}>
+                  <div>
+                    <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#c084fc' }}>🤝 Possible Fiscal Sponsor Pathways</h4>
+                    <p style={{ fontSize: '0.825rem', color: '#cbd5e1', marginTop: '0.15rem' }}>
+                      {drawerSponsorMatches.length} calculated sponsor match(es) for this opportunity requirement.
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => handleNavigateToOpportunitySponsors(selectedOppForDrawer)}
+                    style={{ background: '#8b5cf6', color: '#fff', padding: '0.5rem 1rem', borderRadius: '0.4rem', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', border: 'none' }}
+                  >
+                    View Possible Sponsors ({drawerSponsorMatches.length}) →
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Briefing Packet Modal Drawer */}
       {briefingPacket && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1.5rem' }}>
-          <div style={{ background: '#0f172a', border: '2px solid #3b82f6', borderRadius: '0.85rem', maxWidth: '780px', width: '100%', maxHeight: '90vh', overflowY: 'auto', padding: '1.5rem' }}>
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1200, padding: '1.5rem' }}>
+          <div style={{ background: '#0f172a', border: '2px solid #3b82f6', borderRadius: '0.85rem', maxWidth: '820px', width: '100%', maxHeight: '92vh', overflowY: 'auto', padding: '1.75rem' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem', marginBottom: '1rem' }}>
-              <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#fff' }}>
-                📄 Fiscal Sponsor Inquiry Briefing Packet — {briefingPacket.candidateName}
-              </h2>
+              <div>
+                <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.25rem' }}>
+                  <span className={`badge ${briefingPacket.inquiryType === 'SPECIFIC_OPPORTUNITY' ? 'badge-blue' : 'badge-purple'}`}>
+                    {briefingPacket.inquiryType === 'SPECIFIC_OPPORTUNITY' ? 'OPPORTUNITY-SPECIFIC INQUIRY' : 'GENERAL INTRODUCTORY INQUIRY'}
+                  </span>
+                </div>
+                <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#fff' }}>
+                  📄 Fiscal Sponsor Inquiry Briefing — {briefingPacket.candidateName}
+                </h2>
+              </div>
               <button onClick={() => setBriefingPacket(null)} style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
             </div>
 
@@ -904,11 +1328,51 @@ export function App() {
               {briefingPacket.safeguardNotice}
             </div>
 
-            <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#93c5fd', marginBottom: '0.5rem' }}>✉️ Draft Inquiry Email (Human Review & Dispatch Only)</h3>
-            <div style={{ background: 'rgba(30, 41, 59, 0.9)', padding: '1rem', borderRadius: '0.5rem', fontSize: '0.85rem', whiteSpace: 'pre-wrap', color: '#cbd5e1', marginBottom: '1.25rem' }}>
-              <strong>To:</strong> {briefingPacket.draftInquiryEmail.to}<br />
-              <strong>Subject:</strong> {briefingPacket.draftInquiryEmail.subject}<br /><br />
-              {briefingPacket.draftInquiryEmail.bodyText}
+            {/* Render Selected Opportunity Breakdown if Specific Opportunity */}
+            {briefingPacket.inquiryType === 'SPECIFIC_OPPORTUNITY' && (
+              <div style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(59, 130, 246, 0.3)', padding: '0.85rem 1rem', borderRadius: '0.5rem', marginBottom: '1.25rem', fontSize: '0.85rem', color: '#cbd5e1' }}>
+                <div style={{ fontWeight: 700, color: '#60a5fa', marginBottom: '0.35rem' }}>
+                  📋 Selected Opportunity: {briefingPacket.opportunityTitle} (Notice #{briefingPacket.opportunityNumber})
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.4rem', fontSize: '0.8rem' }}>
+                  <div><strong>Agency:</strong> {briefingPacket.fundingAgency}</div>
+                  <div><strong>Deadline:</strong> {briefingPacket.deadline}</div>
+                  <div><strong>Award Range:</strong> {briefingPacket.awardRange}</div>
+                  <div><strong>Match Requirement:</strong> {briefingPacket.matchRequirement}</div>
+                </div>
+              </div>
+            )}
+
+            {/* Editable Subject & Body Text Section */}
+            <div style={{ marginBottom: '1.25rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#93c5fd' }}>
+                  ✉️ Editable Draft Inquiry Email (Human Review & Dispatch)
+                </h3>
+                <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>To: {briefingPacket.draftInquiryEmail.to}</span>
+              </div>
+
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', color: '#94a3b8', marginBottom: '0.2rem', fontWeight: 600 }}>Subject Line:</label>
+                  <input
+                    type="text"
+                    value={editableSubject}
+                    onChange={(e) => setEditableSubject(e.target.value)}
+                    style={{ width: '100%', background: '#1e293b', border: '1px solid var(--border-color)', color: '#f8fafc', padding: '0.5rem 0.75rem', borderRadius: '0.4rem', fontSize: '0.85rem', fontWeight: 600 }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.78rem', color: '#94a3b8', marginBottom: '0.2rem', fontWeight: 600 }}>Email Body:</label>
+                  <textarea
+                    value={editableBodyText}
+                    onChange={(e) => setEditableBodyText(e.target.value)}
+                    rows={14}
+                    style={{ width: '100%', background: '#1e293b', border: '1px solid var(--border-color)', color: '#cbd5e1', padding: '0.75rem', borderRadius: '0.4rem', fontSize: '0.85rem', fontFamily: 'monospace', lineHeight: 1.5 }}
+                  />
+                </div>
+              </div>
             </div>
 
             <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#93c5fd', marginBottom: '0.5rem' }}>📞 Discovery Call Questions</h3>
@@ -918,8 +1382,24 @@ export function App() {
               ))}
             </ul>
 
-            <div style={{ textAlign: 'right', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
-              <button onClick={() => setBriefingPacket(null)} style={{ background: '#3b82f6', border: 'none', color: '#fff', padding: '0.5rem 1.25rem', borderRadius: '0.4rem', fontWeight: 700, cursor: 'pointer' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
+              <button
+                onClick={handleCopyEmail}
+                style={{
+                  background: copiedEmail ? '#10b981' : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                  border: 'none',
+                  color: '#fff',
+                  padding: '0.55rem 1.25rem',
+                  borderRadius: '0.4rem',
+                  fontWeight: 700,
+                  fontSize: '0.875rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)',
+                }}
+              >
+                {copiedEmail ? '✓ Copied to Clipboard!' : '📋 Copy Email to Clipboard'}
+              </button>
+              <button onClick={() => setBriefingPacket(null)} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid var(--border-color)', color: '#fff', padding: '0.55rem 1.25rem', borderRadius: '0.4rem', fontWeight: 700, cursor: 'pointer' }}>
                 Close Briefing
               </button>
             </div>

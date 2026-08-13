@@ -134,9 +134,14 @@ header {
   box-shadow: 0 0 10px #10b981;
 }
 
-.status-warning {
+.status-degraded {
   background-color: #f59e0b;
   box-shadow: 0 0 10px #f59e0b;
+}
+
+.status-warning {
+  background-color: #ef4444;
+  box-shadow: 0 0 10px #ef4444;
 }
 
 .badge {
@@ -255,7 +260,7 @@ header {
   border-color: rgba(59, 130, 246, 0.3);
 }
 
-.tab:focus-visible, .filter-btn:focus-visible {
+.tab:focus-visible, .filter-btn:focus-visible, button:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
 }
@@ -360,6 +365,40 @@ button {
   border-radius: 1rem;
   padding: 3rem 1.5rem;
   text-align: center;
+}
+
+/* Detail Drawer Styles */
+.drawer-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.82);
+  backdrop-filter: blur(8px);
+  display: flex;
+  justify-content: flex-end;
+  z-index: 1100;
+  animation: fadeIn 0.2s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.drawer-content {
+  background: #0f172a;
+  border-left: 2px solid #3b82f6;
+  width: 100%;
+  max-width: 780px;
+  height: 100vh;
+  overflow-y: auto;
+  padding: 2rem;
+  box-shadow: -10px 0 30px rgba(0,0,0,0.8);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
 }
 
 footer {

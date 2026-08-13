@@ -68,6 +68,25 @@ phase1eRouter.get('/fiscal-sponsors/matches/:opportunityId', async (req: Request
   }
 });
 
+// GET & POST /api/opportunities/:opportunityId/sponsor-matches
+phase1eRouter.get('/opportunities/:opportunityId/sponsor-matches', async (req: Request, res: Response) => {
+  try {
+    const matches = await FiscalSponsorService.matchOpportunityToSponsors(req.params.opportunityId);
+    res.json({ success: true, count: matches.length, data: matches });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+phase1eRouter.post('/opportunities/:opportunityId/sponsor-matches', async (req: Request, res: Response) => {
+  try {
+    const matches = await FiscalSponsorService.matchOpportunityToSponsors(req.params.opportunityId);
+    res.json({ success: true, count: matches.length, data: matches });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
 // POST /api/fiscal-sponsors/matches/:matchId/status
 phase1eRouter.post('/fiscal-sponsors/matches/:matchId/status', async (req: Request, res: Response) => {
   try {
