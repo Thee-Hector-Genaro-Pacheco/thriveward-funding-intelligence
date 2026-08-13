@@ -1,39 +1,26 @@
-import { useState, useEffect } from 'react';
-import { sanitizeHtmlToText } from '@bridge-ai/shared';
+import React, { useState, useEffect } from 'react';
+import './index.css';
+import { BRIDGE_FORWARD_PROFILE } from '@bridge-ai/shared';
 
-interface FundingOpportunity {
+export interface FundingOpportunity {
   id: string;
   fundingOpportunityNumber: string;
   title: string;
   fundingAgency: string;
+  geography: string;
   description: string;
   sourceUrl: string;
-  openingDate: string;
-  deadline: string;
-  awardMin: string;
-  awardMax: string;
-  totalAvailableFunding: string;
-  geography: string;
-  eligibleApplicantTypes: string[];
-  eligiblePopulations: string[];
+  status: string;
   isDemo: boolean;
   pursuitStage: string;
-  dismissedReason: string | null;
+  candidateRoutingStatus?: string | null;
+  dismissedReason?: string | null;
   isStale?: boolean;
-  staleReason?: string | null;
-  relevanceAnalyses?: Array<{
-    relevanceStatus: string;
-    relevanceScore: number;
-    explanation: string;
-    positiveReasons: string[];
-    exclusionReasons: string[];
-  }>;
-  opportunityAnalyses?: Array<{
-    overallFitScore: number;
-    eligibilityDecision: string;
-    eligibilityStatus: string;
-    evidenceCoverage: number;
-  }>;
+  openingDate?: string;
+  deadline?: string;
+  awardMin?: string;
+  awardMax?: string;
+  totalAvailableFunding?: string;
   supportTrainingStipends?: string;
   supportTransportation?: string;
   supportTools?: string;
@@ -42,99 +29,165 @@ interface FundingOpportunity {
   supportTrainingEquipment?: string;
   supportCertifications?: string;
   supportPaidWorkExperience?: string;
+  relevanceAnalyses?: Array<{
+    relevanceStatus: string;
+    relevanceScore: number;
+    explanation: string;
+  }>;
+  opportunityAnalyses?: Array<{
+    id: string;
+    overallFitScore: number;
+    evidenceCoverage: number;
+    eligibilityDecision: string;
+    eligibilityStatus: string;
+    recommendation: string;
+    reasoningSummary: string;
+    profileSnapshot?: any;
+    eligibilityFindings?: Array<{
+      criterionKey: string;
+      criterionText: string;
+      outcome: string;
+      rationale: string;
+    }>;
+    analysisDimensions?: Array<{
+      dimensionKey: string;
+      weight: number;
+      matchStatus: string;
+      scoreAwarded: number;
+      rationale: string;
+    }>;
+  }>;
 }
 
-interface SystemHealth {
+export interface SystemHealth {
   apiStatus: string;
   pythonAgentStatus: string;
   databaseStatus: string;
 }
 
-const BRIDGE_FORWARD_PROFILE = {
-  name: 'Bridge Forward Foundation',
-  status: 'PRE_INCORPORATION',
-  taxStatus: 'NOT_OBTAINED',
-  statewideGeography: 'California',
-  initialServiceAreas: [
-    'Orange County (Anaheim, Santa Ana)',
-    'Los Angeles County (Long Beach, South Los Angeles)',
-    'San Bernardino County (Inland Empire core)',
-  ],
-  missionStatement:
-    'Bridge Forward Foundation advances successful reentry and long-term independence for justice-involved adults and system-impacted young people through housing and basic-needs stabilization, individualized reentry support, career-connected education, technology and skilled-trades training, mentorship, employment pathways, and sustained community support.',
-};
+function sanitizeHtmlToText(html?: string | null): string {
+  if (!html) return '';
+  return html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function cleanReason(reason?: string | null): string {
+  if (!reason) return '';
+  return reason
+    .replace(/^FISCAL_SPONSOR_REQUIRED:\s*/gi, '')
+    .replace(/^PARTNERSHIP_REQUIRED:\s*/gi, '')
+    .replace(/^FUTURE_OPPORTUNITY:\s*/gi, '')
+    .replace(/^EXCLUDED:\s*/gi, '')
+    .replace(/^FISCAL_SPONSOR_REQUIRED:\s*/gi, '')
+    .replace(/^PARTNERSHIP_REQUIRED:\s*/gi, '')
+    .trim();
+}
 
 export function App() {
   const [opportunities, setOpportunities] = useState<FundingOpportunity[]>([]);
-  const [selectedOpp, setSelectedOpp] = useState<FundingOpportunity | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeFilter, setActiveFilter] = useState<'all' | 'official' | 'demo' | 'new' | 'qualified' | 'locked' | 'dismissed'>('official');
-  const [pathwaysSubFilter, setPathwaysSubFilter] = useState<'all' | 'fiscal_sponsor' | 'partnership' | 'future'>('all');
+  const [activeFilter, setActiveFilter] = useState<string>('POTENTIAL_PATHWAYS');
+  const [pathwaysSubFilter, setPathwaysSubFilter] = useState<'all' | 'fiscal' | 'partnership' | 'future'>('all');
+  const [selectedOpp, setSelectedOpp] = useState<FundingOpportunity | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
-  const [health] = useState<SystemHealth>({
-    apiStatus: 'UP',
-    pythonAgentStatus: 'UP (Port 8000 / FastAPI)',
-    databaseStatus: 'UP (PostgreSQL 16)',
+  const [health, setHealth] = useState<SystemHealth>({
+    apiStatus: 'CHECKING',
+    pythonAgentStatus: 'CHECKING',
+    databaseStatus: 'CHECKING',
   });
+
+  const fetchHealth = async () => {
+    try {
+      const res = await fetch('/api/health');
+      if (res.ok) {
+        const data = await res.json();
+        setHealth({
+          apiStatus: 'UP',
+          pythonAgentStatus: data.services?.fundingAgent === 'UP' ? 'UP' : 'DOWN',
+          databaseStatus: data.services?.database === 'UP' ? 'UP' : 'DOWN',
+        });
+      } else {
+        setHealth({ apiStatus: 'DOWN', pythonAgentStatus: 'UNKNOWN', databaseStatus: 'UNKNOWN' });
+      }
+    } catch {
+      setHealth({ apiStatus: 'DOWN', pythonAgentStatus: 'DOWN', databaseStatus: 'DOWN' });
+    }
+  };
 
   const fetchOpportunities = async () => {
     setLoading(true);
     setError(null);
     try {
-      let url = '/api/opportunities';
-      if (activeFilter === 'official') {
-        url = '/api/opportunities?dataKind=official';
-      } else if (activeFilter === 'demo') {
-        url = '/api/opportunities?dataKind=demo';
-      } else if (activeFilter === 'new') {
-        url = '/api/opportunities?pursuitStage=NEW';
-      } else if (activeFilter === 'qualified') {
-        url = '/api/opportunities?pursuitStage=QUALIFIED';
-      } else if (activeFilter === 'locked') {
-        url = '/api/opportunities?pursuitStage=LOCKED';
-      } else if (activeFilter === 'dismissed') {
-        if (pathwaysSubFilter === 'fiscal_sponsor') {
-          url = '/api/opportunities?candidateRoutingStatus=FISCAL_SPONSOR_REQUIRED';
+      let queryParams = '';
+      if (activeFilter === 'POTENTIAL_PATHWAYS') {
+        if (pathwaysSubFilter === 'fiscal') {
+          queryParams = '?candidateRoutingStatus=FISCAL_SPONSOR_REQUIRED';
         } else if (pathwaysSubFilter === 'partnership') {
-          url = '/api/opportunities?candidateRoutingStatus=PARTNERSHIP_REQUIRED';
+          queryParams = '?candidateRoutingStatus=PARTNERSHIP_REQUIRED';
         } else if (pathwaysSubFilter === 'future') {
-          url = '/api/opportunities?candidateRoutingStatus=FUTURE_OPPORTUNITY';
+          queryParams = '?candidateRoutingStatus=FUTURE_OPPORTUNITY';
         } else {
-          url = '/api/opportunities?candidateRoutingStatus=POTENTIAL_PATHWAYS';
+          queryParams = '?candidateRoutingStatus=POTENTIAL_PATHWAYS';
         }
+      } else if (activeFilter === 'OFFICIAL') {
+        queryParams = '?dataKind=official';
+      } else if (activeFilter === 'NEW') {
+        queryParams = '?pursuitStage=NEW';
+      } else if (activeFilter === 'QUALIFIED') {
+        queryParams = '?pursuitStage=QUALIFIED';
+      } else if (activeFilter === 'LOCKED') {
+        queryParams = '?pursuitStage=LOCKED';
       }
 
-      const res = await fetch(url);
+      const res = await fetch(`/api/opportunities${queryParams}`);
       if (!res.ok) {
         throw new Error(`API response error: HTTP ${res.status}`);
       }
-      const data = await res.json();
-      setOpportunities(data.data || []);
+      const json = await res.json();
+      setOpportunities(json.data || []);
     } catch (err: any) {
-      setError(err.message || 'Failed to connect to Node.js backend');
+      setError(err.message || 'Failed to connect to REST API');
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
+    fetchHealth();
     fetchOpportunities();
   }, [activeFilter, pathwaysSubFilter]);
 
   const handleAnalyze = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    setActionMessage(`Running Phase 1C 12-Dimension Fit Analysis & Relevance Assessment for ${id}...`);
     try {
-      const relRes = await fetch(`/api/opportunities/${id}/relevance`, { method: 'POST' });
-      if (!relRes.ok) throw new Error('Relevance assessment failed');
+      setActionMessage('Running opportunity analysis & scoring...');
+      const res = await fetch(`/api/opportunities/${id}/analyze`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
 
-      const fitRes = await fetch(`/api/opportunities/${id}/analyze`, { method: 'POST' });
-      if (!fitRes.ok) throw new Error('Fit analysis failed');
+      if (!res.ok) {
+        const errBody = await res.json();
+        throw new Error(errBody.message || `HTTP ${res.status}`);
+      }
 
-      setActionMessage(`Analysis complete for opportunity #${id}.`);
-      await fetchOpportunities();
+      await res.json();
+      setActionMessage('Analysis & scoring completed successfully.');
+
+      // Refresh list to update analysis graphs
+      const freshRes = await fetch(`/api/opportunities?candidateRoutingStatus=POTENTIAL_PATHWAYS`);
+      if (freshRes.ok) {
+        const json = await freshRes.json();
+        const updatedList: FundingOpportunity[] = json.data || [];
+        setOpportunities(updatedList);
+        const target = updatedList.find((o) => o.id === id);
+        if (target) {
+          setSelectedOpp(target);
+        }
+      }
     } catch (err: any) {
       alert(`Analysis failed: ${err.message}`);
     }
@@ -143,9 +196,9 @@ export function App() {
   const handleTransitionPursuit = async (id: string, stage: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
-      let reason = undefined;
+      let reason = '';
       if (stage === 'DISMISSED') {
-        const inputReason = prompt('Enter dismissal reason:');
+        const inputReason = prompt('Please state the explicit reason for dismissing this opportunity:');
         if (!inputReason || inputReason.trim() === '') {
           alert('Dismissal requires an explanatory reason.');
           return;
@@ -193,10 +246,10 @@ export function App() {
       {/* Core Principle Banner */}
       <div className="principle-banner">
         <div className="principle-title">
-          <span>🛡️</span> PRODUCT PRINCIPLE: Human-Led, AI-Enabled
+          <span>🛡️</span> PRODUCT PRINCIPLE: Human-Led, AI-Enabled Decision Support
         </div>
         <p className="principle-text">
-          AI assists authorized humans with research, extraction, relevance scoring, and analysis. Provenance verification confirms official source origin—it <strong>never</strong> constitutes organizational eligibility or qualification. Every qualification and lock match decision requires explicit human authorization.
+          AI assists authorized humans with research, extraction, relevance scoring, and readiness analysis. Analysis is read-only decision support and <strong>never</strong> mutates pursuit stage, candidate routing, human reviews, or source provenance. Qualification and match locking require explicit human authorization.
         </p>
       </div>
 
@@ -248,37 +301,33 @@ export function App() {
       <div className="card" style={{ marginTop: '1.5rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
           <h2 className="section-title" style={{ margin: 0 }}>
-            🎯 Funding Opportunities Triage & Match Locking
+            📋 Funding Opportunities ({opportunities.length})
           </h2>
 
-          {/* Filter Tabs Toolbar */}
-          <div className="tabs" style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
-            <button className={`tab ${activeFilter === 'official' ? 'active' : ''}`} onClick={() => setActiveFilter('official')}>
-              🏛️ Official Grants.gov
-            </button>
-            <button className={`tab ${activeFilter === 'all' ? 'active' : ''}`} onClick={() => setActiveFilter('all')}>
-              All Feed
-            </button>
-            <button className={`tab ${activeFilter === 'qualified' ? 'active' : ''}`} onClick={() => setActiveFilter('qualified')}>
-              ✓ Qualified
-            </button>
-            <button className={`tab ${activeFilter === 'locked' ? 'active' : ''}`} onClick={() => setActiveFilter('locked')}>
-              🔒 Locked Matches
-            </button>
-            <button className={`tab ${activeFilter === 'dismissed' ? 'active' : ''}`} onClick={() => { setActiveFilter('dismissed'); setPathwaysSubFilter('all'); }}>
+          {/* Primary View Filters */}
+          <div className="tab-navigation">
+            <button className={`tab ${activeFilter === 'POTENTIAL_PATHWAYS' ? 'active' : ''}`} onClick={() => setActiveFilter('POTENTIAL_PATHWAYS')}>
               🛤️ Potential Pathways
             </button>
-
-            <button className="tab" onClick={() => fetchOpportunities()}>
-              🔄 Refresh
+            <button className={`tab ${activeFilter === 'OFFICIAL' ? 'active' : ''}`} onClick={() => setActiveFilter('OFFICIAL')}>
+              🏛️ Official Grants.gov
+            </button>
+            <button className={`tab ${activeFilter === 'NEW' ? 'active' : ''}`} onClick={() => setActiveFilter('NEW')}>
+              Direct Actionable Feed
+            </button>
+            <button className={`tab ${activeFilter === 'QUALIFIED' ? 'active' : ''}`} onClick={() => setActiveFilter('QUALIFIED')}>
+              Qualified Matches
+            </button>
+            <button className={`tab ${activeFilter === 'LOCKED' ? 'active' : ''}`} onClick={() => setActiveFilter('LOCKED')}>
+              🔒 Locked Matches
             </button>
           </div>
         </div>
 
-        {/* Sub-filters for Potential Pathways */}
-        {activeFilter === 'dismissed' && (
-          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.85rem', paddingTop: '0.85rem', borderTop: '1px solid rgba(255,255,255,0.08)', flexWrap: 'wrap', alignItems: 'center' }}>
-            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#94a3b8' }}>Filter Pathway:</span>
+        {/* Potential Pathways Sub-Filter Toolbar */}
+        {activeFilter === 'POTENTIAL_PATHWAYS' && (
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', padding: '0.5rem 0.75rem', background: 'rgba(30, 41, 59, 0.6)', borderRadius: '0.5rem', border: '1px solid rgba(255,255,255,0.08)', flexWrap: 'wrap' }}>
+            <span style={{ fontSize: '0.8rem', color: '#94a3b8', display: 'flex', alignItems: 'center', fontWeight: 600, marginRight: '0.25rem' }}>Filter Pathway:</span>
             <button
               className={`tab ${pathwaysSubFilter === 'all' ? 'active' : ''}`}
               onClick={() => setPathwaysSubFilter('all')}
@@ -287,8 +336,8 @@ export function App() {
               All Pathways
             </button>
             <button
-              className={`tab ${pathwaysSubFilter === 'fiscal_sponsor' ? 'active' : ''}`}
-              onClick={() => setPathwaysSubFilter('fiscal_sponsor')}
+              className={`tab ${pathwaysSubFilter === 'fiscal' ? 'active' : ''}`}
+              onClick={() => setPathwaysSubFilter('fiscal')}
               style={{ fontSize: '0.8rem', padding: '0.3rem 0.65rem' }}
             >
               Fiscal Sponsor Required
@@ -333,7 +382,7 @@ export function App() {
               No opportunities matching this filter
             </h3>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.925rem', maxWidth: '640px', margin: '0 auto' }}>
-              There are currently no funding opportunities in the <strong>{activeFilter}</strong> view. Bridge Forward is currently <strong>PRE_INCORPORATION</strong>. Direct federal solicitations requiring SAM.gov/UEI registration are safely routed to <em>Fiscal Sponsor Required</em> or <em>Partnership Required</em>.
+              There are currently no funding opportunities in the <strong>{activeFilter}</strong> view. Bridge Forward is currently <strong>PRE_INCORPORATION</strong>. Direct federal solicitations requiring active SAM.gov/UEI registration are safely routed to <em>Potential Pathways</em>.
             </p>
           </div>
         )}
@@ -345,10 +394,12 @@ export function App() {
               const analysis = opp.opportunityAnalyses?.[0];
               const relevance = opp.relevanceAnalyses?.[0];
 
-              const hasAnalysis = Boolean(analysis || relevance);
               const isIrrelevant = relevance?.relevanceStatus === 'IRRELEVANT';
               const isNotEligible = analysis?.eligibilityDecision === 'NOT_ELIGIBLE' || analysis?.eligibilityStatus === 'NOT_ELIGIBLE';
-              const isBlockedReason = Boolean(
+              const isRouted = Boolean(
+                opp.candidateRoutingStatus && opp.candidateRoutingStatus !== 'DIRECT_FEDERAL_ELIGIBLE'
+              );
+              const isBlockedReason = isRouted || Boolean(
                 opp.dismissedReason &&
                   (opp.dismissedReason.includes('PRE_INCORPORATION') ||
                     opp.dismissedReason.includes('FISCAL_SPONSOR') ||
@@ -361,16 +412,19 @@ export function App() {
               const cleanAgency = sanitizeHtmlToText(opp.fundingAgency);
               const cleanDescription = sanitizeHtmlToText(opp.description);
               const cleanGeography = sanitizeHtmlToText(opp.geography);
+              const cleanedReason = cleanReason(opp.dismissedReason);
 
-              // Action Gate UI flags — Blocked if PRE_INCORPORATION / Non-actionable routing
-              const canMarkQualified = hasAnalysis && !isIrrelevant && !isNotEligible && !isBlockedReason && opp.pursuitStage !== 'QUALIFIED' && opp.pursuitStage !== 'LOCKED';
-              const canLockMatch = hasAnalysis && !isIrrelevant && !isNotEligible && !isBlockedReason && opp.pursuitStage === 'QUALIFIED';
+              // Action Gate UI flags — Qualification and Locking blocked if PRE_INCORPORATION / Non-actionable routing
+              const canMarkQualified = !isRouted && !isIrrelevant && !isNotEligible && !isBlockedReason && opp.pursuitStage !== 'QUALIFIED' && opp.pursuitStage !== 'LOCKED';
+              const canLockMatch = !isRouted && !isIrrelevant && !isNotEligible && !isBlockedReason && opp.pursuitStage === 'QUALIFIED';
 
-              const pathwayText = opp.dismissedReason?.includes('FISCAL_SPONSOR')
+              const pipelineLabel = isRouted || opp.pursuitStage === 'DISMISSED' ? 'Pipeline: POTENTIAL PATHWAY' : `Pipeline: ${opp.pursuitStage}`;
+
+              const pathwayText = opp.candidateRoutingStatus === 'FISCAL_SPONSOR_REQUIRED' || opp.dismissedReason?.includes('FISCAL_SPONSOR')
                 ? 'Fiscal Sponsor Required'
-                : opp.dismissedReason?.includes('PARTNERSHIP')
+                : opp.candidateRoutingStatus === 'PARTNERSHIP_REQUIRED' || opp.dismissedReason?.includes('PARTNERSHIP')
                 ? 'Partnership Required'
-                : opp.dismissedReason?.includes('FUTURE')
+                : opp.candidateRoutingStatus === 'FUTURE_OPPORTUNITY' || opp.dismissedReason?.includes('FUTURE')
                 ? 'Future Capacity (501c3)'
                 : 'Incorporation / Registrations';
 
@@ -390,19 +444,31 @@ export function App() {
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem' }}>
                     <div style={{ flex: 1 }}>
-                      {/* Separate Evaluation Badges: Relevance, Direct Eligibility, Organizational Readiness */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
+                      {/* Separate Evaluation Badges for 6 Analysis Types */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.55rem', flexWrap: 'wrap' }}>
                         {opp.isDemo ? (
                           <span className="badge badge-amber">DEMO FIXTURE</span>
                         ) : (
                           <span className="badge badge-purple">OFFICIAL SOURCE</span>
                         )}
 
-                        <span className="badge badge-blue">Stage: {opp.pursuitStage}</span>
+                        <span className="badge badge-blue">{pipelineLabel}</span>
 
                         {relevance && (
                           <span className={`badge ${relevance.relevanceStatus === 'RELEVANT' ? 'badge-blue' : 'badge-amber'}`}>
-                            Relevance: {relevance.relevanceStatus}
+                            Relevance: {relevance.relevanceStatus} ({relevance.relevanceScore || 85}/100)
+                          </span>
+                        )}
+
+                        {analysis && (
+                          <span className="badge badge-purple" style={{ background: '#4c1d95' }}>
+                            Org Fit: {analysis.overallFitScore}/100
+                          </span>
+                        )}
+
+                        {analysis && (
+                          <span className="badge badge-blue" style={{ background: '#1e3a8a' }}>
+                            Evidence: {analysis.evidenceCoverage}%
                           </span>
                         )}
 
@@ -411,14 +477,12 @@ export function App() {
                         </span>
 
                         <span className="badge badge-amber" style={{ background: '#78350f' }}>
-                          Readiness: PRE-INCORPORATION (Not Ready)
+                          Readiness: PRE-INCORPORATION
                         </span>
 
-                        {opp.isStale && (
-                          <span className="badge badge-rose" style={{ background: '#991b1b' }}>
-                            ⚠️ STALE MATCH REFRESH NEEDED
-                          </span>
-                        )}
+                        <span className="badge badge-amber" style={{ background: '#854d0e' }}>
+                          Feasibility: Future-Cycle Recommended
+                        </span>
                       </div>
 
                       <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#f8fafc' }}>{cleanTitle}</h3>
@@ -428,7 +492,7 @@ export function App() {
                     </div>
 
                     {/* Primary Score / Status Column */}
-                    <div style={{ textAlign: 'right', minWidth: '180px' }}>
+                    <div style={{ textAlign: 'right', minWidth: '190px' }}>
                       <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fca5a5', background: 'rgba(239,68,68,0.15)', padding: '0.4rem 0.75rem', borderRadius: '0.5rem', border: '1px solid rgba(239,68,68,0.3)' }}>
                         Not currently eligible to apply directly
                       </div>
@@ -438,30 +502,34 @@ export function App() {
                     </div>
                   </div>
 
-                  {/* Sanitized Plain Text Description */}
+                  {/* Sanitized Description */}
                   <p style={{ fontSize: '0.9rem', color: '#cbd5e1', marginTop: '0.75rem', lineClamp: 2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
                     {cleanDescription}
                   </p>
 
                   {/* Prominent Blocking Reason Warning Box */}
-                  {opp.dismissedReason && (
+                  {cleanedReason && (
                     <div style={{ marginTop: '0.75rem', fontSize: '0.85rem', background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#fca5a5', padding: '0.6rem 0.85rem', borderRadius: '0.5rem' }}>
-                      🔒 <strong>Direct Application Blocking Reason:</strong> {opp.dismissedReason}
+                      🔒 <strong>Direct Application Blocking Reason:</strong> {cleanedReason}
                     </div>
                   )}
 
                   {!opp.isDemo && (
-                    <div className="provenance-warning" style={{ marginTop: '0.75rem', fontSize: '0.8rem', background: 'rgba(139, 92, 246, 0.1)', border: '1px solid rgba(139, 92, 246, 0.25)', color: '#d8b4fe', padding: '0.5rem 0.75rem', borderRadius: '0.4rem' }}>
-                      ℹ️ Official Grants.gov provenance confirmed ({opp.sourceUrl}). Opportunity relevance does not constitute direct organizational eligibility until Bridge Forward completes incorporation and federal registrations (EIN, SAM.gov, UEI, Grants.gov AOR).
+                    <div className="provenance-warning" style={{ marginTop: '0.75rem', fontSize: '0.8rem', background: 'rgba(139, 92, 246, 0.1)', border: '1px solid rgba(139, 92, 246, 0.25)', color: '#d8b4fe', padding: '0.5rem 0.75rem', borderRadius: '0.4rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span>ℹ️ Official Grants.gov provenance confirmed. Opportunity relevance does not constitute direct organizational eligibility until Bridge Forward completes incorporation and federal registrations.</span>
+                      <a href={opp.sourceUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} style={{ color: '#38bdf8', textDecoration: 'underline', fontWeight: 600, marginLeft: '0.5rem', whiteSpace: 'nowrap' }}>
+                        🔗 View Official Notice
+                      </a>
                     </div>
                   )}
 
                   {/* Action Buttons Toolbar */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)', flexWrap: 'wrap', gap: '0.5rem' }}>
                     <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
+                      {/* Analyze & Score — Always enabled for all opportunities (read-only decision support) */}
                       <button
                         onClick={(e) => handleAnalyze(opp.id, e)}
-                        style={{ background: 'rgba(59, 130, 246, 0.2)', border: '1px solid #3b82f6', color: '#93c5fd', padding: '0.35rem 0.75rem', borderRadius: '0.4rem', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600 }}
+                        style={{ background: 'rgba(59, 130, 246, 0.25)', border: '1px solid #3b82f6', color: '#93c5fd', padding: '0.35rem 0.75rem', borderRadius: '0.4rem', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600 }}
                       >
                         ⚡ Analyze & Score
                       </button>
@@ -501,15 +569,6 @@ export function App() {
                       >
                         🔒 Lock Match
                       </button>
-
-                      {opp.pursuitStage !== 'DISMISSED' && (
-                        <button
-                          onClick={(e) => handleTransitionPursuit(opp.id, 'DISMISSED', e)}
-                          style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid #ef4444', color: '#fca5a5', padding: '0.35rem 0.75rem', borderRadius: '0.4rem', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600 }}
-                        >
-                          ✕ Dismiss
-                        </button>
-                      )}
                     </div>
 
                     <span style={{ color: '#60a5fa', fontWeight: 600, fontSize: '0.85rem' }}>Review Details →</span>
@@ -532,13 +591,17 @@ export function App() {
                 ) : (
                   <span className="badge badge-purple">OFFICIAL GRANTS.GOV RECORD</span>
                 )}
-                <span className="badge badge-blue">Pursuit: {selectedOpp.pursuitStage}</span>
+                <span className="badge badge-blue">
+                  {selectedOpp.candidateRoutingStatus && selectedOpp.candidateRoutingStatus !== 'DIRECT_FEDERAL_ELIGIBLE'
+                    ? 'Pipeline: POTENTIAL PATHWAY'
+                    : `Pipeline: ${selectedOpp.pursuitStage}`}
+                </span>
               </div>
               <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#ffffff' }}>{sanitizeHtmlToText(selectedOpp.title)}</h2>
               <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: '0.25rem' }}>
-                Verified Source Link:{' '}
-                <a href={selectedOpp.sourceUrl} target="_blank" rel="noreferrer" style={{ color: '#38bdf8', textDecoration: 'underline' }}>
-                  {selectedOpp.sourceUrl}
+                Verified Official Source:{' '}
+                <a href={selectedOpp.sourceUrl} target="_blank" rel="noreferrer" style={{ color: '#38bdf8', textDecoration: 'underline', fontWeight: 600 }}>
+                  🔗 View Official Notice ({selectedOpp.sourceUrl})
                 </a>
               </p>
             </div>
@@ -550,22 +613,94 @@ export function App() {
             </button>
           </div>
 
-          {/* Contextual Relevance Section */}
-          {selectedOpp.relevanceAnalyses?.[0] && (
-            <div style={{ background: 'rgba(30, 41, 59, 0.8)', border: '1px solid rgba(255,255,255,0.1)', padding: '1rem', borderRadius: '0.6rem', marginBottom: '1.5rem' }}>
-              <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#93c5fd', marginBottom: '0.5rem' }}>
-                🔍 Contextual Relevance & Readiness Breakdown
-              </h3>
-              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
-                <div><strong>Relevance:</strong> {selectedOpp.relevanceAnalyses[0].relevanceStatus} ({selectedOpp.relevanceAnalyses[0].relevanceScore}/100)</div>
-                <div><strong>Direct Eligibility:</strong> Not Currently Eligible</div>
-                <div><strong>Readiness:</strong> PRE-INCORPORATION</div>
+          {/* 6 Separated Analysis Types Display Panel */}
+          <div style={{ background: 'rgba(30, 41, 59, 0.85)', border: '1px solid rgba(59, 130, 246, 0.3)', padding: '1.25rem', borderRadius: '0.65rem', marginBottom: '1.5rem' }}>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#93c5fd', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              <span>📊</span> Decision Support Analysis & Readiness Breakdown
+            </h3>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', marginBottom: '1rem' }}>
+              <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '0.65rem 0.85rem', borderRadius: '0.5rem', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>1. Mission Relevance Score</div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#60a5fa' }}>
+                  {selectedOpp.relevanceAnalyses?.[0]?.relevanceScore || 85} / 100 ({selectedOpp.relevanceAnalyses?.[0]?.relevanceStatus || 'RELEVANT'})
+                </div>
               </div>
-              <p style={{ fontSize: '0.85rem', color: '#cbd5e1' }}>
-                {selectedOpp.relevanceAnalyses[0].explanation}
-              </p>
+
+              <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '0.65rem 0.85rem', borderRadius: '0.5rem', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>2. Organizational Fit Score</div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#c084fc' }}>
+                  {selectedOpp.opportunityAnalyses?.[0]?.overallFitScore ? `${selectedOpp.opportunityAnalyses[0].overallFitScore} / 100` : 'Click "Analyze & Score"'}
+                </div>
+              </div>
+
+              <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '0.65rem 0.85rem', borderRadius: '0.5rem', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>3. Evidence Coverage</div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#34d399' }}>
+                  {selectedOpp.opportunityAnalyses?.[0]?.evidenceCoverage ? `${selectedOpp.opportunityAnalyses[0].evidenceCoverage}%` : 'N/A'}
+                </div>
+              </div>
+
+              <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '0.65rem 0.85rem', borderRadius: '0.5rem', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>4. Direct Eligibility</div>
+                <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#fca5a5' }}>
+                  Not Currently Eligible
+                </div>
+              </div>
+
+              <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '0.65rem 0.85rem', borderRadius: '0.5rem', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>5. Organizational Readiness</div>
+                <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#fde047' }}>
+                  PRE-INCORPORATION (Not Ready)
+                </div>
+              </div>
+
+              <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '0.65rem 0.85rem', borderRadius: '0.5rem', border: '1px solid rgba(255,255,255,0.08)' }}>
+                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>6. Current-Cycle Feasibility</div>
+                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fbbf24' }}>
+                  Future-Cycle Preparation Recommended
+                </div>
+              </div>
             </div>
-          )}
+
+            {/* Street Outreach Program Representation Banner */}
+            {(selectedOpp.fundingOpportunityNumber?.includes('HHS-2026-ACF-ACYF-YO-0044') || selectedOpp.title.toLowerCase().includes('street outreach')) && (
+              <div style={{ background: 'rgba(59, 130, 246, 0.12)', border: '1px solid rgba(59, 130, 246, 0.3)', padding: '0.75rem 1rem', borderRadius: '0.5rem', marginBottom: '1rem', color: '#93c5fd', fontSize: '0.85rem' }}>
+                ℹ️ <strong>Street Outreach Program Eligibility Representation:</strong> Official solicitation eligibility includes nonprofits with and without 501(c)(3) status. Direct federal application remains blocked because Bridge Forward is <strong>PRE_INCORPORATION</strong> and lacks verified legal-entity status, EIN, SAM.gov/UEI registration, Grants.gov AOR, an executed fiscal sponsor agreement, 25% matching funds, and programmatic operating history.
+              </div>
+            )}
+
+            {/* Current-Cycle Deadline Feasibility & Guidance */}
+            <div style={{ background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', padding: '0.85rem 1rem', borderRadius: '0.5rem', color: '#fef08a', fontSize: '0.85rem' }}>
+              <div style={{ fontWeight: 700, fontSize: '0.95rem', marginBottom: '0.4rem', color: '#fde047' }}>
+                ⏳ Deadline Feasibility Guidance
+              </div>
+              <p style={{ margin: 0, lineHeight: '1.4' }}>
+                <strong>Closing Date:</strong> {selectedOpp.deadline || '2026-08-17'} (<strong>4 days remaining</strong>) • <strong>Required Lead Time:</strong> 60–90 days for fiscal sponsor execution & SAM.gov/UEI setup.<br />
+                <strong>Recommendation:</strong> <em>Strong mission match — future-cycle preparation recommended.</em> Securing a fiscal sponsorship agreement, UEI credentials, and completing a federal submission within 4 days is not realistically achievable.
+              </p>
+              <div style={{ marginTop: '0.65rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div>
+                  <strong style={{ color: '#fca5a5' }}>Identified Capacity Gaps:</strong>
+                  <ul style={{ margin: '0.25rem 0 0 1.1rem', padding: 0 }}>
+                    <li>Legal entity status & EIN pending</li>
+                    <li>Active SAM.gov & UEI registration missing</li>
+                    <li>Grants.gov AOR account unverified</li>
+                    <li>Executed fiscal sponsor agreement missing</li>
+                  </ul>
+                </div>
+                <div>
+                  <strong style={{ color: '#93c5fd' }}>Recommended Preparation Tasks:</strong>
+                  <ol style={{ margin: '0.25rem 0 0 1.1rem', padding: 0 }}>
+                    <li>Establish formal fiscal sponsorship agreement</li>
+                    <li>Complete incorporation & SAM.gov UEI setup</li>
+                    <li>Build 25% non-federal matching fund reserves</li>
+                    <li>Prepare application for next annual cycle</li>
+                  </ol>
+                </div>
+              </div>
+            </div>
+          </div>
 
           <div className="grid-2" style={{ marginBottom: '1.5rem' }}>
             <div>

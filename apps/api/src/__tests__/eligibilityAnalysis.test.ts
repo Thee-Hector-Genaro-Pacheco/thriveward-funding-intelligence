@@ -583,6 +583,19 @@ describe('Phase 1C — Eligibility and Fit Analysis Foundation Complete Test Sui
     });
 
     it('Case 53: Official analysis preserves Phase 1B source authority and timestamps', async () => {
+      await cleanTestOpp('test-phase1c-official-003');
+      const existing = await prisma.fundingOpportunity.findUnique({
+        where: {
+          sourceSystem_externalOpportunityId: {
+            sourceSystem: 'GRANTS_GOV',
+            externalOpportunityId: '357658-test-case-53',
+          },
+        },
+      });
+      if (existing) {
+        await cleanTestOpp(existing.id);
+      }
+
       await prisma.fundingOpportunity.create({
         data: {
           id: 'test-phase1c-official-003',
@@ -590,7 +603,7 @@ describe('Phase 1C — Eligibility and Fit Analysis Foundation Complete Test Sui
           fundingAgency: 'Department of Labor ETA',
           isDemo: false,
           sourceSystem: 'GRANTS_GOV',
-          externalOpportunityId: '357658',
+          externalOpportunityId: '357658-test-case-53',
           officialSourceAuthority: 'Grants.gov (U.S. Federal Government)',
           firstRetrievedAt: new Date('2026-08-11T12:00:00Z'),
           lastRetrievedAt: new Date('2026-08-11T12:00:00Z'),

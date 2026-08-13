@@ -179,6 +179,8 @@ export class IngestionService {
             if (isDryRun) {
               recordsCreated++;
             } else {
+              const rawReason = evalRes.blockingReason || evalRes.explanation;
+              const cleanReason = rawReason.startsWith('FISCAL_SPONSOR_REQUIRED') ? rawReason : `FISCAL_SPONSOR_REQUIRED: ${rawReason}`;
               const res = await this.persistNonActionableRecord({
                 runId,
                 mapped,
@@ -187,7 +189,7 @@ export class IngestionService {
                 termsArray,
                 pursuitStage: 'DISMISSED',
                 candidateRoutingStatus: 'FISCAL_SPONSOR_REQUIRED',
-                dismissedReason: `FISCAL_SPONSOR_REQUIRED: ${evalRes.blockingReason || evalRes.explanation}`,
+                dismissedReason: cleanReason,
                 relevanceStatus: 'RELEVANT',
                 evalRes,
               });
@@ -208,6 +210,8 @@ export class IngestionService {
             if (isDryRun) {
               recordsCreated++;
             } else {
+              const rawReason = evalRes.blockingReason || evalRes.explanation;
+              const cleanReason = rawReason.startsWith('PARTNERSHIP_REQUIRED') ? rawReason : `PARTNERSHIP_REQUIRED: ${rawReason}`;
               const res = await this.persistNonActionableRecord({
                 runId,
                 mapped,
@@ -216,7 +220,7 @@ export class IngestionService {
                 termsArray,
                 pursuitStage: 'DISMISSED',
                 candidateRoutingStatus: 'PARTNERSHIP_REQUIRED',
-                dismissedReason: `PARTNERSHIP_REQUIRED: ${evalRes.blockingReason || evalRes.explanation}`,
+                dismissedReason: cleanReason,
                 relevanceStatus: 'RELEVANT',
                 evalRes,
               });
@@ -237,6 +241,8 @@ export class IngestionService {
             if (isDryRun) {
               recordsCreated++;
             } else {
+              const rawReason = evalRes.blockingReason || evalRes.explanation;
+              const cleanReason = rawReason.startsWith('FUTURE_OPPORTUNITY') ? rawReason : `FUTURE_OPPORTUNITY: ${rawReason}`;
               const res = await this.persistNonActionableRecord({
                 runId,
                 mapped,
@@ -245,7 +251,7 @@ export class IngestionService {
                 termsArray,
                 pursuitStage: 'DISMISSED',
                 candidateRoutingStatus: 'FUTURE_OPPORTUNITY',
-                dismissedReason: `FUTURE_OPPORTUNITY: ${evalRes.blockingReason || evalRes.explanation}`,
+                dismissedReason: cleanReason,
                 relevanceStatus: 'POSSIBLY_RELEVANT',
                 evalRes,
               });

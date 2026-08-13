@@ -6,6 +6,7 @@ import { IngestionService } from '../services/ingestionService';
 import { ExclusionGateEngine } from '../services/exclusionGateEngine';
 import { OpportunityService } from '../services/opportunityService';
 import { PursuitService } from '../services/pursuitService';
+import { AnalysisService } from '../services/analysisService';
 import { GrantsGovClient } from '../integrations/grantsGov/grantsGovClient';
 import { GrantsGovMapper } from '../integrations/grantsGov/grantsGovMapper';
 
@@ -577,6 +578,105 @@ describe('Phase 1D — Applicant Readiness & Source-Integrity Correction Suite',
       // 7. Source identity and verbatim evidence invariants remain enforced
       expect(sampleRoutedOpp.sourcePayloadHash).toMatch(/^[a-f0-9]{64}$/);
       expect(sampleRoutedOpp.sourceUrl).toContain(sampleRoutedOpp.externalOpportunityId);
+    });
+  });
+
+  describe('Potential Pathway Analysis & Accurate Readiness Suite', () => {
+    it('analyzes routed records without mutating pursuit stage or routing status', async () => {
+      await cleanTestOpp('357658-test-analysis');
+
+      const source = await prisma.fundingSource.upsert({
+        where: { id: 'src-grants-gov-hhs' },
+        update: {},
+        create: {
+          id: 'src-grants-gov-hhs',
+          name: 'Administration for Children and Families',
+          agencyType: 'FEDERAL_GOVERNMENT',
+          websiteUrl: 'https://www.grants.gov',
+          description: 'Official Grants.gov federal funding source.',
+        },
+      });
+
+      const opp = await prisma.fundingOpportunity.create({
+        data: {
+          fundingSourceId: source.id,
+          sourceSystem: 'GRANTS_GOV',
+          externalOpportunityId: '357658-test-analysis',
+          fundingOpportunityNumber: 'HHS-2026-ACF-ACYF-YO-0044',
+          title: 'FY 2026 Street Outreach Program',
+          fundingAgency: 'Administration for Children and Families',
+          description: 'Street Outreach Program (SOP) for runaway and homeless youth. Grants to prevent youth homelessness and human trafficking.',
+          sourceUrl: 'https://www.grants.gov/search-results-detail/357658',
+          pursuitStage: 'DISMISSED',
+          candidateRoutingStatus: 'FISCAL_SPONSOR_REQUIRED',
+          dismissedReason: 'FISCAL_SPONSOR_REQUIRED: PRE_INCORPORATION: Federal grant submission requires active SAM.gov registration, UEI, and Grants.gov AOR.',
+          eligibleApplicantTypes: ['Nonprofits having a 501(c)(3) status with the IRS', 'Nonprofits that do not have a 501(c)(3) status with the IRS'],
+          deadline: '2026-08-17',
+          openingDate: '2026-06-01',
+          awardMin: '$90,000',
+          awardMax: '$150,000',
+          totalAvailableFunding: '$5,400,000',
+          geography: 'California',
+          firstRetrievedAt: new Date(),
+          lastRetrievedAt: new Date(),
+        },
+      });
+
+      // 1. Analyze routed record
+      const analysis1 = await AnalysisService.analyzeOpportunity(opp.id);
+      expect(analysis1).toBeDefined();
+      expect(analysis1.overallFitScore).toBeGreaterThan(0);
+      expect(analysis1.evidenceCoverage).toBeGreaterThan(0);
+
+      // 2. Verify analysis created NO pursuit mutation or routing status change
+      const refreshedOpp = await prisma.fundingOpportunity.findUnique({ where: { id: opp.id } });
+      expect(refreshedOpp?.pursuitStage).toBe('DISMISSED');
+      expect(refreshedOpp?.candidateRoutingStatus).toBe('FISCAL_SPONSOR_REQUIRED');
+
+      // 3. Verify routed record still cannot be qualified or locked
+      await expect(
+        PursuitService.transitionStage({
+          fundingOpportunityId: opp.id,
+          targetStage: 'QUALIFIED',
+          reviewerId: 'reviewer-1',
+          authHeader: 'Bearer bridge_secret_review_token_change_in_production_2026',
+        })
+      ).rejects.toThrow(/not currently eligible to apply directly/i);
+
+      await expect(
+        PursuitService.transitionStage({
+          fundingOpportunityId: opp.id,
+          targetStage: 'LOCKED',
+          reviewerId: 'reviewer-1',
+          authHeader: 'Bearer bridge_secret_review_token_change_in_production_2026',
+        })
+      ).rejects.toThrow(/not currently eligible to apply directly/i);
+
+      // 4. Verify nonprofits without 501(c)(3) are represented accurately for SOP
+      const taxFinding = analysis1.eligibilityFindings.find((f: any) => f.criterionKey === 'applicant_tax_status');
+      expect(taxFinding.outcome).toBe('SATISFIED');
+      expect(taxFinding.rationale).toMatch(/includes nonprofits with and without 501\(c\)\(3\)/i);
+
+      // 5. Verify pre-incorporation remains a real blocker in ExclusionGateEngine
+      const evalRes = ExclusionGateEngine.evaluateAll({
+        title: opp.title,
+        fundingAgency: opp.fundingAgency,
+        description: opp.description,
+        fundingOpportunityNumber: opp.fundingOpportunityNumber || '',
+      } as any, {}, 'bridge-forward');
+      expect(evalRes.routingStatus).toBe('FISCAL_SPONSOR_REQUIRED');
+      expect(evalRes.explanation || '').toMatch(/nonprofits with and without 501\(c\)\(3\)/i);
+      expect(evalRes.explanation || '').toMatch(/PRE_INCORPORATION/i);
+
+      // 6. Verify deadline feasibility is calculated
+      const deadlineDimension = analysis1.analysisDimensions.find((d: any) => d.dimensionKey === 'deadlineApplicationReadiness');
+      expect(deadlineDimension.matchStatus).toBe('MISMATCH');
+      expect(deadlineDimension.rationale).toMatch(/2026-08-17/);
+      expect(deadlineDimension.rationale).toMatch(/Strong mission match — future-cycle preparation recommended/i);
+
+      // 7. Verify repeated analysis is idempotent
+      const analysis2 = await AnalysisService.analyzeOpportunity(opp.id);
+      expect(analysis2.id).toBe(analysis1.id);
     });
   });
 });

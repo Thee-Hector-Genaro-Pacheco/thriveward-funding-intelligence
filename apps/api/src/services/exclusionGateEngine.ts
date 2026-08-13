@@ -444,9 +444,9 @@ export class ExclusionGateEngine {
         routingStatus: 'FISCAL_SPONSOR_REQUIRED',
         applicantReadiness: 'NOT_READY_PRE_INCORPORATION',
         recommendedPathway: 'fiscal sponsor',
-        blockingReason: 'PRE_INCORPORATION: Direct federal submission requires incorporated 501(c)(3) entity with active SAM.gov/UEI registration.',
-        capacityNotes: 'Street Outreach Program for runaway and homeless youth. Requires incorporated non-profit tax status and SAM/UEI.',
-        explanation: 'FISCAL_SPONSOR_REQUIRED: Mission relevant, but Bridge Forward is PRE_INCORPORATION and requires a fiscal sponsor or incorporation.',
+        blockingReason: 'PRE_INCORPORATION: Federal grant submission requires legal entity status, EIN, SAM.gov/UEI registration, and Grants.gov AOR.',
+        capacityNotes: 'Street Outreach Program for runaway and homeless youth. Official solicitation eligibility includes nonprofits with and without 501(c)(3) status, but direct submission requires active SAM.gov/UEI registration and incorporated entity status.',
+        explanation: 'FISCAL_SPONSOR_REQUIRED: Mission relevant. Official eligibility includes nonprofits with and without 501(c)(3) tax status. Bridge Forward remains blocked because it is PRE_INCORPORATION and lacks verified legal-entity status, EIN, SAM.gov/UEI registration, Grants.gov AOR, fiscal sponsor, matching-fund capacity, and relevant operating history.',
       };
     }
 
