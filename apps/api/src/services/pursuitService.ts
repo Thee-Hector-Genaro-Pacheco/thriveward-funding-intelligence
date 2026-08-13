@@ -75,11 +75,12 @@ export class PursuitService {
       currentAnalysis?.eligibilityStatus === 'NOT_ELIGIBLE';
 
     const isDismissedOrRouted = Boolean(
-      opp.dismissedReason &&
-        (opp.dismissedReason.startsWith('EXCLUDED') ||
-          opp.dismissedReason.startsWith('FUTURE_OPPORTUNITY') ||
-          opp.dismissedReason.startsWith('PARTNERSHIP_REQUIRED') ||
-          opp.dismissedReason.startsWith('FISCAL_SPONSOR_REQUIRED'))
+      (opp.candidateRoutingStatus && opp.candidateRoutingStatus !== 'DIRECT_FEDERAL_ELIGIBLE') ||
+        (opp.dismissedReason &&
+          (opp.dismissedReason.startsWith('EXCLUDED') ||
+            opp.dismissedReason.startsWith('FUTURE_OPPORTUNITY') ||
+            opp.dismissedReason.startsWith('PARTNERSHIP_REQUIRED') ||
+            opp.dismissedReason.startsWith('FISCAL_SPONSOR_REQUIRED')))
     );
 
     // Action Gate 1: Mark Qualified

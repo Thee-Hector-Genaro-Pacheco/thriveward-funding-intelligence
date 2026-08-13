@@ -43,6 +43,14 @@ enum PursuitStage {
   DISMISSED
 }
 
+enum CandidateRoutingStatus {
+  DIRECT_FEDERAL_ELIGIBLE
+  FISCAL_SPONSOR_REQUIRED
+  PARTNERSHIP_REQUIRED
+  FUTURE_OPPORTUNITY
+  EXCLUDED
+}
+
 model OrganizationProfile {
   id                 String   @id @default(uuid())
   name               String   @default("Bridge Forward Foundation")
@@ -136,9 +144,10 @@ model FundingOpportunity {
   supportEmergencyAssistance  TriStateStatus @default(UNKNOWN)
 
   // Phase 1D Pursuit & Triage
-  pursuitStage         PursuitStage @default(NEW)
-  dismissedReason      String?
-  discoverySearchTerms String[]     @default([])
+  pursuitStage           PursuitStage            @default(NEW)
+  candidateRoutingStatus CandidateRoutingStatus?
+  dismissedReason        String?
+  discoverySearchTerms   String[]                @default([])
 
   // Relations
   eligibilityRequirements EligibilityRequirement[]
@@ -152,6 +161,7 @@ model FundingOpportunity {
   pursuitHistory          PursuitHistory[]
 
   @@unique([sourceSystem, externalOpportunityId])
+  @@index([candidateRoutingStatus])
 }
 
 model EligibilityRequirement {

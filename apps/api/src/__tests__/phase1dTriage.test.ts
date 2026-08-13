@@ -4,6 +4,8 @@ import { app } from '../server';
 import { prisma } from '../lib/prisma';
 import { IngestionService } from '../services/ingestionService';
 import { ExclusionGateEngine } from '../services/exclusionGateEngine';
+import { OpportunityService } from '../services/opportunityService';
+import { PursuitService } from '../services/pursuitService';
 import { GrantsGovClient } from '../integrations/grantsGov/grantsGovClient';
 import { GrantsGovMapper } from '../integrations/grantsGov/grantsGovMapper';
 
@@ -428,6 +430,153 @@ describe('Phase 1D — Applicant Readiness & Source-Integrity Correction Suite',
       };
       const evalRes = ExclusionGateEngine.evaluateAll(mapped, {}, 'bridge-forward');
       expect(evalRes.isExcluded).toBe(true);
+    });
+  });
+
+  describe('Routed Candidate Persistence & Potential Pathways Suite', () => {
+    it('persists routed candidates, supports Potential Pathways API, and blocks invalid transitions', async () => {
+      const mockClient = new GrantsGovClient();
+      
+      const mockHits = Array.from({ length: 21 }, (_, i) => ({
+        id: `mock-opp-${100 + i}`,
+        number: `OPP-${100 + i}`,
+        title: `Mock Opportunity ${100 + i}`,
+      }));
+
+      vi.spyOn(mockClient, 'searchOpportunities').mockResolvedValue({ opportunityHits: mockHits });
+
+      vi.spyOn(mockClient, 'fetchOpportunity').mockImplementation(async (idInput: string | number) => {
+        const id = String(idInput);
+        const index = parseInt(id.replace('mock-opp-', ''), 10) - 100;
+        
+        // 5 Fiscal Sponsor Required
+        if (index >= 0 && index < 5) {
+          return {
+            id,
+            opportunityId: id,
+            opportunityNumber: `OPP-FS-${index}`,
+            opportunityTitle: `Reentry Housing & Street Outreach Program Grant #${index}`,
+            agencyName: 'Department of Labor',
+            description: 'Street Outreach Program for housing stabilization, basic center program, and reentry support for system-impacted adults in California.',
+            synopsis: {
+              applicantTypes: [{ id: '99', description: 'Other' }],
+              applicantEligibilityDesc: 'Eligible Applicants: 501(c)(3) Nonprofits with active SAM.gov registration.',
+            },
+          };
+        }
+
+        // 2 Partnership Required
+        if (index >= 5 && index < 7) {
+          return {
+            id,
+            opportunityId: id,
+            opportunityNumber: `OPP-PR-${index}`,
+            opportunityTitle: `Community CoC Competition & National Communication System Program #${index}`,
+            agencyName: 'Department of Justice',
+            description: 'CoC Competition and National Communication System requiring mandatory partnership with local workforce development boards in Orange County.',
+            synopsis: {
+              applicantTypes: [{ id: '99', description: 'Other' }],
+              applicantEligibilityDesc: 'Applicants must demonstrate mandatory partnership with a local workforce board.',
+            },
+          };
+        }
+
+        // 1 Future Opportunity
+        if (index === 7) {
+          return {
+            id,
+            opportunityId: id,
+            opportunityNumber: 'OPP-FO-7',
+            opportunityTitle: 'Drug Court Training and Technical Assistance Program',
+            agencyName: 'Department of Justice BJA',
+            description: 'Drug court training and technical assistance for reentry programs.',
+            synopsis: {
+              applicantTypes: [{ id: '99', description: 'Other' }],
+              applicantEligibilityDesc: 'Requires established 501(c)(3) status and national TTA capacity.',
+            },
+          };
+        }
+
+        // 13 Excluded records
+        return {
+          id,
+          opportunityId: id,
+          opportunityNumber: `OPP-EX-${index}`,
+          opportunityTitle: `Irrelevant Research Grant #${index}`,
+          agencyName: 'National Science Foundation',
+          description: 'Quantum computing research for university physics departments.',
+          synopsis: {
+            applicantTypes: [{ id: '20', description: 'State Higher Education' }],
+          },
+        };
+      });
+
+      const service = new IngestionService(mockClient);
+      const run1 = await service.ingestFromGrantsGov({ limit: 10, profile: 'bridge-forward' });
+
+      // 1. Routed records reach persistence
+      expect(run1.detailedRecordsInspected).toBe(21);
+      expect(run1.recordsExcluded).toBe(13);
+      expect(run1.recordsRoutedFiscalSponsor).toBe(5);
+      expect(run1.recordsRoutedPartnership).toBe(2);
+      expect(run1.recordsRoutedFuture).toBe(1);
+      expect(run1.recordsAccepted).toBe(0); // Direct federal actionable count remains 0
+      expect(run1.persistedOpportunityNumbers.length).toBe(8);
+
+      // 2. Database contains exactly 8 potential pathways from this run
+      const potentialPathwaysInDb = await prisma.fundingOpportunity.findMany({
+        where: {
+          fundingOpportunityNumber: {
+            in: run1.persistedOpportunityNumbers,
+          },
+          candidateRoutingStatus: {
+            in: ['FISCAL_SPONSOR_REQUIRED', 'PARTNERSHIP_REQUIRED', 'FUTURE_OPPORTUNITY'],
+          },
+        },
+      });
+      expect(potentialPathwaysInDb.length).toBe(8);
+
+      // 3. Potential Pathways API returns all 8
+      const apiRes = await OpportunityService.listOpportunities({
+        candidateRoutingStatus: 'POTENTIAL_PATHWAYS',
+      });
+      const pathwaysFromRun = apiRes.data.filter((opp) => run1.persistedOpportunityNumbers.includes(opp.fundingOpportunityNumber));
+      expect(pathwaysFromRun.length).toBe(8);
+
+      // 4. Excluded / NO_MISSION_LANE_MATCH records do NOT appear in Potential Pathways API
+      const hasExcludedInPathways = apiRes.data.some(
+        (opp) => opp.candidateRoutingStatus === 'EXCLUDED' || opp.relevanceAnalyses?.[0]?.relevanceStatus === 'IRRELEVANT'
+      );
+      expect(hasExcludedInPathways).toBe(false);
+
+      // 5. Second identical ingestion creates 0 duplicates
+      const run2 = await service.ingestFromGrantsGov({ limit: 10, profile: 'bridge-forward' });
+      expect(run2.recordsCreated).toBe(0);
+      expect(run2.recordsUnchanged).toBe(21);
+
+      // 6. Routed records cannot transition to QUALIFIED or LOCKED
+      const sampleRoutedOpp = potentialPathwaysInDb[0];
+      await expect(
+        PursuitService.transitionStage({
+          fundingOpportunityId: sampleRoutedOpp.id,
+          targetStage: 'QUALIFIED',
+          reviewerId: 'reviewer-1',
+          authHeader: 'Bearer bridge_secret_review_token_change_in_production_2026',
+        })
+      ).rejects.toThrow(/not currently eligible to apply directly/i);
+
+      await expect(
+        PursuitService.transitionStage({
+          fundingOpportunityId: sampleRoutedOpp.id,
+          targetStage: 'LOCKED',
+          reviewerId: 'reviewer-1',
+          authHeader: 'Bearer bridge_secret_review_token_change_in_production_2026',
+        })
+      ).rejects.toThrow(/not currently eligible to apply directly/i);
+
+      // 7. Source identity and verbatim evidence invariants remain enforced
+      expect(sampleRoutedOpp.sourcePayloadHash).toMatch(/^[a-f0-9]{64}$/);
+      expect(sampleRoutedOpp.sourceUrl).toContain(sampleRoutedOpp.externalOpportunityId);
     });
   });
 });

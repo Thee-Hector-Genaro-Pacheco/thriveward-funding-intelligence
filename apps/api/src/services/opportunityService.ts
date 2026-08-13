@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma';
-import { OpportunityStatus, PursuitStage, RelevanceStatus, Prisma } from '@prisma/client';
+import { OpportunityStatus, PursuitStage, RelevanceStatus, CandidateRoutingStatus, Prisma } from '@prisma/client';
 
 export interface OpportunityQueryOptions {
   status?: string;
@@ -10,6 +10,7 @@ export interface OpportunityQueryOptions {
   verificationStatus?: string;
   pursuitStage?: string;
   relevanceStatus?: string;
+  candidateRoutingStatus?: string;
   page?: number;
   limit?: number;
 }
@@ -95,8 +96,30 @@ export class OpportunityService {
       }
     }
 
-    // Exclude IRRELEVANT opportunities from active candidates feed unless explicitly requested
-    if (options.pursuitStage !== 'DISMISSED' && options.relevanceStatus !== 'IRRELEVANT') {
+    // Filter by candidateRoutingStatus
+    if (options.candidateRoutingStatus) {
+      const routingUpper = options.candidateRoutingStatus.toUpperCase();
+      if (routingUpper === 'POTENTIAL_PATHWAYS') {
+        where.candidateRoutingStatus = {
+          in: ['FISCAL_SPONSOR_REQUIRED', 'PARTNERSHIP_REQUIRED', 'FUTURE_OPPORTUNITY'] as CandidateRoutingStatus[],
+        };
+      } else if (['DIRECT_FEDERAL_ELIGIBLE', 'FISCAL_SPONSOR_REQUIRED', 'PARTNERSHIP_REQUIRED', 'FUTURE_OPPORTUNITY', 'EXCLUDED'].includes(routingUpper)) {
+        where.candidateRoutingStatus = routingUpper as CandidateRoutingStatus;
+      } else {
+        throw new Error(`Invalid candidateRoutingStatus parameter: '${options.candidateRoutingStatus}'. Allowed values: POTENTIAL_PATHWAYS, DIRECT_FEDERAL_ELIGIBLE, FISCAL_SPONSOR_REQUIRED, PARTNERSHIP_REQUIRED, FUTURE_OPPORTUNITY, EXCLUDED`);
+      }
+    }
+
+    // Exclude IRRELEVANT / EXCLUDED opportunities from active candidates feed unless explicitly requested
+    if (options.pursuitStage === 'DISMISSED' && !options.candidateRoutingStatus) {
+      where.candidateRoutingStatus = {
+        in: ['FISCAL_SPONSOR_REQUIRED', 'PARTNERSHIP_REQUIRED', 'FUTURE_OPPORTUNITY'] as CandidateRoutingStatus[],
+      };
+    } else if (options.pursuitStage !== 'DISMISSED' && options.relevanceStatus !== 'IRRELEVANT' && !options.candidateRoutingStatus) {
+      where.OR = [
+        { candidateRoutingStatus: null },
+        { candidateRoutingStatus: { not: 'EXCLUDED' as CandidateRoutingStatus } },
+      ];
       where.NOT = {
         relevanceAnalyses: {
           some: {

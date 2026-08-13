@@ -70,6 +70,7 @@ export function App() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<'all' | 'official' | 'demo' | 'new' | 'qualified' | 'locked' | 'dismissed'>('official');
+  const [pathwaysSubFilter, setPathwaysSubFilter] = useState<'all' | 'fiscal_sponsor' | 'partnership' | 'future'>('all');
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
   const [health] = useState<SystemHealth>({
@@ -94,7 +95,15 @@ export function App() {
       } else if (activeFilter === 'locked') {
         url = '/api/opportunities?pursuitStage=LOCKED';
       } else if (activeFilter === 'dismissed') {
-        url = '/api/opportunities?pursuitStage=DISMISSED';
+        if (pathwaysSubFilter === 'fiscal_sponsor') {
+          url = '/api/opportunities?candidateRoutingStatus=FISCAL_SPONSOR_REQUIRED';
+        } else if (pathwaysSubFilter === 'partnership') {
+          url = '/api/opportunities?candidateRoutingStatus=PARTNERSHIP_REQUIRED';
+        } else if (pathwaysSubFilter === 'future') {
+          url = '/api/opportunities?candidateRoutingStatus=FUTURE_OPPORTUNITY';
+        } else {
+          url = '/api/opportunities?candidateRoutingStatus=POTENTIAL_PATHWAYS';
+        }
       }
 
       const res = await fetch(url);
@@ -112,7 +121,7 @@ export function App() {
 
   useEffect(() => {
     fetchOpportunities();
-  }, [activeFilter]);
+  }, [activeFilter, pathwaysSubFilter]);
 
   const handleAnalyze = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -256,8 +265,8 @@ export function App() {
             <button className={`tab ${activeFilter === 'locked' ? 'active' : ''}`} onClick={() => setActiveFilter('locked')}>
               🔒 Locked Matches
             </button>
-            <button className={`tab ${activeFilter === 'dismissed' ? 'active' : ''}`} onClick={() => setActiveFilter('dismissed')}>
-              🚫 Dismissed / Routed
+            <button className={`tab ${activeFilter === 'dismissed' ? 'active' : ''}`} onClick={() => { setActiveFilter('dismissed'); setPathwaysSubFilter('all'); }}>
+              🛤️ Potential Pathways
             </button>
 
             <button className="tab" onClick={() => fetchOpportunities()}>
@@ -265,6 +274,41 @@ export function App() {
             </button>
           </div>
         </div>
+
+        {/* Sub-filters for Potential Pathways */}
+        {activeFilter === 'dismissed' && (
+          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.85rem', paddingTop: '0.85rem', borderTop: '1px solid rgba(255,255,255,0.08)', flexWrap: 'wrap', alignItems: 'center' }}>
+            <span style={{ fontSize: '0.85rem', fontWeight: 600, color: '#94a3b8' }}>Filter Pathway:</span>
+            <button
+              className={`tab ${pathwaysSubFilter === 'all' ? 'active' : ''}`}
+              onClick={() => setPathwaysSubFilter('all')}
+              style={{ fontSize: '0.8rem', padding: '0.3rem 0.65rem' }}
+            >
+              All Pathways
+            </button>
+            <button
+              className={`tab ${pathwaysSubFilter === 'fiscal_sponsor' ? 'active' : ''}`}
+              onClick={() => setPathwaysSubFilter('fiscal_sponsor')}
+              style={{ fontSize: '0.8rem', padding: '0.3rem 0.65rem' }}
+            >
+              Fiscal Sponsor Required
+            </button>
+            <button
+              className={`tab ${pathwaysSubFilter === 'partnership' ? 'active' : ''}`}
+              onClick={() => setPathwaysSubFilter('partnership')}
+              style={{ fontSize: '0.8rem', padding: '0.3rem 0.65rem' }}
+            >
+              Partnership Required
+            </button>
+            <button
+              className={`tab ${pathwaysSubFilter === 'future' ? 'active' : ''}`}
+              onClick={() => setPathwaysSubFilter('future')}
+              style={{ fontSize: '0.8rem', padding: '0.3rem 0.65rem' }}
+            >
+              Future Opportunity
+            </button>
+          </div>
+        )}
 
         {/* Loading State */}
         {loading && (

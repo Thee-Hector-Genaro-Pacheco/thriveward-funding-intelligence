@@ -17,13 +17,14 @@ const ALLOWED_QUERY_PARAMS = new Set([
   'verificationStatus',
   'pursuitStage',
   'relevanceStatus',
+  'candidateRoutingStatus',
   'page',
   'limit',
 ]);
 
 /**
  * GET /api/opportunities
- * Query params: status, fundingType, minimumFitScore, dataKind, sourceSystem, verificationStatus, pursuitStage, relevanceStatus, page, limit
+ * Query params: status, fundingType, minimumFitScore, dataKind, sourceSystem, verificationStatus, pursuitStage, relevanceStatus, candidateRoutingStatus, page, limit
  */
 opportunitiesRouter.get('/', async (req: Request, res: Response) => {
   try {
@@ -35,7 +36,7 @@ opportunitiesRouter.get('/', async (req: Request, res: Response) => {
       });
     }
 
-    const { status, fundingType, minimumFitScore, dataKind, sourceSystem, verificationStatus, pursuitStage, relevanceStatus, page, limit } = req.query;
+    const { status, fundingType, minimumFitScore, dataKind, sourceSystem, verificationStatus, pursuitStage, relevanceStatus, candidateRoutingStatus, page, limit } = req.query;
 
     let parsedMinimumFitScore: number | undefined;
     if (minimumFitScore !== undefined) {
@@ -85,6 +86,7 @@ opportunitiesRouter.get('/', async (req: Request, res: Response) => {
       verificationStatus: verificationStatus ? String(verificationStatus) : undefined,
       pursuitStage: pursuitStage ? String(pursuitStage) : undefined,
       relevanceStatus: relevanceStatus ? String(relevanceStatus) : undefined,
+      candidateRoutingStatus: candidateRoutingStatus ? String(candidateRoutingStatus) : undefined,
       page: parsedPage,
       limit: parsedLimit,
     });

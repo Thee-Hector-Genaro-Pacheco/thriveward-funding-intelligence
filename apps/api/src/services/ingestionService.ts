@@ -17,9 +17,12 @@ export interface IngestionSummary {
   ingestionRunId: string;
   sourceSystem: string;
   dryRun: boolean;
+  status?: string;
   rawSearchHitsCount: number;
-  recordsInspected: number;
+  detailedRecordsInspected: number;
+  recordsInspected?: number;
   recordsExcluded: number;
+  exclusionReasonsBreakdown: Record<string, number>;
   exclusionReasonsCount: Record<string, number>;
   recordsRoutedFiscalSponsor: number;
   recordsRoutedPartnership: number;
@@ -30,23 +33,10 @@ export interface IngestionSummary {
   recordsUpdated: number;
   recordsUnchanged: number;
   recordsFailed: number;
-  persistedOpportunityNumbers: string[];
-  status: 'COMPLETED' | 'PARTIAL_SUCCESS' | 'FAILED';
   errorSummary?: string;
+  persistedOpportunityNumbers: string[];
+  executionTimeMs: number;
 }
-
-export const BRIDGE_FORWARD_SEARCH_TERMS = [
-  '"reentry" AND workforce',
-  '"formerly incarcerated" AND employment',
-  '"justice-involved" AND training',
-  '"returning citizens" AND housing',
-  '"youth homelessness" AND supportive services',
-  '"juvenile justice" AND mentorship',
-  '"digital equity" AND workforce',
-  '"career pathways" AND disadvantaged youth',
-  '"housing stabilization" AND nonprofit',
-  '"community economic development" AND employment',
-];
 
 export class IngestionService {
   private client: GrantsGovClient;
@@ -55,29 +45,30 @@ export class IngestionService {
     this.client = client || new GrantsGovClient();
   }
 
-  /**
-   * Execute Grants.gov ingestion run with detail-level source identity verification, applicant readiness checks, and routing.
-   */
-  async ingestFromGrantsGov(options: IngestionOptions): Promise<IngestionSummary> {
-    const isDryRun = options.dryRun !== false;
-    const targetLimit = Math.min(options.limit || 3, 20);
-    const searchStatuses = options.statuses || 'forecasted|posted';
+  async ingestFromGrantsGov(options: IngestionOptions = {}): Promise<IngestionSummary> {
+    const startTime = Date.now();
+    const keywordInput = options.keyword || 'reentry';
+    const rawKeywords = keywordInput.split('|').map((k) => k.trim()).filter((k) => k.length > 0);
+    const keywords = rawKeywords.length > 0 ? rawKeywords : ['reentry'];
 
-    let runId = `dry-run-${Date.now()}`;
+    const targetLimit = options.limit ? Math.min(options.limit, 10) : 3;
+    const isDryRun = options.dryRun ?? false;
+
+    let runId = `run-dry-${Date.now()}`;
     if (!isDryRun) {
-      const run = await prisma.ingestionRun.create({
+      const dbRun = await prisma.ingestionRun.create({
         data: {
           sourceSystem: 'GRANTS_GOV',
           searchParameters: {
-            keyword: options.keyword || '',
-            profile: options.profile || null,
-            statuses: searchStatuses,
+            keywords,
+            statuses: options.statuses || 'forecasted|posted',
             limit: targetLimit,
+            profile: options.profile,
           },
           status: 'IN_PROGRESS',
         },
       });
-      runId = run.id;
+      runId = dbRun.id;
     }
 
     let rawSearchHitsCount = 0;
@@ -92,61 +83,23 @@ export class IngestionService {
     let recordsUpdated = 0;
     let recordsUnchanged = 0;
     let recordsFailed = 0;
-    const persistedOpportunityNumbers: string[] = [];
-    const errors: string[] = [];
 
-    const exclusionReasonsCount: Record<string, number> = {
-      EXCLUDED_FOREIGN_PLACE_OF_PERFORMANCE: 0,
-      EXCLUDED_RESEARCH_ONLY: 0,
-      EXCLUDED_CLINICAL_RESEARCH: 0,
-      EXCLUDED_LAW_ENFORCEMENT_PROGRAM: 0,
-      EXCLUDED_APPLICANT_TYPE: 0,
-      EXCLUDED_RFI: 0,
-      EXCLUDED_INVITED_ONLY: 0,
-      EXCLUDED_REIMBURSEMENT_PROGRAM: 0,
-      EXCLUDED_CONTEXTUALLY_IRRELEVANT: 0,
-      NO_MISSION_LANE_MATCH: 0,
-      FISCAL_SPONSOR_REQUIRED: 0,
-      PARTNERSHIP_REQUIRED: 0,
-      FUTURE_OPPORTUNITY: 0,
-    };
+    const exclusionReasonsCount: Record<string, number> = {};
+    const persistedOpportunityNumbers: string[] = [];
 
     try {
       const hitsMap = new Map<string, { hit: GrantsGovSearchHit; searchTerms: Set<string> }>();
 
-      if (options.profile === 'bridge-forward') {
-        for (const term of BRIDGE_FORWARD_SEARCH_TERMS) {
-          try {
-            const searchRes = await this.client.searchOpportunities({
-              keyword: term,
-              oppStatuses: searchStatuses,
-              rows: 25,
-            });
-            const hits = searchRes.opportunityHits || [];
-            rawSearchHitsCount += hits.length;
-
-            for (const h of hits) {
-              const extId = String(h.id);
-              if (!hitsMap.has(extId)) {
-                hitsMap.set(extId, { hit: h, searchTerms: new Set([term]) });
-              } else {
-                hitsMap.get(extId)?.searchTerms.add(term);
-                recordsDeduplicated++;
-              }
-            }
-          } catch (err: any) {
-            console.warn(`[IngestionService] Discovery warning for term '${term}':`, err.message);
-          }
-        }
-      } else {
-        const keyword = options.keyword || 'reentry';
-        const searchRes = await this.client.searchOpportunities({
+      for (const keyword of keywords) {
+        const result = await this.client.searchOpportunities({
           keyword,
-          oppStatuses: searchStatuses,
-          rows: 25,
+          oppStatuses: options.statuses || 'forecasted|posted',
+          rows: 50,
         });
-        const hits = searchRes.opportunityHits || [];
-        rawSearchHitsCount = hits.length;
+
+        const hits = result.opportunityHits || (result as any).oppHits || [];
+        rawSearchHitsCount += hits.length;
+
         for (const h of hits) {
           const extId = String(h.id);
           hitsMap.set(extId, { hit: h, searchTerms: new Set([keyword]) });
@@ -197,18 +150,24 @@ export class IngestionService {
             const reasonKey = evalRes.exclusionReason || 'EXCLUDED_CONTEXTUALLY_IRRELEVANT';
             exclusionReasonsCount[reasonKey] = (exclusionReasonsCount[reasonKey] || 0) + 1;
 
-            if (!isDryRun) {
-              await this.persistNonActionableRecord({
+            if (isDryRun) {
+              recordsCreated++;
+            } else {
+              const res = await this.persistNonActionableRecord({
                 runId,
                 mapped,
                 detail,
                 hitId,
                 termsArray,
                 pursuitStage: 'DISMISSED',
+                candidateRoutingStatus: 'EXCLUDED',
                 dismissedReason: `${reasonKey}: ${evalRes.explanation}`,
                 relevanceStatus: 'IRRELEVANT',
                 evalRes,
               });
+              if (res.action === 'CREATED') recordsCreated++;
+              else if (res.action === 'UPDATED') recordsUpdated++;
+              else if (res.action === 'UNCHANGED') recordsUnchanged++;
             }
             continue;
           }
@@ -217,18 +176,27 @@ export class IngestionService {
             recordsRoutedFiscalSponsor++;
             exclusionReasonsCount['FISCAL_SPONSOR_REQUIRED'] = (exclusionReasonsCount['FISCAL_SPONSOR_REQUIRED'] || 0) + 1;
 
-            if (!isDryRun) {
-              await this.persistNonActionableRecord({
+            if (isDryRun) {
+              recordsCreated++;
+            } else {
+              const res = await this.persistNonActionableRecord({
                 runId,
                 mapped,
                 detail,
                 hitId,
                 termsArray,
                 pursuitStage: 'DISMISSED',
+                candidateRoutingStatus: 'FISCAL_SPONSOR_REQUIRED',
                 dismissedReason: `FISCAL_SPONSOR_REQUIRED: ${evalRes.blockingReason || evalRes.explanation}`,
                 relevanceStatus: 'RELEVANT',
                 evalRes,
               });
+              if (res.action === 'CREATED') recordsCreated++;
+              else if (res.action === 'UPDATED') recordsUpdated++;
+              else if (res.action === 'UNCHANGED') recordsUnchanged++;
+              if (mapped.fundingOpportunityNumber && !persistedOpportunityNumbers.includes(mapped.fundingOpportunityNumber)) {
+                persistedOpportunityNumbers.push(mapped.fundingOpportunityNumber);
+              }
             }
             continue;
           }
@@ -237,18 +205,27 @@ export class IngestionService {
             recordsRoutedPartnership++;
             exclusionReasonsCount['PARTNERSHIP_REQUIRED'] = (exclusionReasonsCount['PARTNERSHIP_REQUIRED'] || 0) + 1;
 
-            if (!isDryRun) {
-              await this.persistNonActionableRecord({
+            if (isDryRun) {
+              recordsCreated++;
+            } else {
+              const res = await this.persistNonActionableRecord({
                 runId,
                 mapped,
                 detail,
                 hitId,
                 termsArray,
                 pursuitStage: 'DISMISSED',
+                candidateRoutingStatus: 'PARTNERSHIP_REQUIRED',
                 dismissedReason: `PARTNERSHIP_REQUIRED: ${evalRes.blockingReason || evalRes.explanation}`,
                 relevanceStatus: 'RELEVANT',
                 evalRes,
               });
+              if (res.action === 'CREATED') recordsCreated++;
+              else if (res.action === 'UPDATED') recordsUpdated++;
+              else if (res.action === 'UNCHANGED') recordsUnchanged++;
+              if (mapped.fundingOpportunityNumber && !persistedOpportunityNumbers.includes(mapped.fundingOpportunityNumber)) {
+                persistedOpportunityNumbers.push(mapped.fundingOpportunityNumber);
+              }
             }
             continue;
           }
@@ -257,25 +234,36 @@ export class IngestionService {
             recordsRoutedFuture++;
             exclusionReasonsCount['FUTURE_OPPORTUNITY'] = (exclusionReasonsCount['FUTURE_OPPORTUNITY'] || 0) + 1;
 
-            if (!isDryRun) {
-              await this.persistNonActionableRecord({
+            if (isDryRun) {
+              recordsCreated++;
+            } else {
+              const res = await this.persistNonActionableRecord({
                 runId,
                 mapped,
                 detail,
                 hitId,
                 termsArray,
                 pursuitStage: 'DISMISSED',
+                candidateRoutingStatus: 'FUTURE_OPPORTUNITY',
                 dismissedReason: `FUTURE_OPPORTUNITY: ${evalRes.blockingReason || evalRes.explanation}`,
                 relevanceStatus: 'POSSIBLY_RELEVANT',
                 evalRes,
               });
+              if (res.action === 'CREATED') recordsCreated++;
+              else if (res.action === 'UPDATED') recordsUpdated++;
+              else if (res.action === 'UNCHANGED') recordsUnchanged++;
+              if (mapped.fundingOpportunityNumber && !persistedOpportunityNumbers.includes(mapped.fundingOpportunityNumber)) {
+                persistedOpportunityNumbers.push(mapped.fundingOpportunityNumber);
+              }
             }
             continue;
           }
 
           // Candidate is CURRENTLY_ACTIONABLE!
           recordsAccepted++;
-          persistedOpportunityNumbers.push(mapped.fundingOpportunityNumber);
+          if (mapped.fundingOpportunityNumber && !persistedOpportunityNumbers.includes(mapped.fundingOpportunityNumber)) {
+            persistedOpportunityNumbers.push(mapped.fundingOpportunityNumber);
+          }
 
           if (isDryRun) {
             recordsCreated++;
@@ -302,6 +290,7 @@ export class IngestionService {
                 lastRetrievedAt: now,
                 discoverySearchTerms: mergedTerms,
                 pursuitStage: 'NEW',
+                candidateRoutingStatus: 'DIRECT_FEDERAL_ELIGIBLE',
                 dismissedReason: null,
               },
             });
@@ -328,7 +317,7 @@ export class IngestionService {
 
           if (existing) {
             const mergedTerms = Array.from(new Set([...(existing.discoverySearchTerms || []), ...termsArray]));
-            await prisma.fundingOpportunity.update({
+            const updatedOpp = await prisma.fundingOpportunity.update({
               where: { id: existing.id },
               data: {
                 title: mapped.title,
@@ -348,16 +337,17 @@ export class IngestionService {
                 sourceLastUpdatedTimestamp: mapped.sourceLastUpdatedTimestamp,
                 sourcePayloadHash: payloadHash,
                 lastRetrievedAt: now,
-                discoverySearchTerms: mergedTerms,
                 pursuitStage: 'NEW',
+                candidateRoutingStatus: 'DIRECT_FEDERAL_ELIGIBLE',
                 dismissedReason: null,
+                discoverySearchTerms: mergedTerms,
               },
             });
 
             await prisma.sourceSnapshot.create({
               data: {
                 ingestionRunId: runId,
-                fundingOpportunityId: existing.id,
+                fundingOpportunityId: updatedOpp.id,
                 externalOpportunityId: mapped.externalOpportunityId,
                 payloadHash,
                 rawPayload: detail as any,
@@ -395,9 +385,8 @@ export class IngestionService {
                 sourcePayloadHash: payloadHash,
                 firstRetrievedAt: now,
                 lastRetrievedAt: now,
-                lastVerifiedTimestamp: null,
                 pursuitStage: 'NEW',
-                dismissedReason: null,
+                candidateRoutingStatus: 'DIRECT_FEDERAL_ELIGIBLE',
                 discoverySearchTerms: termsArray,
               },
             });
@@ -413,14 +402,39 @@ export class IngestionService {
               },
             });
 
-            await prisma.sourceCitation.create({
+            if (mapped.description) {
+              await prisma.sourceCitation.create({
+                data: {
+                  fundingOpportunityId: newOpp.id,
+                  sourceUrl: mapped.sourceUrl,
+                  extractedClaim: mapped.description.slice(0, 300),
+                  quotedSection: mapped.description.slice(0, 300),
+                },
+              });
+            }
+
+            // Auto-create OpportunityRelevance record
+            const verbatimCitations = (evalRes.evidenceQuotes || []).map((quote: string) => ({
+              field: 'description',
+              matchedTerm: quote.slice(0, 100),
+              contextSnippet: quote,
+            }));
+
+            await prisma.opportunityRelevance.create({
               data: {
                 fundingOpportunityId: newOpp.id,
-                sourceUrl: mapped.sourceUrl,
-                sourceTitle: `Grants.gov Official Notice #${mapped.fundingOpportunityNumber}`,
-                sourceOrganization: mapped.fundingAgency,
-                quotedSection: mapped.description.slice(0, 300),
-                extractedClaim: `Official opportunity announcement for ${mapped.title} published by ${mapped.fundingAgency}.`,
+                relevanceStatus: 'RELEVANT',
+                relevanceScore: 85,
+                positiveReasons: evalRes.matchedLanes || [],
+                exclusionReasons: [],
+                explanation: evalRes.explanation || 'Mission-relevant federal candidate',
+                evidenceFields: ['title', 'description'],
+                profileVersion: '1.1.1-phase1d',
+                profileHash: 'ac72cc0322b3b6840e78998b26791261a27424f3af8f912167fb9de5953776c6',
+                isCurrent: true,
+                citations: {
+                  create: verbatimCitations,
+                },
               },
             });
 
@@ -428,31 +442,23 @@ export class IngestionService {
           }
         } catch (itemErr: any) {
           recordsFailed++;
-          const errStr = `Error importing opp #${hit.id}: ${itemErr.message || itemErr}`;
-          console.error(`[IngestionService] ${errStr}`);
-          errors.push(errStr);
+          console.error(`[IngestionService] Error importing opp #${hit.id}: ${itemErr.message}`);
         }
       }
 
-      const finalStatus =
-        recordsFailed === 0
-          ? 'COMPLETED'
-          : recordsCreated > 0 || recordsUpdated > 0
-          ? 'PARTIAL_SUCCESS'
-          : 'FAILED';
+      const runStatus = recordsFailed > 0 ? (recordsCreated > 0 || recordsAccepted > 0 ? 'PARTIAL_SUCCESS' : 'FAILED') : 'COMPLETED';
 
       if (!isDryRun) {
         await prisma.ingestionRun.update({
           where: { id: runId },
           data: {
             completionTime: new Date(),
-            status: finalStatus,
+            status: runStatus,
             recordsDiscovered: rawSearchHitsCount,
             recordsCreated,
             recordsUpdated,
             recordsUnchanged,
             recordsFailed,
-            errorSummary: errors.length > 0 ? errors.join('; ') : null,
           },
         });
       }
@@ -461,9 +467,12 @@ export class IngestionService {
         ingestionRunId: runId,
         sourceSystem: 'GRANTS_GOV',
         dryRun: isDryRun,
+        status: runStatus,
         rawSearchHitsCount,
+        detailedRecordsInspected: recordsInspected,
         recordsInspected,
         recordsExcluded,
+        exclusionReasonsBreakdown: exclusionReasonsCount,
         exclusionReasonsCount,
         recordsRoutedFiscalSponsor,
         recordsRoutedPartnership,
@@ -475,8 +484,7 @@ export class IngestionService {
         recordsUnchanged,
         recordsFailed,
         persistedOpportunityNumbers,
-        status: finalStatus,
-        errorSummary: errors.length > 0 ? errors.join('; ') : undefined,
+        executionTimeMs: Date.now() - startTime,
       };
     } catch (globalErr: any) {
       if (!isDryRun) {
@@ -504,11 +512,12 @@ export class IngestionService {
     hitId: string;
     termsArray: string[];
     pursuitStage: 'DISMISSED';
+    candidateRoutingStatus: 'EXCLUDED' | 'FISCAL_SPONSOR_REQUIRED' | 'PARTNERSHIP_REQUIRED' | 'FUTURE_OPPORTUNITY';
     dismissedReason: string;
     relevanceStatus: 'IRRELEVANT' | 'RELEVANT' | 'POSSIBLY_RELEVANT';
     evalRes: any;
-  }) {
-    const { runId, mapped, detail, termsArray, pursuitStage, dismissedReason, relevanceStatus, evalRes } = params;
+  }): Promise<{ action: 'CREATED' | 'UPDATED' | 'UNCHANGED'; oppId: string }> {
+    const { runId, mapped, detail, termsArray, pursuitStage, candidateRoutingStatus, dismissedReason, relevanceStatus, evalRes } = params;
     const payloadHash = crypto.createHash('sha256').update(JSON.stringify(detail)).digest('hex');
     const now = new Date();
 
@@ -522,22 +531,40 @@ export class IngestionService {
     });
 
     let oppId = existing?.id;
+    let action: 'CREATED' | 'UPDATED' | 'UNCHANGED' = 'CREATED';
 
     if (existing) {
-      await prisma.fundingOpportunity.update({
-        where: { id: existing.id },
-        data: {
-          title: mapped.title,
-          fundingAgency: mapped.fundingAgency,
-          description: mapped.description,
-          sourceUrl: mapped.sourceUrl,
-          pursuitStage,
-          dismissedReason,
-          sourcePayloadHash: payloadHash,
-          lastRetrievedAt: now,
-        },
-      });
+      if (existing.sourcePayloadHash === payloadHash) {
+        action = 'UNCHANGED';
+        const mergedTerms = Array.from(new Set([...(existing.discoverySearchTerms || []), ...termsArray]));
+        await prisma.fundingOpportunity.update({
+          where: { id: existing.id },
+          data: {
+            lastRetrievedAt: now,
+            discoverySearchTerms: mergedTerms,
+            candidateRoutingStatus: candidateRoutingStatus as any,
+            dismissedReason,
+          },
+        });
+      } else {
+        action = 'UPDATED';
+        await prisma.fundingOpportunity.update({
+          where: { id: existing.id },
+          data: {
+            title: mapped.title,
+            fundingAgency: mapped.fundingAgency,
+            description: mapped.description,
+            sourceUrl: mapped.sourceUrl,
+            pursuitStage,
+            candidateRoutingStatus: candidateRoutingStatus as any,
+            dismissedReason,
+            sourcePayloadHash: payloadHash,
+            lastRetrievedAt: now,
+          },
+        });
+      }
     } else {
+      action = 'CREATED';
       const agencySlug = (mapped.fundingAgency || 'unknown').replace(/[^a-zA-Z0-9]/g, '-').toLowerCase().slice(0, 40);
       const source = await prisma.fundingSource.upsert({
         where: { id: `src-grants-gov-${agencySlug}` },
@@ -580,6 +607,7 @@ export class IngestionService {
           firstRetrievedAt: now,
           lastRetrievedAt: now,
           pursuitStage,
+          candidateRoutingStatus: candidateRoutingStatus as any,
           dismissedReason,
           discoverySearchTerms: termsArray,
         },
@@ -587,7 +615,7 @@ export class IngestionService {
       oppId = newOpp.id;
     }
 
-    if (oppId) {
+    if (oppId && action !== 'UNCHANGED') {
       await prisma.sourceSnapshot.create({
         data: {
           ingestionRunId: runId,
@@ -598,6 +626,17 @@ export class IngestionService {
           retrievalTimestamp: now,
         },
       });
+
+      if (action === 'CREATED' && mapped.description) {
+        await prisma.sourceCitation.create({
+          data: {
+            fundingOpportunityId: oppId,
+            sourceUrl: mapped.sourceUrl,
+            extractedClaim: mapped.description.slice(0, 300),
+            quotedSection: mapped.description.slice(0, 300),
+          },
+        });
+      }
 
       // Verbatim evidence citations
       const verbatimCitations = (evalRes.evidenceQuotes || []).map((quote: string) => ({
@@ -622,7 +661,7 @@ export class IngestionService {
           relevanceScore: relevanceStatus === 'IRRELEVANT' ? 0 : 80,
           positiveReasons: evalRes.matchedLanes || [],
           exclusionReasons: [dismissedReason],
-          explanation: dismissedReason,
+          explanation: dismissedReason ?? '',
           evidenceFields: ['title', 'description'],
           profileVersion: '1.1.1-phase1d',
           profileHash: 'ac72cc0322b3b6840e78998b26791261a27424f3af8f912167fb9de5953776c6',
@@ -633,5 +672,7 @@ export class IngestionService {
         },
       });
     }
+
+    return { action, oppId: oppId || '' };
   }
 }
