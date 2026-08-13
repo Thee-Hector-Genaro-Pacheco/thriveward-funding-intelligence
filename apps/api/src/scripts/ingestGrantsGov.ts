@@ -84,10 +84,11 @@ async function main() {
     console.log(`    - EXCLUDED_REIMBURSEMENT_PROGRAM:     ${summary.exclusionReasonsCount.EXCLUDED_REIMBURSEMENT_PROGRAM || 0}`);
     console.log(`    - EXCLUDED_CONTEXTUALLY_IRRELEVANT:   ${summary.exclusionReasonsCount.EXCLUDED_CONTEXTUALLY_IRRELEVANT || 0}`);
     console.log(`    - NO_MISSION_LANE_MATCH:              ${summary.exclusionReasonsCount.NO_MISSION_LANE_MATCH || 0}`);
-    console.log(`  • Records Routed to FUTURE_OPPORTUNITY: ${summary.recordsRoutedFuture}`);
-    console.log(`  • Records Routed to PARTNERSHIP_REQUIRED: ${summary.recordsRoutedPartnership}`);
+    console.log(`  • Records Routed to FISCAL_SPONSOR_REQUIRED: ${summary.recordsRoutedFiscalSponsor}`);
+    console.log(`  • Records Routed to PARTNERSHIP_REQUIRED:     ${summary.recordsRoutedPartnership}`);
+    console.log(`  • Records Routed to FUTURE_OPPORTUNITY:      ${summary.recordsRoutedFuture}`);
     console.log(`  • Records Deduplicated:              ${summary.recordsDeduplicated}`);
-    console.log(`  • Records Accepted (Actionable):     ${summary.recordsAccepted}`);
+    console.log(`  • Records Accepted (Direct Federal): ${summary.recordsAccepted}`);
     console.log(`  • Records Created:                   ${summary.recordsCreated}`);
     console.log(`  • Records Updated:                   ${summary.recordsUpdated}`);
     console.log(`  • Records Unchanged:                 ${summary.recordsUnchanged}`);

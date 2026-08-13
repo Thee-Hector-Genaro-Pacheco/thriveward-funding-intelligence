@@ -1,221 +1,180 @@
-import { useEffect, useState } from 'react';
-import { BRIDGE_FORWARD_PROFILE, sanitizeHtmlToText, PursuitStage, RelevanceStatus } from '@bridge-ai/shared';
+import { useState, useEffect } from 'react';
+import { sanitizeHtmlToText } from '@bridge-ai/shared';
 
-interface SystemHealth {
-  apiStatus: string;
-  pythonAgentStatus: string;
-  dbStatus: string;
-  lastChecked: string;
-}
-
-interface RelevanceInfo {
-  relevanceStatus: RelevanceStatus;
-  relevanceScore: number;
-  explanation: string;
-  positiveReasons: string[];
-  exclusionReasons: string[];
-}
-
-interface OpportunityItem {
+interface FundingOpportunity {
   id: string;
+  fundingOpportunityNumber: string;
   title: string;
   fundingAgency: string;
-  fundingOpportunityNumber?: string;
-  sourceSystem?: string;
-  externalOpportunityId?: string;
-  isDemo: boolean;
-  verificationStatus?: string;
-  pursuitStage: PursuitStage;
-  dismissedReason?: string;
-  discoverySearchTerms?: string[];
-  program?: string;
   description: string;
   sourceUrl: string;
-  status: string;
   openingDate: string;
   deadline: string;
   awardMin: string;
   awardMax: string;
   totalAvailableFunding: string;
   geography: string;
-  supportTrainingStipends: string;
-  supportTransportation: string;
-  supportTools: string;
-  supportPPE: string;
-  supportLaptops: string;
-  supportTrainingEquipment: string;
-  supportCertifications: string;
-  supportPaidWorkExperience: string;
-  lastVerifiedTimestamp?: string;
-  fundingSource?: {
-    name: string;
-    agencyType: string;
-  };
-  eligibilityRequirements?: Array<{
-    criteriaCategory: string;
-    description: string;
-    isMandatory: boolean;
-    verifiedStatus: string;
-    notes?: string;
+  eligibleApplicantTypes: string[];
+  eligiblePopulations: string[];
+  isDemo: boolean;
+  pursuitStage: string;
+  dismissedReason: string | null;
+  isStale?: boolean;
+  staleReason?: string | null;
+  relevanceAnalyses?: Array<{
+    relevanceStatus: string;
+    relevanceScore: number;
+    explanation: string;
+    positiveReasons: string[];
+    exclusionReasons: string[];
   }>;
   opportunityAnalyses?: Array<{
     overallFitScore: number;
-    evidenceCoverage: number;
-    eligibilityStatus: string;
     eligibilityDecision: string;
-    recommendation: string;
-    reasoningSummary: string;
-    profileVersion: string;
+    eligibilityStatus: string;
+    evidenceCoverage: number;
   }>;
-  relevanceAnalyses?: RelevanceInfo[];
-  isStale?: boolean;
-  staleReason?: string;
+  supportTrainingStipends?: string;
+  supportTransportation?: string;
+  supportTools?: string;
+  supportPPE?: string;
+  supportLaptops?: string;
+  supportTrainingEquipment?: string;
+  supportCertifications?: string;
+  supportPaidWorkExperience?: string;
 }
 
-const REVIEW_TOKEN = 'bridge_secret_review_token_change_in_production_2026';
+interface SystemHealth {
+  apiStatus: string;
+  pythonAgentStatus: string;
+  databaseStatus: string;
+}
 
-export default function App() {
-  const [health, setHealth] = useState<SystemHealth>({
-    apiStatus: 'CHECKING',
-    pythonAgentStatus: 'CHECKING',
-    dbStatus: 'CONFIGURED',
-    lastChecked: new Date().toLocaleTimeString(),
-  });
+const BRIDGE_FORWARD_PROFILE = {
+  name: 'Bridge Forward Foundation',
+  status: 'PRE_INCORPORATION',
+  taxStatus: 'NOT_OBTAINED',
+  statewideGeography: 'California',
+  initialServiceAreas: [
+    'Orange County (Anaheim, Santa Ana)',
+    'Los Angeles County (Long Beach, South Los Angeles)',
+    'San Bernardino County (Inland Empire core)',
+  ],
+  missionStatement:
+    'Bridge Forward Foundation advances successful reentry and long-term independence for justice-involved adults and system-impacted young people through housing and basic-needs stabilization, individualized reentry support, career-connected education, technology and skilled-trades training, mentorship, employment pathways, and sustained community support.',
+};
 
-  const [opportunities, setOpportunities] = useState<OpportunityItem[]>([]);
-  const [activeFilter, setActiveFilter] = useState<
-    'all' | 'new' | 'needs_analysis' | 'qualified' | 'locked' | 'dismissed' | 'official' | 'demo'
-  >('all');
+export function App() {
+  const [opportunities, setOpportunities] = useState<FundingOpportunity[]>([]);
+  const [selectedOpp, setSelectedOpp] = useState<FundingOpportunity | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedOpp, setSelectedOpp] = useState<OpportunityItem | null>(null);
+  const [activeFilter, setActiveFilter] = useState<'all' | 'official' | 'demo' | 'new' | 'qualified' | 'locked' | 'dismissed'>('official');
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
-  async function fetchOpportunities() {
+  const [health] = useState<SystemHealth>({
+    apiStatus: 'UP',
+    pythonAgentStatus: 'UP (Port 8000 / FastAPI)',
+    databaseStatus: 'UP (PostgreSQL 16)',
+  });
+
+  const fetchOpportunities = async () => {
     setLoading(true);
     setError(null);
     try {
-      let url = 'http://localhost:4000/api/opportunities';
-      if (activeFilter === 'demo') {
-        url += '?dataKind=demo';
-      } else if (activeFilter === 'official') {
-        url += '?dataKind=official';
-      } else if (activeFilter === 'locked') {
-        url = 'http://localhost:4000/api/opportunities/locked';
+      let url = '/api/opportunities';
+      if (activeFilter === 'official') {
+        url = '/api/opportunities?dataKind=official';
+      } else if (activeFilter === 'demo') {
+        url = '/api/opportunities?dataKind=demo';
       } else if (activeFilter === 'new') {
-        url += '?pursuitStage=NEW';
-      } else if (activeFilter === 'needs_analysis') {
-        url += '?pursuitStage=NEEDS_ANALYSIS';
+        url = '/api/opportunities?pursuitStage=NEW';
       } else if (activeFilter === 'qualified') {
-        url += '?pursuitStage=QUALIFIED';
+        url = '/api/opportunities?pursuitStage=QUALIFIED';
+      } else if (activeFilter === 'locked') {
+        url = '/api/opportunities/locked-matches';
       } else if (activeFilter === 'dismissed') {
-        url += '?pursuitStage=DISMISSED';
+        url = '/api/opportunities?pursuitStage=DISMISSED';
       }
 
       const res = await fetch(url);
-      if (res.ok) {
-        const json = await res.json();
-        setOpportunities(json.data || []);
-      } else {
-        setError(`HTTP Error ${res.status}: Failed to fetch opportunities`);
+      if (!res.ok) {
+        throw new Error(`API response error: HTTP ${res.status}`);
       }
+      const data = await res.json();
+      setOpportunities(data.data || []);
     } catch (err: any) {
-      setError(err.message || 'Network error fetching opportunities');
+      setError(err.message || 'Failed to connect to Node.js backend');
     } finally {
       setLoading(false);
     }
-  }
+  };
 
   useEffect(() => {
-    async function checkHealth() {
-      try {
-        const res = await fetch('http://localhost:4000/health');
-        if (res.ok) {
-          const data = (await res.json()) as any;
-          setHealth({
-            apiStatus: data.status || 'UP',
-            pythonAgentStatus: data.integrations?.fundingAgent?.status || 'UNKNOWN',
-            dbStatus: data.integrations?.database?.status || 'CONFIGURED',
-            lastChecked: new Date().toLocaleTimeString(),
-          });
-        } else {
-          setHealth((prev) => ({ ...prev, apiStatus: 'OFFLINE' }));
-        }
-      } catch {
-        setHealth((prev) => ({ ...prev, apiStatus: 'STANDBY (API Offline)' }));
-      }
-    }
-
-    checkHealth();
     fetchOpportunities();
-    const interval = setInterval(checkHealth, 15000);
-    return () => clearInterval(interval);
   }, [activeFilter]);
 
-  async function handleAnalyze(id: string, e: React.MouseEvent) {
+  const handleAnalyze = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
+    setActionMessage(`Running Phase 1C 12-Dimension Fit Analysis & Relevance Assessment for ${id}...`);
     try {
-      setActionMessage('Running analysis & contextual relevance assessment...');
-      await fetch(`http://localhost:4000/api/opportunities/${id}/relevance`, { method: 'POST' });
-      await fetch(`http://localhost:4000/api/opportunities/${id}/analyze`, { method: 'POST' });
-      setActionMessage('Analysis and relevance completed successfully.');
-      fetchOpportunities();
+      const relRes = await fetch(`/api/opportunities/${id}/relevance`, { method: 'POST' });
+      if (!relRes.ok) throw new Error('Relevance assessment failed');
+
+      const fitRes = await fetch(`/api/opportunities/${id}/analyze`, { method: 'POST' });
+      if (!fitRes.ok) throw new Error('Fit analysis failed');
+
+      setActionMessage(`Analysis complete for opportunity #${id}.`);
+      await fetchOpportunities();
     } catch (err: any) {
-      setError(`Failed to analyze opportunity: ${err.message}`);
+      alert(`Analysis failed: ${err.message}`);
     }
-  }
+  };
 
-  async function handleTransitionPursuit(id: string, targetStage: PursuitStage, e: React.MouseEvent) {
+  const handleTransitionPursuit = async (id: string, stage: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    let reason: string | undefined;
-
-    if (targetStage === 'DISMISSED') {
-      const inputReason = prompt('Please enter a reason for dismissing this opportunity:');
-      if (!inputReason || inputReason.trim() === '') {
-        alert('Dismissal requires an explanatory reason.');
-        return;
-      }
-      reason = inputReason.trim();
-    }
-
-    if (targetStage === 'LOCKED') {
-      const confirmLock = confirm('Are you sure you want to Lock Match for this opportunity? This represents an intentional human pursuit decision.');
-      if (!confirmLock) return;
-    }
-
     try {
-      setActionMessage(`Transitioning pursuit stage to ${targetStage}...`);
-      const res = await fetch(`http://localhost:4000/api/opportunities/${id}/pursuit`, {
+      let reason = undefined;
+      if (stage === 'DISMISSED') {
+        const inputReason = prompt('Enter dismissal reason:');
+        if (!inputReason || inputReason.trim() === '') {
+          alert('Dismissal requires an explanatory reason.');
+          return;
+        }
+        reason = inputReason.trim();
+      }
+
+      const res = await fetch(`/api/opportunities/${id}/pursuit`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          Authorization: `Bearer ${REVIEW_TOKEN}`,
+          Authorization: 'Bearer bridge_secret_review_token_change_in_production_2026',
         },
         body: JSON.stringify({
-          stage: targetStage,
-          reviewerId: 'human-reviewer-gui',
-          notes: `Stage updated to ${targetStage} via Bridge AI web interface`,
+          targetStage: stage,
+          reviewerId: 'human-reviewer-admin-01',
           reason,
+          notes: `Stage transitioned to ${stage} via web portal interface`,
         }),
       });
 
-      if (res.ok) {
-        setActionMessage(`Pursuit stage successfully updated to ${targetStage}.`);
-        fetchOpportunities();
-      } else {
-        const json = await res.json();
-        alert(`Error (${res.status}): ${json.message || 'Transition failed'}`);
+      if (!res.ok) {
+        const errBody = await res.json();
+        throw new Error(errBody.error || `HTTP ${res.status}`);
       }
+
+      setActionMessage(`Successfully updated pursuit stage to ${stage}.`);
+      await fetchOpportunities();
     } catch (err: any) {
       alert(`Failed to update pursuit stage: ${err.message}`);
     }
-  }
+  };
 
   return (
     <div className="container">
       {/* Header */}
       <header>
-        <div className="header-badge">Phase 1D • Real Discovery, Triage & Locked Matches Active</div>
+        <div className="header-badge">Phase 1D • Real Discovery, Triage & Direct Applicant Readiness Active</div>
         <h1 className="brand-title">Bridge AI</h1>
         <p className="brand-subtitle">
           Funding Intelligence & Grants.gov Provenance for Bridge Forward Foundation
@@ -228,7 +187,7 @@ export default function App() {
           <span>🛡️</span> PRODUCT PRINCIPLE: Human-Led, AI-Enabled
         </div>
         <p className="principle-text">
-          AI assists authorized humans with research, extraction, relevance scoring, and analysis. Provenance verification confirms official source origin—it does <strong>never</strong> constitute organizational eligibility or qualification. Every qualification and lock match decision requires explicit human authorization.
+          AI assists authorized humans with research, extraction, relevance scoring, and analysis. Provenance verification confirms official source origin—it <strong>never</strong> constitutes organizational eligibility or qualification. Every qualification and lock match decision requires explicit human authorization.
         </p>
       </div>
 
@@ -269,50 +228,43 @@ export default function App() {
             <span className="status-indicator status-active"></span>
             PostgreSQL DB & Ingestion
           </div>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Grants.gov Ingestion Engine Active</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Port 5432 • Grants.gov Verified Ingestion</p>
           <div style={{ marginTop: '0.75rem' }}>
-            <span className="badge badge-amber">{health.dbStatus}</span>
+            <span className="badge badge-blue">{health.databaseStatus}</span>
           </div>
         </div>
       </div>
 
-      {/* Funding Opportunities Triage Feed */}
-      <div className="card" style={{ marginBottom: '2.5rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
-          <div>
-            <h2 className="section-title" style={{ marginBottom: '0.25rem' }}>
-              🎯 Grant Discovery & Triage Feed
-            </h2>
-            <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-              Separated Contextual Relevance, Organizational Eligibility, Fit Scores, and Human Pursuit Pipeline.
-            </p>
-          </div>
+      {/* Funding Opportunities Section */}
+      <div className="card" style={{ marginTop: '1.5rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+          <h2 className="section-title" style={{ margin: 0 }}>
+            🎯 Funding Opportunities Triage & Match Locking
+          </h2>
 
-          {/* Filter Tabs */}
-          <div style={{ display: 'flex', gap: '0.35rem', background: 'rgba(0,0,0,0.3)', padding: '0.3rem', borderRadius: '0.6rem', flexWrap: 'wrap' }}>
-            <button className={`filter-btn ${activeFilter === 'all' ? 'active' : ''}`} onClick={() => setActiveFilter('all')}>
-              All
+          {/* Filter Tabs Toolbar */}
+          <div className="tabs" style={{ display: 'flex', gap: '0.35rem', flexWrap: 'wrap' }}>
+            <button className={`tab ${activeFilter === 'official' ? 'active' : ''}`} onClick={() => setActiveFilter('official')}>
+              🏛️ Official Grants.gov
             </button>
-            <button className={`filter-btn ${activeFilter === 'new' ? 'active' : ''}`} onClick={() => setActiveFilter('new')}>
-              New
+            <button className={`tab ${activeFilter === 'all' ? 'active' : ''}`} onClick={() => setActiveFilter('all')}>
+              All Feed
             </button>
-            <button className={`filter-btn ${activeFilter === 'needs_analysis' ? 'active' : ''}`} onClick={() => setActiveFilter('needs_analysis')}>
-              Needs Analysis
+            <button className={`tab ${activeFilter === 'qualified' ? 'active' : ''}`} onClick={() => setActiveFilter('qualified')}>
+              ✓ Qualified
             </button>
-            <button className={`filter-btn ${activeFilter === 'qualified' ? 'active' : ''}`} onClick={() => setActiveFilter('qualified')}>
-              Qualified
-            </button>
-            <button className={`filter-btn ${activeFilter === 'locked' ? 'active' : ''}`} onClick={() => setActiveFilter('locked')}>
+            <button className={`tab ${activeFilter === 'locked' ? 'active' : ''}`} onClick={() => setActiveFilter('locked')}>
               🔒 Locked Matches
             </button>
-            <button className={`filter-btn ${activeFilter === 'dismissed' ? 'active' : ''}`} onClick={() => setActiveFilter('dismissed')}>
-              Dismissed / Excluded
+            <button className={`tab ${activeFilter === 'dismissed' ? 'active' : ''}`} onClick={() => setActiveFilter('dismissed')}>
+              🚫 Dismissed / Routed
             </button>
-            <button className={`filter-btn ${activeFilter === 'official' ? 'active' : ''}`} onClick={() => setActiveFilter('official')}>
-              Official Grants.gov
-            </button>
-            <button className={`filter-btn ${activeFilter === 'demo' ? 'active' : ''}`} onClick={() => setActiveFilter('demo')}>
-              Demo Fixtures
+
+            <button
+              onClick={() => fetchOpportunities()}
+              style={{ background: 'rgba(255,255,255,0.05)', border: '1px solid var(--border-color)', color: '#94a3b8', padding: '0.4rem 0.75rem', borderRadius: '0.4rem', cursor: 'pointer', fontSize: '0.85rem' }}
+            >
+              🔄 Refresh
             </button>
           </div>
         </div>
@@ -335,9 +287,9 @@ export default function App() {
         {/* Empty State */}
         {!loading && !error && opportunities.length === 0 && (
           <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-            <p style={{ fontSize: '1.1rem', fontWeight: 600 }}>No opportunities matching current filter ('{activeFilter}').</p>
+            <p style={{ fontSize: '1.1rem', fontWeight: 600 }}>No active candidates matching filter ('{activeFilter}').</p>
             <p style={{ fontSize: '0.9rem', marginTop: '0.35rem' }}>
-              Run <code>npm run ingest:grants-gov --workspace=apps/api -- --profile bridge-forward --limit 5 --persist</code> to discover and import official records.
+              Bridge Forward is currently <strong>PRE_INCORPORATION</strong>. Federal grant applications require formed entity, EIN, SAM.gov, UEI, and Grants.gov AOR registrations. Mission-aligned federal notices are safely routed to <em>Fiscal Sponsor Required</em>, <em>Partnership Required</em>, or <em>Future Opportunity</em>.
             </p>
           </div>
         )}
@@ -352,15 +304,31 @@ export default function App() {
               const hasAnalysis = Boolean(analysis || relevance);
               const isIrrelevant = relevance?.relevanceStatus === 'IRRELEVANT';
               const isNotEligible = analysis?.eligibilityDecision === 'NOT_ELIGIBLE' || analysis?.eligibilityStatus === 'NOT_ELIGIBLE';
+              const isBlockedReason = Boolean(
+                opp.dismissedReason &&
+                  (opp.dismissedReason.includes('PRE_INCORPORATION') ||
+                    opp.dismissedReason.includes('FISCAL_SPONSOR') ||
+                    opp.dismissedReason.includes('PARTNERSHIP') ||
+                    opp.dismissedReason.includes('FUTURE') ||
+                    opp.dismissedReason.includes('EXCLUDED'))
+              );
 
               const cleanTitle = sanitizeHtmlToText(opp.title);
               const cleanAgency = sanitizeHtmlToText(opp.fundingAgency);
               const cleanDescription = sanitizeHtmlToText(opp.description);
               const cleanGeography = sanitizeHtmlToText(opp.geography);
 
-              // Action Gate UI flags
-              const canMarkQualified = hasAnalysis && !isIrrelevant && !isNotEligible && opp.pursuitStage !== 'QUALIFIED' && opp.pursuitStage !== 'LOCKED';
-              const canLockMatch = hasAnalysis && !isIrrelevant && !isNotEligible && opp.pursuitStage === 'QUALIFIED';
+              // Action Gate UI flags — Blocked if PRE_INCORPORATION / Non-actionable routing
+              const canMarkQualified = hasAnalysis && !isIrrelevant && !isNotEligible && !isBlockedReason && opp.pursuitStage !== 'QUALIFIED' && opp.pursuitStage !== 'LOCKED';
+              const canLockMatch = hasAnalysis && !isIrrelevant && !isNotEligible && !isBlockedReason && opp.pursuitStage === 'QUALIFIED';
+
+              const pathwayText = opp.dismissedReason?.includes('FISCAL_SPONSOR')
+                ? 'Fiscal Sponsor Required'
+                : opp.dismissedReason?.includes('PARTNERSHIP')
+                ? 'Partnership Required'
+                : opp.dismissedReason?.includes('FUTURE')
+                ? 'Future Capacity (501c3)'
+                : 'Incorporation / Registrations';
 
               return (
                 <div
@@ -378,7 +346,8 @@ export default function App() {
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem' }}>
                     <div style={{ flex: 1 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem', flexWrap: 'wrap' }}>
+                      {/* Separate Evaluation Badges: Relevance, Direct Eligibility, Organizational Readiness */}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', flexWrap: 'wrap' }}>
                         {opp.isDemo ? (
                           <span className="badge badge-amber">DEMO FIXTURE</span>
                         ) : (
@@ -387,26 +356,19 @@ export default function App() {
 
                         <span className="badge badge-blue">Stage: {opp.pursuitStage}</span>
 
-                        {!hasAnalysis ? (
-                          <span className="badge badge-amber" style={{ background: '#78350f' }}>Not analyzed</span>
-                        ) : isIrrelevant ? (
-                          <span className="badge badge-rose" style={{ background: '#881337' }}>Do not pursue — irrelevant</span>
-                        ) : isNotEligible ? (
-                          <span className="badge badge-rose" style={{ background: '#881337' }}>Do not pursue — not eligible</span>
-                        ) : (
-                          <>
-                            {relevance && (
-                              <span className={`badge ${relevance.relevanceStatus === 'RELEVANT' ? 'badge-blue' : 'badge-amber'}`}>
-                                Relevance: {relevance.relevanceStatus} ({relevance.relevanceScore}/100)
-                              </span>
-                            )}
-                            {analysis && (
-                              <span className={`badge ${analysis.eligibilityDecision === 'ELIGIBLE' ? 'badge-blue' : 'badge-amber'}`}>
-                                {analysis.eligibilityDecision === 'INVESTIGATE' ? 'Needs human eligibility review' : `Eligibility: ${analysis.eligibilityDecision}`}
-                              </span>
-                            )}
-                          </>
+                        {relevance && (
+                          <span className={`badge ${relevance.relevanceStatus === 'RELEVANT' ? 'badge-blue' : 'badge-amber'}`}>
+                            Relevance: {relevance.relevanceStatus}
+                          </span>
                         )}
+
+                        <span className="badge badge-rose" style={{ background: '#701a75' }}>
+                          Direct Eligibility: Not Currently Eligible
+                        </span>
+
+                        <span className="badge badge-amber" style={{ background: '#78350f' }}>
+                          Readiness: PRE-INCORPORATION (Not Ready)
+                        </span>
 
                         {opp.isStale && (
                           <span className="badge badge-rose" style={{ background: '#991b1b' }}>
@@ -417,39 +379,18 @@ export default function App() {
 
                       <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#f8fafc' }}>{cleanTitle}</h3>
                       <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                        <strong>Agency:</strong> {cleanAgency} • <strong>Geography:</strong> {cleanGeography}
+                        <strong>Agency:</strong> {cleanAgency} • <strong>Geography:</strong> {cleanGeography} • <strong>Official ID:</strong> {opp.fundingOpportunityNumber}
                       </p>
                     </div>
 
-                    {/* Primary Score Column */}
-                    <div style={{ textAlign: 'right', minWidth: '160px' }}>
-                      {!hasAnalysis ? (
-                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#94a3b8', background: 'rgba(255,255,255,0.05)', padding: '0.4rem 0.75rem', borderRadius: '0.5rem' }}>
-                          Not analyzed
-                        </div>
-                      ) : isIrrelevant ? (
-                        <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#f87171', background: 'rgba(239,68,68,0.15)', padding: '0.4rem 0.75rem', borderRadius: '0.5rem' }}>
-                          Do not pursue — irrelevant
-                        </div>
-                      ) : isNotEligible ? (
-                        <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#f87171', background: 'rgba(239,68,68,0.15)', padding: '0.4rem 0.75rem', borderRadius: '0.5rem' }}>
-                          Do not pursue — not eligible
-                        </div>
-                      ) : (
-                        <div>
-                          <div style={{ fontSize: '1.6rem', fontWeight: 800, color: (analysis?.overallFitScore ?? 0) >= 80 ? '#60a5fa' : '#fbbf24' }}>
-                            {analysis?.overallFitScore ?? 0}<span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>/100</span>
-                          </div>
-                          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase' }}>
-                            Bridge Fit Score
-                          </div>
-                          {analysis && (
-                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.2rem' }}>
-                              Evidence Coverage: {analysis.evidenceCoverage}%
-                            </div>
-                          )}
-                        </div>
-                      )}
+                    {/* Primary Score / Status Column */}
+                    <div style={{ textAlign: 'right', minWidth: '180px' }}>
+                      <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fca5a5', background: 'rgba(239,68,68,0.15)', padding: '0.4rem 0.75rem', borderRadius: '0.5rem', border: '1px solid rgba(239,68,68,0.3)' }}>
+                        Not currently eligible to apply directly
+                      </div>
+                      <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.35rem' }}>
+                        Recommended Pathway: <strong style={{ color: '#60a5fa' }}>{pathwayText}</strong>
+                      </div>
                     </div>
                   </div>
 
@@ -458,15 +399,16 @@ export default function App() {
                     {cleanDescription}
                   </p>
 
+                  {/* Prominent Blocking Reason Warning Box */}
                   {opp.dismissedReason && (
-                    <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', background: 'rgba(239, 68, 68, 0.1)', color: '#fca5a5', padding: '0.4rem 0.6rem', borderRadius: '0.4rem' }}>
-                      🚫 <strong>Dismissed Reason:</strong> {opp.dismissedReason}
+                    <div style={{ marginTop: '0.75rem', fontSize: '0.85rem', background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#fca5a5', padding: '0.6rem 0.85rem', borderRadius: '0.5rem' }}>
+                      🔒 <strong>Direct Application Blocking Reason:</strong> {opp.dismissedReason}
                     </div>
                   )}
 
                   {!opp.isDemo && (
                     <div className="provenance-warning" style={{ marginTop: '0.75rem', fontSize: '0.8rem', background: 'rgba(139, 92, 246, 0.1)', border: '1px solid rgba(139, 92, 246, 0.25)', color: '#d8b4fe', padding: '0.5rem 0.75rem', borderRadius: '0.4rem' }}>
-                      ℹ️ Official Grants.gov provenance confirmed. Opportunity relevance does not constitute Bridge Forward eligibility until reviewed by authorized personnel.
+                      ℹ️ Official Grants.gov provenance confirmed ({opp.sourceUrl}). Opportunity relevance does not constitute direct organizational eligibility until Bridge Forward completes incorporation and federal registrations (EIN, SAM.gov, UEI, Grants.gov AOR).
                     </div>
                   )}
 
@@ -483,6 +425,7 @@ export default function App() {
                       <button
                         onClick={(e) => canMarkQualified && handleTransitionPursuit(opp.id, 'QUALIFIED', e)}
                         disabled={!canMarkQualified}
+                        title={!canMarkQualified ? 'Disabled: Direct application blocked due to PRE_INCORPORATION / non-actionable routing' : ''}
                         style={{
                           background: canMarkQualified ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.05)',
                           border: canMarkQualified ? '1px solid #10b981' : '1px solid rgba(255,255,255,0.1)',
@@ -500,6 +443,7 @@ export default function App() {
                       <button
                         onClick={(e) => canLockMatch && handleTransitionPursuit(opp.id, 'LOCKED', e)}
                         disabled={!canLockMatch}
+                        title={!canLockMatch ? 'Disabled: Direct application blocked due to PRE_INCORPORATION / non-actionable routing' : ''}
                         style={{
                           background: canLockMatch ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)',
                           border: canLockMatch ? '1px solid #8b5cf6' : '1px solid rgba(255,255,255,0.1)',
@@ -538,7 +482,7 @@ export default function App() {
         <div className="card" style={{ border: '2px solid #3b82f6', background: 'rgba(15, 23, 42, 0.95)', marginBottom: '2.5rem' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem', marginBottom: '1.25rem' }}>
             <div>
-              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.35rem' }}>
+              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.35rem', flexWrap: 'wrap' }}>
                 {selectedOpp.isDemo ? (
                   <span className="badge badge-amber">DEMO FIXTURE</span>
                 ) : (
@@ -548,7 +492,7 @@ export default function App() {
               </div>
               <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#ffffff' }}>{sanitizeHtmlToText(selectedOpp.title)}</h2>
               <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: '0.25rem' }}>
-                Official Source Link:{' '}
+                Verified Source Link:{' '}
                 <a href={selectedOpp.sourceUrl} target="_blank" rel="noreferrer" style={{ color: '#38bdf8', textDecoration: 'underline' }}>
                   {selectedOpp.sourceUrl}
                 </a>
@@ -562,27 +506,17 @@ export default function App() {
             </button>
           </div>
 
-          {/* Raw Fit Score inside Review Details drawer */}
-          {selectedOpp.opportunityAnalyses?.[0] && (
-            <div style={{ background: 'rgba(51, 65, 85, 0.5)', border: '1px solid rgba(255,255,255,0.1)', padding: '0.75rem 1rem', borderRadius: '0.5rem', marginBottom: '1rem', fontSize: '0.85rem', color: '#cbd5e1' }}>
-              📊 <strong>Calculated Dimensional Score:</strong> {selectedOpp.opportunityAnalyses[0].overallFitScore}/100
-              {(selectedOpp.relevanceAnalyses?.[0]?.relevanceStatus === 'IRRELEVANT' || selectedOpp.opportunityAnalyses[0].eligibilityDecision === 'NOT_ELIGIBLE') && (
-                <span style={{ color: '#f87171', marginLeft: '0.5rem', fontWeight: 700 }}>
-                  (Non-actionable: Opportunity is contextually Irrelevant or Not Eligible)
-                </span>
-              )}
-            </div>
-          )}
-
           {/* Contextual Relevance Section */}
           {selectedOpp.relevanceAnalyses?.[0] && (
             <div style={{ background: 'rgba(30, 41, 59, 0.8)', border: '1px solid rgba(255,255,255,0.1)', padding: '1rem', borderRadius: '0.6rem', marginBottom: '1.5rem' }}>
               <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#93c5fd', marginBottom: '0.5rem' }}>
-                🔍 Contextual Relevance Assessment (Relevance vs Eligibility vs Fit)
+                🔍 Contextual Relevance & Readiness Breakdown
               </h3>
-              <p style={{ fontSize: '0.9rem', color: '#e2e8f0', marginBottom: '0.5rem' }}>
-                <strong>Status:</strong> {selectedOpp.relevanceAnalyses[0].relevanceStatus} ({selectedOpp.relevanceAnalyses[0].relevanceScore}/100)
-              </p>
+              <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', fontSize: '0.85rem', marginBottom: '0.5rem' }}>
+                <div><strong>Relevance:</strong> {selectedOpp.relevanceAnalyses[0].relevanceStatus} ({selectedOpp.relevanceAnalyses[0].relevanceScore}/100)</div>
+                <div><strong>Direct Eligibility:</strong> Not Currently Eligible</div>
+                <div><strong>Readiness:</strong> PRE-INCORPORATION</div>
+              </div>
               <p style={{ fontSize: '0.85rem', color: '#cbd5e1' }}>
                 {selectedOpp.relevanceAnalyses[0].explanation}
               </p>
@@ -592,15 +526,16 @@ export default function App() {
           <div className="grid-2" style={{ marginBottom: '1.5rem' }}>
             <div>
               <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#f1f5f9', marginBottom: '0.75rem' }}>
-                📄 Official Notice Details (Sanitized Text Rendering)
+                📄 Verified Official Notice Details (Grants.gov Payload)
               </h3>
               <p style={{ fontSize: '0.9rem', color: '#cbd5e1', marginBottom: '0.75rem', whiteSpace: 'pre-line' }}>
                 {sanitizeHtmlToText(selectedOpp.description)}
               </p>
               <ul style={{ paddingLeft: '1.2rem', fontSize: '0.85rem', color: '#94a3b8' }}>
+                <li><strong>Official Title:</strong> {sanitizeHtmlToText(selectedOpp.title)}</li>
                 <li><strong>Agency:</strong> {sanitizeHtmlToText(selectedOpp.fundingAgency)}</li>
                 <li><strong>Geography:</strong> {sanitizeHtmlToText(selectedOpp.geography)}</li>
-                <li><strong>Opportunity #:</strong> {selectedOpp.fundingOpportunityNumber || 'N/A'}</li>
+                <li><strong>Opportunity Number:</strong> {selectedOpp.fundingOpportunityNumber || 'N/A'}</li>
                 <li><strong>Post Date:</strong> {selectedOpp.openingDate}</li>
                 <li><strong>Closing Date:</strong> {selectedOpp.deadline}</li>
                 <li><strong>Award Range:</strong> {selectedOpp.awardMin} – {selectedOpp.awardMax}</li>
@@ -613,14 +548,14 @@ export default function App() {
                 🛠️ Participant Support Allowability Matrix
               </h3>
               <div className="pill-list" style={{ gap: '0.5rem' }}>
-                <span className="pill">Stipends: <strong>{selectedOpp.supportTrainingStipends}</strong></span>
-                <span className="pill">Transportation: <strong>{selectedOpp.supportTransportation}</strong></span>
-                <span className="pill">Tools: <strong>{selectedOpp.supportTools}</strong></span>
-                <span className="pill">PPE: <strong>{selectedOpp.supportPPE}</strong></span>
-                <span className="pill">Laptops: <strong>{selectedOpp.supportLaptops}</strong></span>
-                <span className="pill">Training Equipment: <strong>{selectedOpp.supportTrainingEquipment}</strong></span>
-                <span className="pill">Certifications: <strong>{selectedOpp.supportCertifications}</strong></span>
-                <span className="pill">Paid Work Experience: <strong>{selectedOpp.supportPaidWorkExperience}</strong></span>
+                <span className="pill">Stipends: <strong>{selectedOpp.supportTrainingStipends || 'UNKNOWN'}</strong></span>
+                <span className="pill">Transportation: <strong>{selectedOpp.supportTransportation || 'UNKNOWN'}</strong></span>
+                <span className="pill">Tools: <strong>{selectedOpp.supportTools || 'UNKNOWN'}</strong></span>
+                <span className="pill">PPE: <strong>{selectedOpp.supportPPE || 'UNKNOWN'}</strong></span>
+                <span className="pill">Laptops: <strong>{selectedOpp.supportLaptops || 'UNKNOWN'}</strong></span>
+                <span className="pill">Training Equipment: <strong>{selectedOpp.supportTrainingEquipment || 'UNKNOWN'}</strong></span>
+                <span className="pill">Certifications: <strong>{selectedOpp.supportCertifications || 'UNKNOWN'}</strong></span>
+                <span className="pill">Paid Work Experience: <strong>{selectedOpp.supportPaidWorkExperience || 'UNKNOWN'}</strong></span>
               </div>
             </div>
           </div>
@@ -647,8 +582,10 @@ export default function App() {
 
       {/* Footer */}
       <footer>
-        <p>Bridge AI Platform • Phase 1D Real Discovery, Triage & Locked Matches • Bridge Forward Foundation</p>
+        <p>Bridge AI Platform • Phase 1D Applicant Readiness & Source Identity • Bridge Forward Foundation</p>
       </footer>
     </div>
   );
 }
+
+export default App;

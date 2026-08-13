@@ -78,20 +78,21 @@ export class PursuitService {
       opp.dismissedReason &&
         (opp.dismissedReason.startsWith('EXCLUDED') ||
           opp.dismissedReason.startsWith('FUTURE_OPPORTUNITY') ||
-          opp.dismissedReason.startsWith('PARTNERSHIP_REQUIRED'))
+          opp.dismissedReason.startsWith('PARTNERSHIP_REQUIRED') ||
+          opp.dismissedReason.startsWith('FISCAL_SPONSOR_REQUIRED'))
     );
 
     // Action Gate 1: Mark Qualified
     if (targetStage === 'QUALIFIED') {
       if (isIrrelevant || isNotEligible || isDismissedOrRouted) {
-        throw new Error('Opportunity is contextually IRRELEVANT, non-actionable, or NOT_ELIGIBLE and cannot be marked QUALIFIED');
+        throw new Error('Opportunity is not currently eligible to apply directly (PRE_INCORPORATION / non-actionable routing) and cannot be marked QUALIFIED');
       }
     }
 
     // Action Gate 2: Lock Match
     if (targetStage === 'LOCKED') {
       if (isIrrelevant || isNotEligible || isDismissedOrRouted) {
-        throw new Error('Opportunity is contextually IRRELEVANT, non-actionable, or NOT_ELIGIBLE and cannot be marked LOCKED');
+        throw new Error('Opportunity is not currently eligible to apply directly (PRE_INCORPORATION / non-actionable routing) and cannot be marked LOCKED');
       }
       if (currentStage !== 'QUALIFIED' && currentStage !== 'LOCKED') {
         throw new Error('Opportunity must be in QUALIFIED pursuit stage before locking match');

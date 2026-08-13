@@ -190,7 +190,7 @@ opportunitiesRouter.post('/:id/pursuit', async (req: Request, res: Response) => 
     const { id } = req.params;
     const authHeader = req.headers.authorization;
 
-    const ALLOWED_PURSUIT_KEYS = new Set(['stage', 'reviewerId', 'notes', 'reason']);
+    const ALLOWED_PURSUIT_KEYS = new Set(['stage', 'targetStage', 'reviewerId', 'notes', 'reason']);
     const unknownBodyKeys = Object.keys(req.body || {}).filter((k) => !ALLOWED_PURSUIT_KEYS.has(k));
     if (unknownBodyKeys.length > 0) {
       return res.status(400).json({
@@ -199,7 +199,8 @@ opportunitiesRouter.post('/:id/pursuit', async (req: Request, res: Response) => 
       });
     }
 
-    const { stage, reviewerId, notes, reason } = req.body || {};
+    const stage = req.body?.stage || req.body?.targetStage;
+    const { reviewerId, notes, reason } = req.body || {};
 
     if (!stage || !Object.values(PursuitStage).includes(stage as PursuitStage)) {
       return res.status(400).json({

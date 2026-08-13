@@ -404,9 +404,11 @@ describe('Phase 1C — Eligibility and Fit Analysis Foundation Complete Test Sui
     });
 
     it('Case 38: GET returns the documented no-analysis state for unanalyzed opportunity', async () => {
+      await cleanTestOpp('test-phase1c-unanalyzed-004');
       await prisma.fundingOpportunity.create({
         data: {
           id: 'test-phase1c-unanalyzed-004',
+          sourceSystem: 'GRANTS_GOV',
           title: 'Unanalyzed Grant Opportunity',
           fundingAgency: 'State Board',
           description: 'Notice text',

@@ -21,8 +21,9 @@ export interface IngestionSummary {
   recordsInspected: number;
   recordsExcluded: number;
   exclusionReasonsCount: Record<string, number>;
-  recordsRoutedFuture: number;
+  recordsRoutedFiscalSponsor: number;
   recordsRoutedPartnership: number;
+  recordsRoutedFuture: number;
   recordsDeduplicated: number;
   recordsAccepted: number;
   recordsCreated: number;
@@ -55,7 +56,7 @@ export class IngestionService {
   }
 
   /**
-   * Execute Grants.gov ingestion run with detail-level exclusion gates, positive mission lane verification, capacity routing, and limit enforcement after filtering.
+   * Execute Grants.gov ingestion run with detail-level source identity verification, applicant readiness checks, and routing.
    */
   async ingestFromGrantsGov(options: IngestionOptions): Promise<IngestionSummary> {
     const isDryRun = options.dryRun !== false;
@@ -82,8 +83,9 @@ export class IngestionService {
     let rawSearchHitsCount = 0;
     let recordsInspected = 0;
     let recordsExcluded = 0;
-    let recordsRoutedFuture = 0;
+    let recordsRoutedFiscalSponsor = 0;
     let recordsRoutedPartnership = 0;
+    let recordsRoutedFuture = 0;
     let recordsDeduplicated = 0;
     let recordsAccepted = 0;
     let recordsCreated = 0;
@@ -104,8 +106,9 @@ export class IngestionService {
       EXCLUDED_REIMBURSEMENT_PROGRAM: 0,
       EXCLUDED_CONTEXTUALLY_IRRELEVANT: 0,
       NO_MISSION_LANE_MATCH: 0,
-      FUTURE_OPPORTUNITY: 0,
+      FISCAL_SPONSOR_REQUIRED: 0,
       PARTNERSHIP_REQUIRED: 0,
+      FUTURE_OPPORTUNITY: 0,
     };
 
     try {
@@ -154,7 +157,7 @@ export class IngestionService {
 
       for (const { hit, searchTerms } of uniqueHits) {
         if (recordsAccepted >= targetLimit) {
-          break; // Stop after targetLimit CURRENTLY_ACTIONABLE records have been accepted
+          break;
         }
 
         try {
@@ -168,8 +171,10 @@ export class IngestionService {
           } catch (fetchErr: any) {
             if (isDryRun) {
               recordsInspected++;
-              recordsCreated++;
-              recordsAccepted++;
+              if (!options.profile) {
+                recordsCreated++;
+                recordsAccepted++;
+              }
               continue;
             }
             throw fetchErr;
@@ -179,8 +184,13 @@ export class IngestionService {
 
           const mapped = GrantsGovMapper.mapDetailToOpportunity(detail);
 
-          // Comprehensive Master Candidate Evaluation
-          const evalRes = ExclusionGateEngine.evaluateAll(mapped, detail);
+          // Source-Identity Integrity Check: Mapped ID must match requested hit ID
+          if (mapped.externalOpportunityId !== hitId) {
+            throw new Error(`Source Identity Mismatch: Requested opp ID '${hitId}' does not match detail ID '${mapped.externalOpportunityId}'`);
+          }
+
+          // Master Candidate Evaluation with Profile Option
+          const evalRes = ExclusionGateEngine.evaluateAll(mapped, detail, options.profile);
 
           if (evalRes.isExcluded) {
             recordsExcluded++;
@@ -197,14 +207,15 @@ export class IngestionService {
                 pursuitStage: 'DISMISSED',
                 dismissedReason: `${reasonKey}: ${evalRes.explanation}`,
                 relevanceStatus: 'IRRELEVANT',
+                evalRes,
               });
             }
-            continue; // Skipped from active candidates feed
+            continue;
           }
 
-          if (evalRes.routingStatus === 'FUTURE_OPPORTUNITY') {
-            recordsRoutedFuture++;
-            exclusionReasonsCount['FUTURE_OPPORTUNITY'] = (exclusionReasonsCount['FUTURE_OPPORTUNITY'] || 0) + 1;
+          if (evalRes.routingStatus === 'FISCAL_SPONSOR_REQUIRED') {
+            recordsRoutedFiscalSponsor++;
+            exclusionReasonsCount['FISCAL_SPONSOR_REQUIRED'] = (exclusionReasonsCount['FISCAL_SPONSOR_REQUIRED'] || 0) + 1;
 
             if (!isDryRun) {
               await this.persistNonActionableRecord({
@@ -214,11 +225,12 @@ export class IngestionService {
                 hitId,
                 termsArray,
                 pursuitStage: 'DISMISSED',
-                dismissedReason: `FUTURE_OPPORTUNITY: ${evalRes.explanation}`,
-                relevanceStatus: 'POSSIBLY_RELEVANT',
+                dismissedReason: `FISCAL_SPONSOR_REQUIRED: ${evalRes.blockingReason || evalRes.explanation}`,
+                relevanceStatus: 'RELEVANT',
+                evalRes,
               });
             }
-            continue; // Skipped from active candidates feed
+            continue;
           }
 
           if (evalRes.routingStatus === 'PARTNERSHIP_REQUIRED') {
@@ -233,11 +245,32 @@ export class IngestionService {
                 hitId,
                 termsArray,
                 pursuitStage: 'DISMISSED',
-                dismissedReason: `PARTNERSHIP_REQUIRED: ${evalRes.explanation}`,
-                relevanceStatus: 'POSSIBLY_RELEVANT',
+                dismissedReason: `PARTNERSHIP_REQUIRED: ${evalRes.blockingReason || evalRes.explanation}`,
+                relevanceStatus: 'RELEVANT',
+                evalRes,
               });
             }
-            continue; // Skipped from active candidates feed
+            continue;
+          }
+
+          if (evalRes.routingStatus === 'FUTURE_OPPORTUNITY') {
+            recordsRoutedFuture++;
+            exclusionReasonsCount['FUTURE_OPPORTUNITY'] = (exclusionReasonsCount['FUTURE_OPPORTUNITY'] || 0) + 1;
+
+            if (!isDryRun) {
+              await this.persistNonActionableRecord({
+                runId,
+                mapped,
+                detail,
+                hitId,
+                termsArray,
+                pursuitStage: 'DISMISSED',
+                dismissedReason: `FUTURE_OPPORTUNITY: ${evalRes.blockingReason || evalRes.explanation}`,
+                relevanceStatus: 'POSSIBLY_RELEVANT',
+                evalRes,
+              });
+            }
+            continue;
           }
 
           // Candidate is CURRENTLY_ACTIONABLE!
@@ -247,15 +280,6 @@ export class IngestionService {
           if (isDryRun) {
             recordsCreated++;
             continue;
-          }
-
-          if (mapped.externalOpportunityId !== hitId) {
-            throw new Error(`Identity Mismatch: Requested opp ID '${hitId}' does not match detail ID '${mapped.externalOpportunityId}'`);
-          }
-
-          const expectedUrl = `https://www.grants.gov/search-results-detail/${hitId}`;
-          if (mapped.sourceUrl !== expectedUrl) {
-            throw new Error(`Identity Mismatch: Mapped source URL '${mapped.sourceUrl}' does not match expected '${expectedUrl}'`);
           }
 
           const payloadHash = crypto.createHash('sha256').update(JSON.stringify(detail)).digest('hex');
@@ -441,8 +465,9 @@ export class IngestionService {
         recordsInspected,
         recordsExcluded,
         exclusionReasonsCount,
-        recordsRoutedFuture,
+        recordsRoutedFiscalSponsor,
         recordsRoutedPartnership,
+        recordsRoutedFuture,
         recordsDeduplicated,
         recordsAccepted,
         recordsCreated,
@@ -470,7 +495,7 @@ export class IngestionService {
   }
 
   /**
-   * Helper to persist non-actionable (EXCLUDED, FUTURE_OPPORTUNITY, PARTNERSHIP_REQUIRED) records for auditability while keeping them out of active candidate views.
+   * Helper to persist non-actionable (EXCLUDED, FISCAL_SPONSOR_REQUIRED, PARTNERSHIP_REQUIRED, FUTURE_OPPORTUNITY) records for auditability while keeping them out of active candidate views.
    */
   private async persistNonActionableRecord(params: {
     runId: string;
@@ -480,9 +505,10 @@ export class IngestionService {
     termsArray: string[];
     pursuitStage: 'DISMISSED';
     dismissedReason: string;
-    relevanceStatus: 'IRRELEVANT' | 'POSSIBLY_RELEVANT';
+    relevanceStatus: 'IRRELEVANT' | 'RELEVANT' | 'POSSIBLY_RELEVANT';
+    evalRes: any;
   }) {
-    const { runId, mapped, detail, hitId, termsArray, pursuitStage, dismissedReason, relevanceStatus } = params;
+    const { runId, mapped, detail, termsArray, pursuitStage, dismissedReason, relevanceStatus, evalRes } = params;
     const payloadHash = crypto.createHash('sha256').update(JSON.stringify(detail)).digest('hex');
     const now = new Date();
 
@@ -501,6 +527,10 @@ export class IngestionService {
       await prisma.fundingOpportunity.update({
         where: { id: existing.id },
         data: {
+          title: mapped.title,
+          fundingAgency: mapped.fundingAgency,
+          description: mapped.description,
+          sourceUrl: mapped.sourceUrl,
           pursuitStage,
           dismissedReason,
           sourcePayloadHash: payloadHash,
@@ -569,6 +599,13 @@ export class IngestionService {
         },
       });
 
+      // Verbatim evidence citations
+      const verbatimCitations = (evalRes.evidenceQuotes || []).map((quote: string) => ({
+        field: 'description',
+        matchedTerm: quote.slice(0, 100),
+        contextSnippet: quote,
+      }));
+
       await prisma.opportunityRelevance.upsert({
         where: {
           id: `rel-${oppId}`,
@@ -582,14 +619,17 @@ export class IngestionService {
           id: `rel-${oppId}`,
           fundingOpportunityId: oppId,
           relevanceStatus,
-          relevanceScore: relevanceStatus === 'IRRELEVANT' ? 0 : 40,
-          positiveReasons: [],
+          relevanceScore: relevanceStatus === 'IRRELEVANT' ? 0 : 80,
+          positiveReasons: evalRes.matchedLanes || [],
           exclusionReasons: [dismissedReason],
           explanation: dismissedReason,
           evidenceFields: ['title', 'description'],
           profileVersion: '1.1.1-phase1d',
           profileHash: 'ac72cc0322b3b6840e78998b26791261a27424f3af8f912167fb9de5953776c6',
           isCurrent: true,
+          citations: {
+            create: verbatimCitations,
+          },
         },
       });
     }
