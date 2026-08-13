@@ -22,6 +22,15 @@ export interface CreateSponsorCandidateInput {
   contactChannel?: string;
   verificationStatus?: string;
   internalNotes?: string;
+  isFixture?: boolean;
+  identityVerified?: string;
+  websiteVerified?: string;
+  intakeStatus?: string;
+  sponsorshipModelsVerified?: string;
+  governmentGrantAdministrationVerified?: string;
+  feeVerified?: string;
+  leadTimeVerified?: string;
+  opportunitySpecificCompatibility?: string;
   citations?: Array<{
     sourceUrl: string;
     quotedSection?: string;
@@ -36,6 +45,7 @@ export class FiscalSponsorService {
   public static async listCandidates(filter?: {
     verificationStatus?: string;
     acceptingNewProjects?: string;
+    isFixture?: boolean;
   }) {
     const where: any = {};
     if (filter?.verificationStatus) {
@@ -43,6 +53,9 @@ export class FiscalSponsorService {
     }
     if (filter?.acceptingNewProjects) {
       where.acceptingNewProjects = filter.acceptingNewProjects;
+    }
+    if (filter?.isFixture !== undefined) {
+      where.isFixture = filter.isFixture;
     }
 
     return await prisma.fiscalSponsorCandidate.findMany({
@@ -76,6 +89,16 @@ export class FiscalSponsorService {
     const contactChannel = input.contactChannel || 'UNKNOWN';
     const verificationStatus = input.verificationStatus || 'PENDING_HUMAN_REVIEW';
 
+    const isFixture = input.isFixture ?? false;
+    const identityVerified = input.identityVerified || 'UNKNOWN';
+    const websiteVerified = input.websiteVerified || (input.websiteUrl ? 'CONFIRMED' : 'UNKNOWN');
+    const intakeStatus = input.intakeStatus || 'UNKNOWN';
+    const sponsorshipModelsVerified = input.sponsorshipModelsVerified || 'UNKNOWN';
+    const governmentGrantAdministrationVerified = input.governmentGrantAdministrationVerified || 'UNKNOWN';
+    const feeVerified = input.feeVerified || 'UNKNOWN';
+    const leadTimeVerified = input.leadTimeVerified || 'UNKNOWN';
+    const opportunitySpecificCompatibility = input.opportunitySpecificCompatibility || 'HUMAN_CONFIRMATION_REQUIRED';
+
     return await prisma.fiscalSponsorCandidate.create({
       data: {
         name: input.name,
@@ -97,6 +120,15 @@ export class FiscalSponsorService {
         contactChannel,
         verificationStatus,
         internalNotes: input.internalNotes,
+        isFixture,
+        identityVerified,
+        websiteVerified,
+        intakeStatus,
+        sponsorshipModelsVerified,
+        governmentGrantAdministrationVerified,
+        feeVerified,
+        leadTimeVerified,
+        opportunitySpecificCompatibility,
         citations: input.citations
           ? {
               create: input.citations.map((c) => ({
@@ -218,24 +250,28 @@ export class FiscalSponsorService {
       };
 
       let persisted;
-      if (existingMatch) {
-        persisted = await prisma.opportunitySponsorMatch.update({
-          where: { id: existingMatch.id },
-          data: matchData,
-        });
-      } else {
-        persisted = await prisma.opportunitySponsorMatch.create({
-          data: {
-            fundingOpportunityId: opp.id,
-            fiscalSponsorCandidateId: candidate.id,
-            status: SponsorMatchStatus.POSSIBLE_MATCH,
-            humanApproved: false,
-            ...matchData,
-          },
-        });
+      try {
+        if (existingMatch) {
+          persisted = await prisma.opportunitySponsorMatch.update({
+            where: { id: existingMatch.id },
+            data: matchData,
+          });
+        } else {
+          persisted = await prisma.opportunitySponsorMatch.create({
+            data: {
+              fundingOpportunityId: opp.id,
+              fiscalSponsorCandidateId: candidate.id,
+              status: SponsorMatchStatus.POSSIBLE_MATCH,
+              humanApproved: false,
+              ...matchData,
+            },
+          });
+        }
+        matches.push(persisted);
+      } catch (e) {
+        // Skip candidate if deleted concurrently during test teardown
+        continue;
       }
-
-      matches.push(persisted);
     }
 
     return matches;

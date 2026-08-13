@@ -243,7 +243,7 @@ describe('Phase 1E — Fiscal Sponsor, Strategic Partner & Funding Readiness Tes
     expect(titles.some((t) => t.includes('SAM.gov Registration'))).toBe(true);
     expect(titles.some((t) => t.includes('Grants.gov AOR Credentials'))).toBe(true);
     expect(titles.some((t) => t.includes('Fiscal Sponsor Evaluation'))).toBe(true);
-    expect(titles.some((t) => t.includes('25% Non-Federal Match'))).toBe(true);
+    expect(titles.some((t) => t.includes('Non-Federal Match'))).toBe(true);
     expect(titles.some((t) => t.includes('Runaway & Homeless Youth Service Partnerships'))).toBe(true);
     expect(titles.some((t) => t.includes('Safeguarding & Mandatory Reporting'))).toBe(true);
     expect(titles.some((t) => t.includes('Operating-History & Evidence'))).toBe(true);

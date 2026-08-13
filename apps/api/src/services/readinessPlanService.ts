@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { PlanTaskStatus } from '@prisma/client';
+import { calculateSopMatchRequirement } from './sopMatchCalculator';
 
 export class ReadinessPlanService {
   /**
@@ -32,10 +33,13 @@ export class ReadinessPlanService {
     let planData;
 
     if (isStreetOutreach) {
+      const sopMatch = calculateSopMatchRequirement(150000);
+      const sopMinMatch = calculateSopMatchRequirement(90000);
+
       planData = {
         fundingOpportunityId: opp.id,
         targetNextCycle: 'FY 2027 Annual Street Outreach Program Cycle (Anticipated Post Date: May 2027)',
-        currentBlocker: 'PRE_INCORPORATION: Lacks legal entity status, EIN, SAM.gov/UEI, Grants.gov AOR, executed fiscal sponsor agreement, 25% match funds, and operating history.',
+        currentBlocker: 'PRE_INCORPORATION: Lacks legal entity status, EIN, SAM.gov/UEI, Grants.gov AOR, executed fiscal sponsor agreement, non-federal match reserves, and operating history.',
         requiredRegistrations: [
           'California Legal Incorporation (Articles of Incorporation)',
           'IRS Employer Identification Number (EIN)',
@@ -51,16 +55,16 @@ export class ReadinessPlanService {
         operatingHistoryAndCapacityGaps: [
           '0 years independent organizational operating history (PRE_INCORPORATION)',
           'Missing audited financial statements for prior 2 years',
-          'Unverified 25% non-federal matching fund reserve',
+          `Unverified statutory non-federal match reserve ($${sopMinMatch.nonFederalMatchRequired.toLocaleString()}–$${sopMatch.nonFederalMatchRequired.toLocaleString()} required under NOFO Section III.2, Page 18)`,
         ],
         requiredDocuments: [
           'Executed Fiscal Sponsorship Agreement or Articles of Incorporation',
-          '25% Non-Federal Match Commitment Letters',
+          '10% Statutory Non-Federal Match Commitment Letters',
           'Youth Safeguarding & Mandatory Reporting Policy Manual',
           'Street Outreach Service Delivery Plan & Staffing Roster',
           'Program Budget & Narrative Template',
         ],
-        matchFundStrategy: 'Secure 25% non-federal match ($22,500–$37,500) via local foundation grant commitments and partner in-kind contributions.',
+        matchFundStrategy: sopMatch.formattedSummary,
         responsibleOwner: 'Bridge Forward Executive Lead & Project Counsel',
         targetCompletionDate: new Date('2027-04-15T00:00:00Z'),
         isComplete: false,
@@ -104,7 +108,7 @@ export class ReadinessPlanService {
             },
             {
               title: '5. Fiscal Sponsor Evaluation & Execution',
-              description: 'Evaluate California fiscal sponsors (Model A / Model F) and execute formal sponsorship agreement.',
+              description: 'Evaluate California fiscal sponsors (Model A / Model C) and execute formal sponsorship agreement.',
               category: 'PARTNERSHIP',
               responsibleOwner: 'Executive Lead',
               targetDate: new Date('2027-02-28T00:00:00Z'),
@@ -112,8 +116,8 @@ export class ReadinessPlanService {
               sourceEvidence: 'Executed Fiscal Sponsorship Contract',
             },
             {
-              title: '6. 25% Non-Federal Match Strategy Execution',
-              description: 'Identify and secure written match commitments ($22,500–$37,500) from community foundations and partner in-kind space/services.',
+              title: '6. 10% Non-Federal Match Strategy Execution',
+              description: `Identify and secure written match commitments ($${sopMinMatch.nonFederalMatchRequired.toLocaleString()}–$${sopMatch.nonFederalMatchRequired.toLocaleString()}) from community foundations and partner in-kind space/services per NOFO Section III.2 (Page 18).`,
               category: 'FINANCIAL',
               responsibleOwner: 'Development Director',
               targetDate: new Date('2027-03-15T00:00:00Z'),

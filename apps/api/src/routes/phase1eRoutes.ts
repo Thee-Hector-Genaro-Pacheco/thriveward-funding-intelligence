@@ -4,19 +4,43 @@ import { StrategicPartnerService } from '../services/strategicPartnerService';
 import { ReadinessPlanService } from '../services/readinessPlanService';
 import { GrantCalendarService } from '../services/grantCalendarService';
 import { OutreachBriefingService } from '../services/outreachBriefingService';
+import { SponsorDiscoveryService } from '../services/sponsorDiscoveryService';
+import { calculateSopMatchRequirement } from '../services/sopMatchCalculator';
 import { SponsorMatchStatus, RecurrenceConfidence, PlanTaskStatus } from '@prisma/client';
 
 export const phase1eRouter = Router();
 
 // --- Fiscal Sponsor Directory & Matching ---
 
+// POST /api/fiscal-sponsors/discovery
+phase1eRouter.post('/fiscal-sponsors/discovery', async (req: Request, res: Response) => {
+  try {
+    const result = await SponsorDiscoveryService.runDiscovery(req.body);
+    res.json({ success: true, data: result });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/sop-match-calculator
+phase1eRouter.get('/sop-match-calculator', async (req: Request, res: Response) => {
+  try {
+    const awardAmount = req.query.awardAmount ? Number(req.query.awardAmount) : 150000;
+    const calc = calculateSopMatchRequirement(awardAmount);
+    res.json({ success: true, data: calc });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
 // GET /api/fiscal-sponsors
 phase1eRouter.get('/fiscal-sponsors', async (req: Request, res: Response) => {
   try {
-    const { verificationStatus, acceptingNewProjects } = req.query;
+    const { verificationStatus, acceptingNewProjects, isFixture } = req.query;
     const candidates = await FiscalSponsorService.listCandidates({
       verificationStatus: verificationStatus as string,
       acceptingNewProjects: acceptingNewProjects as string,
+      isFixture: isFixture !== undefined ? isFixture === 'true' : undefined,
     });
     res.json({ success: true, count: candidates.length, data: candidates });
   } catch (err: any) {

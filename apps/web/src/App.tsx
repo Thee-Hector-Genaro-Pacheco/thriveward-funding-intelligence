@@ -79,6 +79,15 @@ export interface FiscalSponsorCandidate {
   samUeiStatus: string;
   contactChannel: string;
   verificationStatus: string;
+  isFixture?: boolean;
+  websiteVerified?: string;
+  intakeStatus?: string;
+  identityVerified?: string;
+  sponsorshipModelsVerified?: string;
+  governmentGrantAdministrationVerified?: string;
+  feeVerified?: string;
+  leadTimeVerified?: string;
+  opportunitySpecificCompatibility?: string;
   lastVerifiedTimestamp?: string;
   internalNotes?: string;
   citations?: Array<{
@@ -208,6 +217,34 @@ export function App() {
   const [selectedOpp, setSelectedOpp] = useState<FundingOpportunity | null>(null);
   const [briefingPacket, setBriefingPacket] = useState<SponsorBriefingPacket | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
+  const [discoveryResult, setDiscoveryResult] = useState<any | null>(null);
+  const [discoveryLoading, setDiscoveryLoading] = useState<boolean>(false);
+
+  const handleTriggerDiscovery = async () => {
+    setDiscoveryLoading(true);
+    try {
+      const res = await fetch('/api/fiscal-sponsors/discovery', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          geography: 'California',
+          focusAreas: ['youth', 'housing', 'reentry', 'workforce'],
+        }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        setDiscoveryResult(json.data);
+        setActionMessage(`Sponsor Discovery Completed! Found ${json.data.discoveredCandidates.length} candidate(s). Created: ${json.data.recordsCreated}, Updated: ${json.data.recordsUpdated}, Unchanged: ${json.data.recordsUnchanged}`);
+        await fetchSponsors();
+      } else {
+        setError(json.error || 'Failed to run sponsor discovery');
+      }
+    } catch (err: any) {
+      setError(err.message || 'Error triggering discovery');
+    } finally {
+      setDiscoveryLoading(false);
+    }
+  };
 
   const [health, setHealth] = useState<SystemHealth>({
     apiStatus: 'CHECKING',
@@ -569,10 +606,46 @@ export function App() {
       {/* TAB 2: FISCAL SPONSOR DIRECTORY */}
       {activePrimaryTab === 'SPONSORS' && (
         <div className="card" style={{ marginTop: '1.5rem' }}>
-          <h2 className="section-title">🤝 Fiscal Sponsor Directory & Evidence-Backed Match Finder</h2>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.925rem', marginBottom: '1.25rem' }}>
-            Human-reviewed directory of verified California fiscal sponsors. Unverified facts are explicitly preserved as <strong>UNKNOWN</strong>. Only an authorized human can advance a candidate or confirm an agreement.
-          </p>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
+            <div>
+              <h2 className="section-title" style={{ margin: 0 }}>🤝 Fiscal Sponsor Directory & Evidence-Backed Match Finder</h2>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '0.25rem' }}>
+                Human-reviewed directory of verified California fiscal sponsors. Unverified facts are explicitly preserved as <strong>UNKNOWN</strong>.
+              </p>
+            </div>
+            <button
+              onClick={handleTriggerDiscovery}
+              disabled={discoveryLoading}
+              style={{
+                background: discoveryLoading ? 'rgba(100, 116, 139, 0.5)' : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                border: 'none',
+                color: '#ffffff',
+                padding: '0.6rem 1.2rem',
+                borderRadius: '0.5rem',
+                fontWeight: 600,
+                fontSize: '0.875rem',
+                cursor: discoveryLoading ? 'not-allowed' : 'pointer',
+                boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)',
+              }}
+            >
+              {discoveryLoading ? '⏳ Running Sponsor Discovery...' : '⚡ Trigger Live Sponsor Discovery Run'}
+            </button>
+          </div>
+
+          {/* Discovery Run Results accounting panel */}
+          {discoveryResult && (
+            <div style={{ background: 'rgba(30, 41, 59, 0.8)', border: '1px solid rgba(59, 130, 246, 0.3)', padding: '1rem', borderRadius: '0.5rem', marginBottom: '1.5rem', fontSize: '0.85rem' }}>
+              <div style={{ fontWeight: 700, color: '#60a5fa', marginBottom: '0.5rem' }}>
+                🌐 Live Discovery Run Accounting Report ({new Date(discoveryResult.runTimestamp).toLocaleTimeString()})
+              </div>
+              <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', color: '#cbd5e1' }}>
+                <div><strong>Records Created:</strong> {discoveryResult.recordsCreated}</div>
+                <div><strong>Records Updated:</strong> {discoveryResult.recordsUpdated}</div>
+                <div><strong>Records Unchanged:</strong> {discoveryResult.recordsUnchanged}</div>
+                <div><strong>Records Rejected:</strong> {discoveryResult.recordsRejected}</div>
+              </div>
+            </div>
+          )}
 
           {loading && <div style={{ textAlign: 'center', padding: '2rem' }}>Loading directory...</div>}
 
@@ -582,15 +655,19 @@ export function App() {
                 <div key={s.id} style={{ background: 'rgba(15, 23, 42, 0.7)', border: '1px solid var(--border-color)', borderRadius: '0.75rem', padding: '1.25rem' }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem' }}>
                     <div>
-                      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.4rem' }}>
-                        <span className={`badge ${s.verificationStatus === 'VERIFIED_OFFICIAL' ? 'badge-blue' : 'badge-amber'}`}>
-                          {s.verificationStatus}
+                      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.4rem', flexWrap: 'wrap' }}>
+                        {/* Section 8 Required Badges */}
+                        <span className={`badge ${s.isFixture ? 'badge-amber' : 'badge-purple'}`}>
+                          {s.isFixture ? '🧪 Seeded example' : '🌐 Live Discovered'}
                         </span>
-                        <span className={`badge ${s.acceptingNewProjects === 'YES' ? 'badge-purple' : 'badge-amber'}`}>
-                          Accepting Projects: {s.acceptingNewProjects}
+                        <span className={`badge ${s.websiteVerified === 'CONFIRMED' ? 'badge-blue' : 'badge-amber'}`}>
+                          {s.websiteVerified === 'CONFIRMED' ? 'Source verified' : 'Unverified Source'}
                         </span>
-                        <span className="badge badge-blue">
-                          Gov Grants: {s.administersGovGrants}
+                        <span className={`badge ${s.intakeStatus === 'UNKNOWN' || s.acceptingNewProjects === 'UNKNOWN' ? 'badge-amber' : 'badge-blue'}`}>
+                          {s.intakeStatus === 'UNKNOWN' || s.acceptingNewProjects === 'UNKNOWN' ? 'Current intake unknown' : `Intake: ${s.intakeStatus || s.acceptingNewProjects}`}
+                        </span>
+                        <span className="badge badge-purple">
+                          Possible sponsor — not contacted
                         </span>
                       </div>
                       <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#f8fafc' }}>{s.name}</h3>
@@ -610,7 +687,7 @@ export function App() {
                   <p style={{ fontSize: '0.9rem', color: '#cbd5e1', marginTop: '0.75rem' }}>{s.mission}</p>
 
                   <div style={{ marginTop: '0.75rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.65rem', background: 'rgba(30, 41, 59, 0.5)', padding: '0.75rem', borderRadius: '0.5rem', fontSize: '0.85rem' }}>
-                    <div><strong>Models Offered:</strong> {s.modelsOffered.join(', ')}</div>
+                    <div><strong>Models Offered:</strong> {Array.isArray(s.modelsOffered) ? s.modelsOffered.join(', ') : s.modelsOffered}</div>
                     <div><strong>Admin Fee:</strong> {s.adminPercentage}</div>
                     <div><strong>Setup Fee:</strong> {s.setupFee}</div>
                     <div><strong>Est. Review Lead Time:</strong> {s.estimatedReviewTime}</div>
