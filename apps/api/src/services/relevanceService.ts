@@ -2,6 +2,8 @@ import { prisma } from '../lib/prisma';
 import { RelevanceStatus } from '@prisma/client';
 import { BRIDGE_FORWARD_PROFILE, getProfileHash } from '../config/bridgeForwardProfile';
 import { sanitizeHtmlToText } from '@bridge-ai/shared';
+import { ExclusionGateEngine } from './exclusionGateEngine';
+import { GrantsGovMapper } from '../integrations/grantsGov/grantsGovMapper';
 
 export interface RelevanceResult {
   id: string;
@@ -25,7 +27,7 @@ export interface RelevanceResult {
 
 export class RelevanceService {
   /**
-   * Deterministically assesses contextual relevance for a funding opportunity.
+   * Deterministically assesses contextual relevance for a funding opportunity using ExclusionGateEngine.
    */
   static async assessRelevance(fundingOpportunityId: string): Promise<RelevanceResult> {
     const opp = await prisma.fundingOpportunity.findUnique({
@@ -42,203 +44,65 @@ export class RelevanceService {
     const descText = sanitizeHtmlToText(opp.description);
     const programText = sanitizeHtmlToText(opp.program || '');
     const geographyText = sanitizeHtmlToText(opp.geography || '');
-    const fullText = `${titleText} ${agencyText} ${descText} ${programText} ${geographyText}`.toLowerCase();
+
+    const mapped = GrantsGovMapper.mapDetailToOpportunity({
+      id: opp.externalOpportunityId || opp.id,
+      opportunityNumber: opp.fundingOpportunityNumber || opp.id,
+      opportunityTitle: titleText,
+      agencyName: agencyText,
+      synopsisDescription: descText,
+      description: descText,
+      geography: geographyText,
+      eligibleApplicants: opp.eligibleApplicantTypes,
+    } as any);
+
+    const evalRes = ExclusionGateEngine.evaluateAll(mapped, {
+      opportunityNumber: opp.fundingOpportunityNumber,
+      opportunityTitle: titleText,
+      fundingAgency: agencyText,
+      description: descText,
+    });
 
     const positiveReasons: string[] = [];
     const exclusionReasons: string[] = [];
     const citations: Array<{ field: string; matchedTerm: string; contextSnippet: string }> = [];
-    const evidenceFieldsSet = new Set<string>();
+    const evidenceFieldsSet = new Set<string>(['title', 'description']);
 
     let score = 0;
-
-    // --- 1. Misleading Keyword Collisions (Negative Drivers) ---
-
-    // A. Clinical / Biomedical Research Collision
-    const clinicalTerms = [
-      'ncats',
-      'clinical and translational science',
-      'clinical trial',
-      'biomedical research',
-      'research career',
-      'scholars',
-      'postdoctoral',
-      'grant program for the ncats',
-      'r03',
-    ];
-
-    const hasClinicalMatch = clinicalTerms.some((t) => fullText.includes(t));
-    if (hasClinicalMatch && (fullText.includes('re-entry') || fullText.includes('reentry'))) {
-      exclusionReasons.push('CLINICAL_RESEARCH_REENTRY_COLLISION');
-      citations.push({
-        field: 'title/description',
-        matchedTerm: 'NCATS / Clinical Trial / Research Scholar Re-entry',
-        contextSnippet: titleText.slice(0, 150),
-      });
-      evidenceFieldsSet.add('title');
-      evidenceFieldsSet.add('description');
-    }
-
-    // B. International Travel / Cultural Exchange Collision
-    const internationalTerms = [
-      'congress-bundestag',
-      'youth exchange',
-      'staff exchange',
-      'cultural exchange',
-      'diplomacy',
-      'study abroad',
-    ];
-
-    const hasIntlMatch = internationalTerms.some((t) => fullText.includes(t));
-    if (hasIntlMatch) {
-      exclusionReasons.push('INTERNATIONAL_TRAVEL_REENTRY_COLLISION');
-      citations.push({
-        field: 'title/description',
-        matchedTerm: 'Congress-Bundestag / International Youth Exchange Re-entry Orientation',
-        contextSnippet: titleText.slice(0, 150),
-      });
-      evidenceFieldsSet.add('title');
-      evidenceFieldsSet.add('fundingAgency');
-    }
-
-    // C. Academic / Scientific Researcher Re-entry Collision
-    if (
-      !hasClinicalMatch &&
-      !hasIntlMatch &&
-      (fullText.includes('faculty re-entry') || fullText.includes('laboratory research supplement'))
-    ) {
-      exclusionReasons.push('ACADEMIC_RESEARCH_REENTRY_COLLISION');
-      citations.push({
-        field: 'description',
-        matchedTerm: 'Academic / Laboratory Research Re-entry',
-        contextSnippet: descText.slice(0, 150),
-      });
-      evidenceFieldsSet.add('description');
-    }
-
-    // --- 2. Relevant Theme Matching (Positive Drivers) ---
-
-    // Theme A: Reentry & Justice-Involved Populations
-    const reentryTerms = [
-      'reentry',
-      're-entry',
-      'returning citizens',
-      'justice-involved',
-      'justice involved',
-      'recidivism',
-      'system-impacted',
-      'system impacted',
-    ];
-
-    const matchedReentryTerms = reentryTerms.filter((t) => fullText.includes(t));
-    if (matchedReentryTerms.length > 0 && exclusionReasons.length === 0) {
-      score += 40;
-      positiveReasons.push('REENTRY_POPULATION_MATCH');
-      citations.push({
-        field: 'description',
-        matchedTerm: matchedReentryTerms.join(', '),
-        contextSnippet: descText.slice(0, 150),
-      });
-      evidenceFieldsSet.add('description');
-      evidenceFieldsSet.add('eligiblePopulations');
-    }
-
-    // Theme B: Workforce Development & Career Training
-    const workforceTerms = [
-      'workforce development',
-      'career connected',
-      'career-connected',
-      'vocational',
-      'technical education',
-      'apprenticeship',
-      'employment pathways',
-      'job training',
-      'stipends',
-    ];
-
-    const matchedWorkforceTerms = workforceTerms.filter((t) => fullText.includes(t));
-    if (matchedWorkforceTerms.length > 0) {
-      score += 25;
-      positiveReasons.push('WORKFORCE_TRAINING_MATCH');
-      citations.push({
-        field: 'description',
-        matchedTerm: matchedWorkforceTerms.join(', '),
-        contextSnippet: descText.slice(0, 150),
-      });
-      evidenceFieldsSet.add('description');
-    }
-
-    // Theme C: Technology & Digital Skills
-    const techTerms = ['controls to code', 'raspberry pi', 'python', 'iot', 'digital skills', 'hardware', 'coding'];
-    const matchedTechTerms = techTerms.filter((t) => fullText.includes(t));
-    if (matchedTechTerms.length > 0) {
-      score += 20;
-      positiveReasons.push('TECHNOLOGY_SKILLS_MATCH');
-      citations.push({
-        field: 'description',
-        matchedTerm: matchedTechTerms.join(', '),
-        contextSnippet: descText.slice(0, 150),
-      });
-      evidenceFieldsSet.add('description');
-    }
-
-    // Theme D: Community Services & Supportive Assistance
-    const communityTerms = [
-      'community services block grant',
-      'csbg',
-      'community-based',
-      'supportive services',
-      'mentorship',
-      'economic mobility',
-    ];
-    const matchedCommunityTerms = communityTerms.filter((t) => fullText.includes(t));
-    if (matchedCommunityTerms.length > 0) {
-      score += 20;
-      positiveReasons.push('COMMUNITY_SERVICES_MATCH');
-      citations.push({
-        field: 'title/agency',
-        matchedTerm: matchedCommunityTerms.join(', '),
-        contextSnippet: `${titleText} — ${agencyText}`.slice(0, 150),
-      });
-      evidenceFieldsSet.add('title');
-      evidenceFieldsSet.add('fundingAgency');
-    }
-
-    // Theme E: California Geography Match
-    const caTerms = ['california', 'bay area', 'northern ca', 'orange county', 'los angeles', 'san bernardino', 'san diego'];
-    if (caTerms.some((t) => fullText.includes(t))) {
-      score += 10;
-      positiveReasons.push('CALIFORNIA_GEOGRAPHY_MATCH');
-      evidenceFieldsSet.add('geography');
-    }
-
-    // --- 3. Score Normalization & Status Determination ---
-    if (exclusionReasons.length > 0) {
-      score = Math.min(score, 10);
-    } else {
-      score = Math.min(score, 100);
-    }
-
     let status: RelevanceStatus = RelevanceStatus.UNKNOWN;
-    if (exclusionReasons.length > 0 || score < 25) {
-      status = RelevanceStatus.IRRELEVANT;
-    } else if (score >= 70) {
-      status = RelevanceStatus.RELEVANT;
-    } else {
-      status = RelevanceStatus.POSSIBLY_RELEVANT;
-    }
-
-    // Human-readable explanation
     let explanation = '';
-    if (exclusionReasons.includes('CLINICAL_RESEARCH_REENTRY_COLLISION')) {
-      explanation = `Misleading keyword collision: Opportunity uses "re-entry" to describe biomedical/clinical research scholar career re-entry (NCATS/NIH), which is unrelated to Bridge Forward's justice-involved reentry mission. Contextually IRRELEVANT.`;
-    } else if (exclusionReasons.includes('INTERNATIONAL_TRAVEL_REENTRY_COLLISION')) {
-      explanation = `Misleading keyword collision: Opportunity uses "re-entry" to describe international cultural/youth exchange participant orientation, which is unrelated to Bridge Forward's criminal justice reentry mission. Contextually IRRELEVANT.`;
-    } else if (status === RelevanceStatus.RELEVANT) {
-      explanation = `High contextual relevance (${score}/100): Direct alignment with Bridge Forward's target population (justice-involved/returning citizens) and core services (${positiveReasons.join(', ')}).`;
-    } else if (status === RelevanceStatus.POSSIBLY_RELEVANT) {
-      explanation = `Moderate contextual relevance (${score}/100): Aligns with community workforce services or technical skills training, but requires human triage to confirm population fit (${positiveReasons.join(', ')}).`;
+
+    if (evalRes.isExcluded) {
+      status = RelevanceStatus.IRRELEVANT;
+      score = 0;
+      const reasonKey = evalRes.exclusionReason || 'EXCLUDED_CONTEXTUALLY_IRRELEVANT';
+      exclusionReasons.push(reasonKey);
+      explanation = evalRes.explanation;
+      citations.push({
+        field: 'title/description',
+        matchedTerm: reasonKey,
+        contextSnippet: titleText.slice(0, 150),
+      });
+    } else if (evalRes.routingStatus === 'FUTURE_OPPORTUNITY' || evalRes.routingStatus === 'PARTNERSHIP_REQUIRED') {
+      status = RelevanceStatus.POSSIBLY_RELEVANT;
+      score = 40;
+      positiveReasons.push(...evalRes.matchedLanes);
+      explanation = evalRes.explanation;
+      citations.push({
+        field: 'title/description',
+        matchedTerm: evalRes.matchedLanes.join(', '),
+        contextSnippet: descText.slice(0, 150),
+      });
     } else {
-      explanation = `Low relevance (${score}/100): Does not contain evidence of alignment with Bridge Forward's reentry model.`;
+      status = RelevanceStatus.RELEVANT;
+      score = 85;
+      positiveReasons.push(...evalRes.matchedLanes);
+      explanation = evalRes.explanation;
+      citations.push({
+        field: 'title/description',
+        matchedTerm: evalRes.matchedLanes.join(', '),
+        contextSnippet: descText.slice(0, 150),
+      });
     }
 
     const currentProfileHash = getProfileHash();
@@ -276,8 +140,8 @@ export class RelevanceService {
       },
     });
 
-    // Update pursuit stage from NEW to REVIEWING if currently NEW
-    if (opp.pursuitStage === 'NEW') {
+    // Update pursuit stage from NEW to REVIEWING if currently NEW and not dismissed
+    if (opp.pursuitStage === 'NEW' && status !== RelevanceStatus.IRRELEVANT) {
       await prisma.fundingOpportunity.update({
         where: { id: fundingOpportunityId },
         data: { pursuitStage: 'REVIEWING' },

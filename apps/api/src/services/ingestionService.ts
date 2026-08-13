@@ -3,7 +3,7 @@ import { prisma } from '../lib/prisma';
 import { GrantsGovClient } from '../integrations/grantsGov/grantsGovClient';
 import { GrantsGovMapper } from '../integrations/grantsGov/grantsGovMapper';
 import { GrantsGovSearchHit } from '../integrations/grantsGov/grantsGovTypes';
-import { ExclusionGateEngine, ExclusionReason } from './exclusionGateEngine';
+import { ExclusionGateEngine, CandidateRoutingStatus, ExclusionReason } from './exclusionGateEngine';
 
 export interface IngestionOptions {
   keyword?: string;
@@ -21,6 +21,8 @@ export interface IngestionSummary {
   recordsInspected: number;
   recordsExcluded: number;
   exclusionReasonsCount: Record<string, number>;
+  recordsRoutedFuture: number;
+  recordsRoutedPartnership: number;
   recordsDeduplicated: number;
   recordsAccepted: number;
   recordsCreated: number;
@@ -33,17 +35,16 @@ export interface IngestionSummary {
 }
 
 export const BRIDGE_FORWARD_SEARCH_TERMS = [
-  'justice involved',
-  'returning citizens',
-  'recidivism',
-  'reentry workforce',
-  'workforce development',
-  'youth employment',
-  'career technical education',
-  'apprenticeship',
-  'digital skills',
-  'technology training',
-  'community services',
+  '"reentry" AND workforce',
+  '"formerly incarcerated" AND employment',
+  '"justice-involved" AND training',
+  '"returning citizens" AND housing',
+  '"youth homelessness" AND supportive services',
+  '"juvenile justice" AND mentorship',
+  '"digital equity" AND workforce',
+  '"career pathways" AND disadvantaged youth',
+  '"housing stabilization" AND nonprofit',
+  '"community economic development" AND employment',
 ];
 
 export class IngestionService {
@@ -54,7 +55,7 @@ export class IngestionService {
   }
 
   /**
-   * Execute Grants.gov ingestion run with detail-level exclusion gates, deduplication, and limit enforcement after filtering.
+   * Execute Grants.gov ingestion run with detail-level exclusion gates, positive mission lane verification, capacity routing, and limit enforcement after filtering.
    */
   async ingestFromGrantsGov(options: IngestionOptions): Promise<IngestionSummary> {
     const isDryRun = options.dryRun !== false;
@@ -81,6 +82,8 @@ export class IngestionService {
     let rawSearchHitsCount = 0;
     let recordsInspected = 0;
     let recordsExcluded = 0;
+    let recordsRoutedFuture = 0;
+    let recordsRoutedPartnership = 0;
     let recordsDeduplicated = 0;
     let recordsAccepted = 0;
     let recordsCreated = 0;
@@ -91,11 +94,18 @@ export class IngestionService {
     const errors: string[] = [];
 
     const exclusionReasonsCount: Record<string, number> = {
-      EXCLUDED_FOREIGN_ONLY: 0,
-      EXCLUDED_CONTEXTUALLY_IRRELEVANT: 0,
+      EXCLUDED_FOREIGN_PLACE_OF_PERFORMANCE: 0,
+      EXCLUDED_RESEARCH_ONLY: 0,
+      EXCLUDED_CLINICAL_RESEARCH: 0,
+      EXCLUDED_LAW_ENFORCEMENT_PROGRAM: 0,
+      EXCLUDED_APPLICANT_TYPE: 0,
       EXCLUDED_RFI: 0,
       EXCLUDED_INVITED_ONLY: 0,
       EXCLUDED_REIMBURSEMENT_PROGRAM: 0,
+      EXCLUDED_CONTEXTUALLY_IRRELEVANT: 0,
+      NO_MISSION_LANE_MATCH: 0,
+      FUTURE_OPPORTUNITY: 0,
+      PARTNERSHIP_REQUIRED: 0,
     };
 
     try {
@@ -144,14 +154,14 @@ export class IngestionService {
 
       for (const { hit, searchTerms } of uniqueHits) {
         if (recordsAccepted >= targetLimit) {
-          break; // Stop after targetLimit accepted records have been processed
+          break; // Stop after targetLimit CURRENTLY_ACTIONABLE records have been accepted
         }
 
         try {
           const hitId = String(hit.id);
           const termsArray = Array.from(searchTerms);
 
-          // Fetch full detail before deciding persistence
+          // Fetch full detail before deciding persistence & routing
           let detail: any;
           try {
             detail = await this.client.fetchOpportunity(hitId);
@@ -169,15 +179,68 @@ export class IngestionService {
 
           const mapped = GrantsGovMapper.mapDetailToOpportunity(detail);
 
-          // Evaluate detail against exclusion gates
-          const exclusionCheck = ExclusionGateEngine.evaluate(mapped, detail);
-          if (exclusionCheck.isExcluded && exclusionCheck.exclusionReason) {
+          // Comprehensive Master Candidate Evaluation
+          const evalRes = ExclusionGateEngine.evaluateAll(mapped, detail);
+
+          if (evalRes.isExcluded) {
             recordsExcluded++;
-            exclusionReasonsCount[exclusionCheck.exclusionReason] =
-              (exclusionReasonsCount[exclusionCheck.exclusionReason] || 0) + 1;
-            continue; // REJECT before persistence
+            const reasonKey = evalRes.exclusionReason || 'EXCLUDED_CONTEXTUALLY_IRRELEVANT';
+            exclusionReasonsCount[reasonKey] = (exclusionReasonsCount[reasonKey] || 0) + 1;
+
+            if (!isDryRun) {
+              await this.persistNonActionableRecord({
+                runId,
+                mapped,
+                detail,
+                hitId,
+                termsArray,
+                pursuitStage: 'DISMISSED',
+                dismissedReason: `${reasonKey}: ${evalRes.explanation}`,
+                relevanceStatus: 'IRRELEVANT',
+              });
+            }
+            continue; // Skipped from active candidates feed
           }
 
+          if (evalRes.routingStatus === 'FUTURE_OPPORTUNITY') {
+            recordsRoutedFuture++;
+            exclusionReasonsCount['FUTURE_OPPORTUNITY'] = (exclusionReasonsCount['FUTURE_OPPORTUNITY'] || 0) + 1;
+
+            if (!isDryRun) {
+              await this.persistNonActionableRecord({
+                runId,
+                mapped,
+                detail,
+                hitId,
+                termsArray,
+                pursuitStage: 'DISMISSED',
+                dismissedReason: `FUTURE_OPPORTUNITY: ${evalRes.explanation}`,
+                relevanceStatus: 'POSSIBLY_RELEVANT',
+              });
+            }
+            continue; // Skipped from active candidates feed
+          }
+
+          if (evalRes.routingStatus === 'PARTNERSHIP_REQUIRED') {
+            recordsRoutedPartnership++;
+            exclusionReasonsCount['PARTNERSHIP_REQUIRED'] = (exclusionReasonsCount['PARTNERSHIP_REQUIRED'] || 0) + 1;
+
+            if (!isDryRun) {
+              await this.persistNonActionableRecord({
+                runId,
+                mapped,
+                detail,
+                hitId,
+                termsArray,
+                pursuitStage: 'DISMISSED',
+                dismissedReason: `PARTNERSHIP_REQUIRED: ${evalRes.explanation}`,
+                relevanceStatus: 'POSSIBLY_RELEVANT',
+              });
+            }
+            continue; // Skipped from active candidates feed
+          }
+
+          // Candidate is CURRENTLY_ACTIONABLE!
           recordsAccepted++;
           persistedOpportunityNumbers.push(mapped.fundingOpportunityNumber);
 
@@ -214,6 +277,8 @@ export class IngestionService {
               data: {
                 lastRetrievedAt: now,
                 discoverySearchTerms: mergedTerms,
+                pursuitStage: 'NEW',
+                dismissedReason: null,
               },
             });
             recordsUnchanged++;
@@ -260,6 +325,8 @@ export class IngestionService {
                 sourcePayloadHash: payloadHash,
                 lastRetrievedAt: now,
                 discoverySearchTerms: mergedTerms,
+                pursuitStage: 'NEW',
+                dismissedReason: null,
               },
             });
 
@@ -306,6 +373,7 @@ export class IngestionService {
                 lastRetrievedAt: now,
                 lastVerifiedTimestamp: null,
                 pursuitStage: 'NEW',
+                dismissedReason: null,
                 discoverySearchTerms: termsArray,
               },
             });
@@ -373,6 +441,8 @@ export class IngestionService {
         recordsInspected,
         recordsExcluded,
         exclusionReasonsCount,
+        recordsRoutedFuture,
+        recordsRoutedPartnership,
         recordsDeduplicated,
         recordsAccepted,
         recordsCreated,
@@ -396,6 +466,132 @@ export class IngestionService {
       }
 
       throw new Error(`Grants.gov ingestion failed: ${globalErr.message}`);
+    }
+  }
+
+  /**
+   * Helper to persist non-actionable (EXCLUDED, FUTURE_OPPORTUNITY, PARTNERSHIP_REQUIRED) records for auditability while keeping them out of active candidate views.
+   */
+  private async persistNonActionableRecord(params: {
+    runId: string;
+    mapped: any;
+    detail: any;
+    hitId: string;
+    termsArray: string[];
+    pursuitStage: 'DISMISSED';
+    dismissedReason: string;
+    relevanceStatus: 'IRRELEVANT' | 'POSSIBLY_RELEVANT';
+  }) {
+    const { runId, mapped, detail, hitId, termsArray, pursuitStage, dismissedReason, relevanceStatus } = params;
+    const payloadHash = crypto.createHash('sha256').update(JSON.stringify(detail)).digest('hex');
+    const now = new Date();
+
+    const existing = await prisma.fundingOpportunity.findUnique({
+      where: {
+        sourceSystem_externalOpportunityId: {
+          sourceSystem: 'GRANTS_GOV',
+          externalOpportunityId: mapped.externalOpportunityId,
+        },
+      },
+    });
+
+    let oppId = existing?.id;
+
+    if (existing) {
+      await prisma.fundingOpportunity.update({
+        where: { id: existing.id },
+        data: {
+          pursuitStage,
+          dismissedReason,
+          sourcePayloadHash: payloadHash,
+          lastRetrievedAt: now,
+        },
+      });
+    } else {
+      const agencySlug = (mapped.fundingAgency || 'unknown').replace(/[^a-zA-Z0-9]/g, '-').toLowerCase().slice(0, 40);
+      const source = await prisma.fundingSource.upsert({
+        where: { id: `src-grants-gov-${agencySlug}` },
+        update: {},
+        create: {
+          id: `src-grants-gov-${agencySlug}`,
+          name: mapped.fundingAgency || 'UNKNOWN',
+          agencyType: 'FEDERAL_GOVERNMENT',
+          websiteUrl: 'https://www.grants.gov',
+          description: 'Official Grants.gov federal funding source.',
+        },
+      });
+
+      const newOpp = await prisma.fundingOpportunity.create({
+        data: {
+          fundingSourceId: source.id,
+          sourceSystem: 'GRANTS_GOV',
+          externalOpportunityId: mapped.externalOpportunityId,
+          fundingOpportunityNumber: mapped.fundingOpportunityNumber,
+          title: mapped.title,
+          fundingAgency: mapped.fundingAgency,
+          isDemo: false,
+          officialSourceAuthority: 'Grants.gov (U.S. Federal Government)',
+          verificationStatus: 'PENDING_HUMAN_REVIEW',
+          program: mapped.program,
+          description: mapped.description,
+          sourceUrl: mapped.sourceUrl,
+          status: 'PENDING_HUMAN_REVIEW',
+          openingDate: mapped.openingDate,
+          deadline: mapped.deadline,
+          awardMin: mapped.awardMin,
+          awardMax: mapped.awardMax,
+          totalAvailableFunding: mapped.totalAvailableFunding,
+          geography: mapped.geography,
+          eligibleApplicantTypes: mapped.eligibleApplicantTypes,
+          eligiblePopulations: mapped.eligiblePopulations,
+          allowableCosts: mapped.allowableCosts,
+          sourceLastUpdatedTimestamp: mapped.sourceLastUpdatedTimestamp,
+          sourcePayloadHash: payloadHash,
+          firstRetrievedAt: now,
+          lastRetrievedAt: now,
+          pursuitStage,
+          dismissedReason,
+          discoverySearchTerms: termsArray,
+        },
+      });
+      oppId = newOpp.id;
+    }
+
+    if (oppId) {
+      await prisma.sourceSnapshot.create({
+        data: {
+          ingestionRunId: runId,
+          fundingOpportunityId: oppId,
+          externalOpportunityId: mapped.externalOpportunityId,
+          payloadHash,
+          rawPayload: detail as any,
+          retrievalTimestamp: now,
+        },
+      });
+
+      await prisma.opportunityRelevance.upsert({
+        where: {
+          id: `rel-${oppId}`,
+        },
+        update: {
+          relevanceStatus,
+          explanation: dismissedReason,
+          isCurrent: true,
+        },
+        create: {
+          id: `rel-${oppId}`,
+          fundingOpportunityId: oppId,
+          relevanceStatus,
+          relevanceScore: relevanceStatus === 'IRRELEVANT' ? 0 : 40,
+          positiveReasons: [],
+          exclusionReasons: [dismissedReason],
+          explanation: dismissedReason,
+          evidenceFields: ['title', 'description'],
+          profileVersion: '1.1.1-phase1d',
+          profileHash: 'ac72cc0322b3b6840e78998b26791261a27424f3af8f912167fb9de5953776c6',
+          isCurrent: true,
+        },
+      });
     }
   }
 }

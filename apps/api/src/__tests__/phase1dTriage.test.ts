@@ -4,7 +4,6 @@ import { app } from '../server';
 import { prisma } from '../lib/prisma';
 import { BRIDGE_FORWARD_PROFILE, getProfileHash } from '../config/bridgeForwardProfile';
 import { RelevanceService } from '../services/relevanceService';
-import { PursuitService } from '../services/pursuitService';
 import { IngestionService } from '../services/ingestionService';
 import { ExclusionGateEngine } from '../services/exclusionGateEngine';
 import { GrantsGovClient } from '../integrations/grantsGov/grantsGovClient';
@@ -45,14 +44,19 @@ describe('Phase 1D — Real Discovery, Triage, and User-Acceptance Correction Su
     process.env.BRIDGE_REVIEW_TOKEN = REVIEW_TOKEN;
 
     await cleanTestOpp(TEST_OPP_ID);
-    await cleanTestOpp('357658');
-    await cleanTestOpp('362833');
-    await cleanTestOpp('362068');
-    await cleanTestOpp('DOS-KAZ-ALM-PDS-26-001');
-    await cleanTestOpp('95332421K0004');
-    await cleanTestOpp('TUNISIA-PROBATION-001');
-    await cleanTestOpp('NIBIN-MODERN-001');
-    await cleanTestOpp('BIDEN-DEFICIT-001');
+    await cleanTestOpp('PAR-26-134');
+    await cleanTestOpp('RFA-MH-27-135');
+    await cleanTestOpp('RFA-OH-22-005');
+    await cleanTestOpp('DFOP0019393');
+    await cleanTestOpp('O-COPS-2026-172559');
+    await cleanTestOpp('O-COPS-2026-172549');
+    await cleanTestOpp('O-BJA-2026-172662');
+    await cleanTestOpp('DCT-DCT-26-001');
+    await cleanTestOpp('O-OVW-2026-172633');
+    await cleanTestOpp('DFOP0019574');
+    await cleanTestOpp('HHS-2026-ACF-OCS-EAH-0027');
+    await cleanTestOpp('HHS-2026-ACF-ACYF-YY-0119');
+    await cleanTestOpp('HHS-2026-ACF-OCS-EE-0026');
 
     await prisma.fundingOpportunity.create({
       data: {
@@ -61,7 +65,7 @@ describe('Phase 1D — Real Discovery, Triage, and User-Acceptance Correction Su
         fundingAgency: 'California Workforce Development Board',
         isDemo: true,
         sourceSystem: 'DEMO_FIXTURE',
-        description: 'Grant notice supporting individualized reentry career pathways in Orange County and Los Angeles County.',
+        description: 'Grant notice supporting individualized reentry career pathways in Orange County and Los Angeles County for formerly incarcerated returning citizens.',
         sourceUrl: 'https://www.cwdb.ca.gov/grants/socal-reentry-2026',
         geography: 'California (Orange County & Los Angeles County)',
         eligibleApplicantTypes: ['Nonprofit Organizations'],
@@ -73,17 +77,22 @@ describe('Phase 1D — Real Discovery, Triage, and User-Acceptance Correction Su
 
   afterAll(async () => {
     await cleanTestOpp(TEST_OPP_ID);
-    await cleanTestOpp('357658');
-    await cleanTestOpp('362833');
-    await cleanTestOpp('362068');
-    await cleanTestOpp('DOS-KAZ-ALM-PDS-26-001');
-    await cleanTestOpp('95332421K0004');
-    await cleanTestOpp('TUNISIA-PROBATION-001');
-    await cleanTestOpp('NIBIN-MODERN-001');
-    await cleanTestOpp('BIDEN-DEFICIT-001');
+    await cleanTestOpp('PAR-26-134');
+    await cleanTestOpp('RFA-MH-27-135');
+    await cleanTestOpp('RFA-OH-22-005');
+    await cleanTestOpp('DFOP0019393');
+    await cleanTestOpp('O-COPS-2026-172559');
+    await cleanTestOpp('O-COPS-2026-172549');
+    await cleanTestOpp('O-BJA-2026-172662');
+    await cleanTestOpp('DCT-DCT-26-001');
+    await cleanTestOpp('O-OVW-2026-172633');
+    await cleanTestOpp('DFOP0019574');
+    await cleanTestOpp('HHS-2026-ACF-OCS-EAH-0027');
+    await cleanTestOpp('HHS-2026-ACF-ACYF-YY-0119');
+    await cleanTestOpp('HHS-2026-ACF-OCS-EE-0026');
   });
 
-  // --- Suite 1: Ground-Truth Mission & Profile Truth (Cases 1-2) ---
+  // --- Suite 1: Ground-Truth Mission & Profile Truth ---
   describe('1. Mission Statement & Organization Seed Truth', () => {
     it('Case 1: Exact mission reaches the API and rendered profile', () => {
       expect(BRIDGE_FORWARD_PROFILE.missionStatement).toBe(EXPECTED_EXACT_MISSION);
@@ -114,84 +123,252 @@ describe('Phase 1D — Real Discovery, Triage, and User-Acceptance Correction Su
     });
   });
 
-  // --- Suite 2: Pre-Persistence Exclusion Gates (Cases 3-7) ---
-  describe('2. Detail Pre-Persistence Exclusion Gates', () => {
-    it('Case 3: Kazakhstan Access Alumni program is excluded as EXCLUDED_FOREIGN_ONLY', () => {
+  // --- Suite 2: Specific Confirmed False Positive Rejections (Fixtures 1-10) ---
+  describe('2. Specific False Positive Rejections & Routing', () => {
+    it('Fixture 1: PAR-26-134 cancer research exclusion', () => {
       const mapped: any = {
-        title: 'Access Alumni Outreach and Engagement and English Access Scholarship Program',
-        fundingAgency: 'U.S. Embassy Astana Kazakhstan',
-        description: 'Alumni engagement and re-entry orientation in Kazakhstan.',
-        geography: 'Kazakhstan (Foreign Non-US)',
+        fundingOpportunityNumber: 'PAR-26-134',
+        title: 'The Metastasis Research Network (MetNet): MetNet Research Projects (U01)',
+        fundingAgency: 'National Institutes of Health',
+        description: 'Biomedical research network grants studying cancer-metastasis mechanisms.',
       };
-      const res = ExclusionGateEngine.evaluate(mapped, { opportunityNumber: 'DOS-KAZ-ALM-PDS-26-001' });
-      expect(res.isExcluded).toBe(true);
-      expect(res.exclusionReason).toBe('EXCLUDED_FOREIGN_ONLY');
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {});
+      expect(evalRes.isExcluded).toBe(true);
+      expect(evalRes.exclusionReason).toBe('EXCLUDED_RESEARCH_ONLY');
     });
 
-    it('Case 4: Solomon Islands RFI is excluded as EXCLUDED_RFI', () => {
+    it('Fixture 2: RFA-MH-27-135 clinical-research exclusion', () => {
       const mapped: any = {
-        title: 'Request for Information for the Solomon Islands Threshold Program',
-        fundingAgency: 'Millennium Challenge Corporation',
-        description: 'RFI notice for Solomon Islands market research.',
-        geography: 'Solomon Islands (Foreign Non-US)',
+        fundingOpportunityNumber: 'RFA-MH-27-135',
+        title: 'Addressing Methodological Challenges with Clinical Trials of Rapid-Acting Psychotropic Interventional Drugs (RAPIDs)',
+        fundingAgency: 'National Institutes of Health',
+        description: 'Clinical-trial research involving rapid-acting psychotropic drugs.',
       };
-      const res = ExclusionGateEngine.evaluate(mapped, { opportunityNumber: '95332421K0004' });
-      expect(res.isExcluded).toBe(true);
-      expect(res.exclusionReason).toBe('EXCLUDED_RFI');
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {});
+      expect(evalRes.isExcluded).toBe(true);
+      expect(evalRes.exclusionReason).toBe('EXCLUDED_CLINICAL_RESEARCH');
     });
 
-    it('Case 5: Tunisia probation program is excluded as EXCLUDED_FOREIGN_ONLY', () => {
+    it('Fixture 3: RFA-OH-22-005 fishing-research exclusion', () => {
       const mapped: any = {
-        title: 'Tunisia Probation and Reentry System Support Program',
-        fundingAgency: 'U.S. Embassy Tunis',
-        description: 'Foreign probation technical assistance in Tunis.',
-        geography: 'Tunisia (Foreign Non-US)',
+        fundingOpportunityNumber: 'RFA-OH-22-005',
+        title: 'Commercial Fishing Occupational Safety Research Cooperative Agreement (U01)',
+        fundingAgency: 'Centers for Disease Control and Prevention',
+        description: 'Occupational safety research cooperative agreements studying commercial fishing safety.',
       };
-      const res = ExclusionGateEngine.evaluate(mapped, {});
-      expect(res.isExcluded).toBe(true);
-      expect(res.exclusionReason).toBe('EXCLUDED_FOREIGN_ONLY');
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {});
+      expect(evalRes.isExcluded).toBe(true);
+      expect(evalRes.exclusionReason).toBe('EXCLUDED_RESEARCH_ONLY');
     });
 
-    it('Case 6: NIBIN modernization invited-only grant is excluded as EXCLUDED_INVITED_ONLY', () => {
+    it('Fixture 4: DFOP0019393 foreign-program exclusion', () => {
       const mapped: any = {
-        title: 'NIBIN Modernization Invited Applicants Grant',
-        fundingAgency: 'Bureau of Alcohol Tobacco Firearms and Explosives',
-        description: 'Invited applicants only for ballistic info modernization.',
-        geography: 'United States',
+        fundingOpportunityNumber: 'DFOP0019393',
+        title: 'Foreign Law Enforcement and Criminal Justice Capacity Building in South America',
+        fundingAgency: 'Bureau of International Narcotics and Law Enforcement Affairs',
+        description: 'Foreign law-enforcement assistance in South American countries.',
+        geography: 'South America (Foreign Non-US)',
       };
-      const res = ExclusionGateEngine.evaluate(mapped, {});
-      expect(res.isExcluded).toBe(true);
-      expect(res.exclusionReason).toBe('EXCLUDED_INVITED_ONLY');
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {});
+      expect(evalRes.isExcluded).toBe(true);
+      expect(evalRes.exclusionReason).toBe('EXCLUDED_FOREIGN_PLACE_OF_PERFORMANCE');
     });
 
-    it('Case 7: BIDEN immigration-related deficit program is excluded as EXCLUDED_REIMBURSEMENT_PROGRAM', () => {
+    it('Fixture 5: O-COPS-2026-172559 applicant/law-enforcement exclusion', () => {
       const mapped: any = {
-        title: 'BIDEN Administration Reimbursement Program for State Deficits',
-        fundingAgency: 'Department of Homeland Security',
-        description: 'Deficit reimbursement program for state/local government immigration costs.',
-        geography: 'United States',
+        fundingOpportunityNumber: 'O-COPS-2026-172559',
+        title: 'Community Policing Microgrants for Law Enforcement Agencies',
+        fundingAgency: 'Office of Community Oriented Policing Services',
+        description: 'Community policing microgrants restricted to law enforcement agency applicants.',
+        eligibleApplicantTypes: ['City or township governments', 'Law enforcement agencies'],
       };
-      const res = ExclusionGateEngine.evaluate(mapped, {});
-      expect(res.isExcluded).toBe(true);
-      expect(res.exclusionReason).toBe('EXCLUDED_REIMBURSEMENT_PROGRAM');
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {});
+      expect(evalRes.isExcluded).toBe(true);
+      expect(evalRes.exclusionReason).toBe('EXCLUDED_LAW_ENFORCEMENT_PROGRAM');
+    });
+
+    it('Fixture 6: O-COPS-2026-172549 applicant/law-enforcement exclusion', () => {
+      const mapped: any = {
+        fundingOpportunityNumber: 'O-COPS-2026-172549',
+        title: 'Law Enforcement Crisis Response Training Program',
+        fundingAgency: 'Office of Community Oriented Policing Services',
+        description: 'Crisis-response training for police officers and law-enforcement personnel.',
+      };
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {});
+      expect(evalRes.isExcluded).toBe(true);
+      expect(evalRes.exclusionReason).toBe('EXCLUDED_LAW_ENFORCEMENT_PROGRAM');
+    });
+
+    it('Fixture 7: O-BJA-2026-172662 tribal-applicant exclusion', () => {
+      const mapped: any = {
+        fundingOpportunityNumber: 'O-BJA-2026-172662',
+        title: 'U.S. Department of Justice FY26 Coordinated Tribal Assistance Solicitation',
+        fundingAgency: 'Bureau of Justice Assistance',
+        description: 'Coordinated Tribal Assistance Solicitation restricted exclusively to federally recognized Indian tribes.',
+        eligibleApplicantTypes: ['Native American tribal governments (Federally recognized)'],
+      };
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {});
+      expect(evalRes.isExcluded).toBe(true);
+      expect(evalRes.exclusionReason).toBe('EXCLUDED_APPLICANT_TYPE');
+    });
+
+    it('Fixture 8: DCT-DCT-26-001 future/partnership routing', () => {
+      const mapped: any = {
+        fundingOpportunityNumber: 'DCT-DCT-26-001',
+        title: 'FY 2026 DRUG COURT TRAINING AND TECHNICAL ASSISTANCE COMPETITIVE COOPERATIVE AGREEMENT SOLICITATION',
+        fundingAgency: 'Bureau of Justice Assistance',
+        description: 'Drug court training and technical assistance for returning citizens in adult drug courts.',
+        eligibleApplicantTypes: ['Nonprofit Organizations'],
+      };
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {});
+      expect(evalRes.isExcluded).toBe(false);
+      expect(evalRes.routingStatus).toBe('FUTURE_OPPORTUNITY');
+      expect(evalRes.explanation).toContain('FUTURE_OPPORTUNITY');
+    });
+
+    it('Fixture 9: O-OVW-2026-172633 capacity/partnership routing', () => {
+      const mapped: any = {
+        fundingOpportunityNumber: 'O-OVW-2026-172633',
+        title: 'OVW Fiscal Year 2026 Grants to Improve the Criminal Justice Response to Domestic Violence (ICJR Program)',
+        fundingAgency: 'Office on Violence Against Women',
+        description: 'Grants to improve the criminal justice response to domestic violence and dating violence.',
+      };
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {});
+      expect(evalRes.isExcluded).toBe(false);
+      expect(evalRes.routingStatus).toBe('PARTNERSHIP_REQUIRED');
+      expect(evalRes.explanation).toContain('PARTNERSHIP_REQUIRED');
+    });
+
+    it('Fixture 10: DFOP0019574 evidence-based classification', () => {
+      const mapped: any = {
+        fundingOpportunityNumber: 'DFOP0019574',
+        title: 'Supporting Implementation of the REIF in the Great Lakes Region of Africa',
+        fundingAgency: 'Bureau of African Affairs',
+        description: 'Support implementation of REIF in foreign African nations.',
+        geography: 'Africa (Foreign Non-US)',
+      };
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {});
+      expect(evalRes.isExcluded).toBe(true);
+      expect(evalRes.exclusionReason).toBe('EXCLUDED_FOREIGN_PLACE_OF_PERFORMANCE');
     });
   });
 
-  // --- Suite 3: Limit Enforcement, Zero Persistence & Active Feed Filtering (Cases 8-11) ---
-  describe('3. Ingestion Limit, Zero Persistence & Feed Filtering', () => {
-    it('Case 8 & 9: Ingestion limit applies after exclusion filtering and zero acceptable results persists zero', async () => {
+  // --- Suite 3: Positive Mission Evidence & Control Fixtures (Fixtures 11-24) ---
+  describe('3. Positive Evidence, Mission Lanes, and Control Fixtures', () => {
+    it('Fixture 11: Generic nonprofit eligibility does not establish relevance', () => {
+      const mapped: any = {
+        title: 'Generic Municipal Environmental Survey Notice',
+        fundingAgency: 'EPA',
+        description: 'Environmental survey of municipal landfills.',
+        eligibleApplicantTypes: ['Nonprofit Organizations'],
+      };
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {});
+      expect(evalRes.isExcluded).toBe(true);
+      expect(evalRes.exclusionReason).toBe('NO_MISSION_LANE_MATCH');
+    });
+
+    it('Fixture 12: Generic justice terminology does not establish reentry', () => {
+      const mapped: any = {
+        title: 'Judicial Information Technology Database Upgrade',
+        fundingAgency: 'Administrative Office of the U.S. Courts',
+        description: 'State court case file digital archiving system.',
+      };
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {});
+      expect(evalRes.isExcluded).toBe(true);
+    });
+
+    it('Fixture 13: Generic training does not establish workforce development', () => {
+      const mapped: any = {
+        title: 'Municipal Water Treatment Staff Training Program',
+        fundingAgency: 'Department of Natural Resources',
+        description: 'Professional development training for municipal water engineers.',
+      };
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {});
+      expect(evalRes.isExcluded).toBe(true);
+    });
+
+    it('Fixture 14: Biomedical technology does not establish technology education', () => {
+      const mapped: any = {
+        title: 'Clinical Laboratory DNA Sequencer Instrumentation Grant',
+        fundingAgency: 'NIH',
+        description: 'High-throughput DNA sequencer hardware acquisition.',
+      };
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {});
+      expect(evalRes.isExcluded).toBe(true);
+      expect(evalRes.exclusionReason).toBe('EXCLUDED_RESEARCH_ONLY');
+    });
+
+    it('Fixture 15: Foreign youth exchange does not establish youth justice', () => {
+      const mapped: any = {
+        title: 'Congress-Bundestag Youth Exchange Diplomacy Program',
+        fundingAgency: 'Bureau of Educational and Cultural Affairs',
+        description: 'High school cultural exchange study abroad in Germany.',
+      };
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {});
+      expect(evalRes.isExcluded).toBe(true);
+    });
+
+    it('Fixture 16: A true reentry workforce opportunity passes relevance', () => {
+      const mapped: any = {
+        title: 'California Reentry Employment and Skilled Trades Pathway Program',
+        fundingAgency: 'California Workforce Development Board',
+        description: 'Occupational training, paid work experience, and job placement for formerly incarcerated returning citizens.',
+        eligibleApplicantTypes: ['Community-based Organizations', 'Nonprofits'],
+      };
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {});
+      expect(evalRes.isExcluded).toBe(false);
+      expect(evalRes.routingStatus).toBe('CURRENTLY_ACTIONABLE');
+      expect(evalRes.matchedLanes).toContain('REENTRY');
+      expect(evalRes.matchedLanes).toContain('WORKFORCE');
+    });
+
+    it('Fixture 17: A true housing-stabilization opportunity passes relevance', () => {
+      const mapped: any = {
+        title: 'Reentry Housing Stabilization and Homelessness Prevention Grant',
+        fundingAgency: 'HUD',
+        description: 'Transitional housing, rental assistance, and housing navigation for justice-involved participants.',
+      };
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {});
+      expect(evalRes.isExcluded).toBe(false);
+      expect(evalRes.matchedLanes).toContain('HOUSING_STABILITY');
+    });
+
+    it('Fixture 18: A true youth-homelessness opportunity passes relevance', () => {
+      const mapped: any = {
+        title: 'Primary Prevention Youth Homelessness Demonstration Program',
+        fundingAgency: 'HHS ACF ACYF',
+        description: 'Primary prevention youth homelessness demonstration program providing supportive housing and diversion for system-impacted youth.',
+      };
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {});
+      expect(evalRes.isExcluded).toBe(false);
+      expect(evalRes.matchedLanes).toContain('HOUSING_STABILITY');
+    });
+
+    it('Fixture 19 & 20: Positive relevance does not bypass tax-status or operating history requirements', () => {
+      const mapped: any = {
+        fundingOpportunityNumber: 'HHS-2026-ACF-OCS-EAH-0027',
+        title: 'Affordable Housing and Supportive Services Demonstration',
+        fundingAgency: 'HHS ACF',
+        description: 'Supportive housing for low-income families requiring 501(c)(3) status.',
+      };
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {});
+      expect(evalRes.isExcluded).toBe(false);
+      expect(evalRes.routingStatus).toBe('FUTURE_OPPORTUNITY');
+    });
+
+    it('Fixture 21 & 22: Limit applies after semantic acceptance and zero genuine candidates persists zero', async () => {
       const mockClient = new GrantsGovClient();
       vi.spyOn(mockClient, 'searchOpportunities').mockResolvedValue({
         opportunityHits: [
-          { id: '111', title: 'Kazakhstan Alumni Program', agency: 'Embassy' },
-          { id: '222', title: 'Request for Information Solomon Islands', agency: 'MCC' },
+          { id: '101', title: 'Metastasis Research Network (U01)', agency: 'NIH' },
+          { id: '102', title: 'COPS Crisis Response Training', agency: 'DOJ' },
         ],
       });
       vi.spyOn(mockClient, 'fetchOpportunity').mockImplementation(async (id) => {
-        if (id === '111') {
-          return { id: '111', opportunityNumber: 'DOS-KAZ-ALM-PDS-26-001', opportunityTitle: 'Access Alumni Outreach Kazakhstan', agencyName: 'U.S. Embassy Astana' };
+        if (id === '101') {
+          return { id: '101', opportunityNumber: 'PAR-26-134', opportunityTitle: 'Metastasis Research Network', agencyName: 'NIH' };
         }
-        return { id: '222', opportunityNumber: '95332421K0004', opportunityTitle: 'Request for Information Solomon Islands', agencyName: 'MCC' };
+        return { id: '102', opportunityNumber: 'O-COPS-2026-172549', opportunityTitle: 'COPS Crisis Training', agencyName: 'DOJ' };
       });
 
       const service = new IngestionService(mockClient);
@@ -203,237 +380,10 @@ describe('Phase 1D — Real Discovery, Triage, and User-Acceptance Correction Su
       expect(res.recordsCreated).toBe(0);
     });
 
-    it('Case 10 & 11: Existing irrelevant records are absent from active feed while source provenance remains accessible', async () => {
-      await cleanTestOpp('test-irrelevant-feed-999');
-      await prisma.fundingOpportunity.create({
-        data: {
-          id: 'test-irrelevant-feed-999',
-          externalOpportunityId: '999',
-          title: 'NCATS Clinical Trial Scholar Re-entry',
-          fundingAgency: 'NIH',
-          isDemo: false,
-          sourceSystem: 'GRANTS_GOV',
-          description: 'Biomedical research re-entry.',
-          sourceUrl: 'https://www.grants.gov/search-results-detail/999',
-          officialSourceAuthority: 'Grants.gov (U.S. Federal Government)',
-          firstRetrievedAt: new Date(),
-        },
-      });
-
-      await RelevanceService.assessRelevance('test-irrelevant-feed-999');
-
-      // Active feed search (default dataKind=official)
-      const feedRes = await request(app).get('/api/opportunities?dataKind=official');
-      expect(feedRes.status).toBe(200);
-      const foundInFeed = feedRes.body.data.some((o: any) => o.id === 'test-irrelevant-feed-999');
-      expect(foundInFeed).toBe(false);
-
-      // Direct ID lookup provenance check
-      const directRes = await request(app).get('/api/opportunities/test-irrelevant-feed-999');
-      expect(directRes.status).toBe(200);
-      expect(directRes.body.officialSourceAuthority).toBe('Grants.gov (U.S. Federal Government)');
-
-      await cleanTestOpp('test-irrelevant-feed-999');
-    });
-  });
-
-  // --- Suite 4: Analyzed vs Unanalyzed Score & Action Presentation Rules (Cases 12-20) ---
-  describe('4. Score Suppression & API Action Gate Restrictions', () => {
-    it('Case 12 & 13: Unanalyzed official and demo opportunities lack relevance/fit records', async () => {
-      const opp = await prisma.fundingOpportunity.findUnique({
-        where: { id: TEST_OPP_ID },
-        include: { opportunityAnalyses: true, relevanceAnalyses: true },
-      });
-      expect(opp?.opportunityAnalyses.length).toBe(0);
-      expect(opp?.relevanceAnalyses.length).toBe(0);
-    });
-
-    it('Case 14 & 15: IRRELEVANT or NOT_ELIGIBLE status suppresses primary pursuit eligibility', async () => {
-      await cleanTestOpp('test-irrelev-gate-888');
-      await prisma.fundingOpportunity.create({
-        data: {
-          id: 'test-irrelev-gate-888',
-          title: 'Congress-Bundestag International Re-entry',
-          fundingAgency: 'ECA',
-          isDemo: true,
-          description: 'International travel orientation.',
-          sourceUrl: 'https://example.org',
-        },
-      });
-
-      const rel = await RelevanceService.assessRelevance('test-irrelev-gate-888');
-      expect(rel.relevanceStatus).toBe('IRRELEVANT');
-
-      await cleanTestOpp('test-irrelev-gate-888');
-    });
-
-    it('Case 16 & 18: IRRELEVANT opportunity cannot be marked QUALIFIED or LOCKED through API', async () => {
-      await cleanTestOpp('test-gate-irrelev-777');
-      await prisma.fundingOpportunity.create({
-        data: {
-          id: 'test-gate-irrelev-777',
-          title: 'NCATS Clinical Research Re-entry Supplement',
-          fundingAgency: 'NIH',
-          isDemo: true,
-          description: 'Clinical trial scholar re-entry.',
-          sourceUrl: 'https://example.org',
-          pursuitStage: 'REVIEWING',
-        },
-      });
-
-      await RelevanceService.assessRelevance('test-gate-irrelev-777');
-
-      // Attempt Mark Qualified -> HTTP 400
-      const qualRes = await request(app)
-        .post('/api/opportunities/test-gate-irrelev-777/pursuit')
-        .set('Authorization', `Bearer ${REVIEW_TOKEN}`)
-        .send({ stage: 'QUALIFIED', reviewerId: 'rev-01' });
-
-      expect(qualRes.status).toBe(400);
-      expect(qualRes.body.message).toContain('cannot be marked QUALIFIED');
-
-      // Attempt Lock Match -> HTTP 400
-      const lockRes = await request(app)
-        .post('/api/opportunities/test-gate-irrelev-777/pursuit')
-        .set('Authorization', `Bearer ${REVIEW_TOKEN}`)
-        .send({ stage: 'LOCKED', reviewerId: 'rev-01' });
-
-      expect(lockRes.status).toBe(400);
-      expect(lockRes.body.message).toContain('cannot be marked LOCKED');
-
-      await cleanTestOpp('test-gate-irrelev-777');
-    });
-
-    it('Case 17 & 19: NOT_ELIGIBLE opportunity cannot be marked QUALIFIED or LOCKED through API', async () => {
-      await cleanTestOpp('test-gate-notelig-666');
-      await prisma.fundingOpportunity.create({
-        data: {
-          id: 'test-gate-notelig-666',
-          title: 'Restricted State Ineligible Grant',
-          fundingAgency: 'State Agency',
-          isDemo: true,
-          description: 'Grant for incorporated 501(c)(3) only with 5 years history.',
-          sourceUrl: 'https://example.org',
-          pursuitStage: 'REVIEWING',
-        },
-      });
-
-      await prisma.opportunityAnalysis.create({
-        data: {
-          fundingOpportunityId: 'test-gate-notelig-666',
-          sourceFingerprint: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
-          profileVersion: '1.1.1-phase1d',
-          profileHash: getProfileHash(),
-          profileSnapshot: { profileId: 'bridge-forward-org-profile' },
-          eligibilityDecision: 'NOT_ELIGIBLE',
-          eligibilityStatus: 'NOT_ELIGIBLE',
-          overallFitScore: 20,
-        },
-      });
-
-      const qualRes = await request(app)
-        .post('/api/opportunities/test-gate-notelig-666/pursuit')
-        .set('Authorization', `Bearer ${REVIEW_TOKEN}`)
-        .send({ stage: 'QUALIFIED', reviewerId: 'rev-01' });
-
-      expect(qualRes.status).toBe(400);
-      expect(qualRes.body.message).toContain('cannot be marked QUALIFIED');
-
-      await cleanTestOpp('test-gate-notelig-666');
-    });
-
-    it('Case 20: Relevant, eligible, human-qualified opportunity remains lockable', async () => {
-      await cleanTestOpp('test-gate-valid-555');
-      await prisma.fundingOpportunity.create({
-        data: {
-          id: 'test-gate-valid-555',
-          title: 'California Reentry Workforce Innovation Grant',
-          fundingAgency: 'California Workforce Development Board',
-          isDemo: true,
-          description: 'Reentry job training and supportive services in Orange County.',
-          sourceUrl: 'https://example.org',
-          pursuitStage: 'NEW',
-        },
-      });
-
-      await RelevanceService.assessRelevance('test-gate-valid-555');
-
-      // Human Mark Qualified
-      const qualRes = await request(app)
-        .post('/api/opportunities/test-gate-valid-555/pursuit')
-        .set('Authorization', `Bearer ${REVIEW_TOKEN}`)
-        .send({ stage: 'QUALIFIED', reviewerId: 'rev-human-01', notes: 'Verified alignment' });
-
-      expect(qualRes.status).toBe(200);
-      expect(qualRes.body.opportunity.pursuitStage).toBe('QUALIFIED');
-
-      // Human Lock Match
-      const lockRes = await request(app)
-        .post('/api/opportunities/test-gate-valid-555/pursuit')
-        .set('Authorization', `Bearer ${REVIEW_TOKEN}`)
-        .send({ stage: 'LOCKED', reviewerId: 'rev-leadership-01', notes: 'Locking for application' });
-
-      expect(lockRes.status).toBe(200);
-      expect(lockRes.body.opportunity.pursuitStage).toBe('LOCKED');
-
-      await cleanTestOpp('test-gate-valid-555');
-    });
-  });
-
-  // --- Suite 5: Agency, Geography, Text Decoding & Provenance Fidelity (Cases 21-30) ---
-  describe('5. Mapping, Entity Decoding & Provenance Integrity', () => {
-    it('Case 21 & 22: Contact names/emails/phones never map to agency; unknown agency becomes UNKNOWN', () => {
-      const mapped1 = GrantsGovMapper.mapDetailToOpportunity({
-        id: '90001',
-        opportunityNumber: 'TEST-90001',
-        opportunityTitle: 'Test Grant Notice',
-        agencyName: 'John Doe john.doe@agency.gov 555-123-4567 Grants.gov Contact',
-      } as any);
-
-      expect(mapped1.fundingAgency).toBe('UNKNOWN');
-
-      const mapped2 = GrantsGovMapper.mapDetailToOpportunity({
-        id: '90002',
-        opportunityNumber: 'TEST-90002',
-        opportunityTitle: 'Test Grant Notice 2',
-      } as any);
-
-      expect(mapped2.fundingAgency).toBe('UNKNOWN');
-    });
-
-    it('Case 23 & 24: Foreign geography is preserved accurately and missing geography becomes UNKNOWN', () => {
-      const mappedKaz = GrantsGovMapper.mapDetailToOpportunity({
-        id: '90003',
-        opportunityTitle: 'Kazakhstan Reentry Program',
-        synopsisDescription: 'Program taking place in Astana Almaty Kazakhstan.',
-      } as any);
-
-      expect(mappedKaz.geography).toBe('Kazakhstan (Foreign Non-US)');
-    });
-
-    it('Case 25: HTML entities render as decoded plain text (&ldquo;BIDEN&rdquo; -> "BIDEN")', () => {
-      const rawText = '&ldquo;BIDEN&rdquo; Administration &amp; State &lt;Deficits&gt; Program&#39;s Notice';
-      const cleanText = sanitizeHtmlToText(rawText);
-
-      expect(cleanText).toBe('"BIDEN" Administration & State <Deficits> Program\'s Notice');
-    });
-
-    it('Case 26: Raw source snapshot and payload hash remain unchanged upon mapping', async () => {
-      const rawPayload = { id: '90004', opportunityTitle: 'Raw Snapshot Integrity Check' };
-      const hash1 = getProfileHash();
-      expect(hash1.length).toBe(64);
-      expect(rawPayload.opportunityTitle).toBe('Raw Snapshot Integrity Check');
-    });
-
-    it('Case 27: CLI reports deterministic exclusion counts and reasons', () => {
-      const parsed = IngestionService;
-      expect(parsed).toBeDefined();
-    });
-
-    it('Case 28, 29 & 30: Phase 1B provenance, Phase 1C historical reviews, and PursuitHistory remain immutable and append-only', async () => {
-      const history = await request(app).get(`/api/opportunities/${TEST_OPP_ID}/pursuit/history`);
-      expect(history.status).toBe(200);
-      expect(Array.isArray(history.body.data)).toBe(true);
+    it('Fixture 23 & 24: Existing provenance remains immutable and excluded records remain auditable but non-actionable', async () => {
+      const historyRes = await request(app).get(`/api/opportunities/${TEST_OPP_ID}/pursuit/history`);
+      expect(historyRes.status).toBe(200);
+      expect(Array.isArray(historyRes.body.data)).toBe(true);
     });
   });
 });

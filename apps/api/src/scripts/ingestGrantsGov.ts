@@ -68,24 +68,31 @@ async function main() {
 
     console.log('\n📊 Ingestion Run Execution Summary:');
     console.log(`-----------------------------------`);
-    console.log(`  • Run ID:                        ${summary.ingestionRunId}`);
-    console.log(`  • Mode:                          ${summary.dryRun ? 'DRY RUN (No DB changes)' : 'PERSISTED TO DB'}`);
-    console.log(`  • Status:                        ${summary.status}`);
-    console.log(`  • Raw Search Hits Discovered:    ${summary.rawSearchHitsCount}`);
-    console.log(`  • Detailed Records Inspected:    ${summary.recordsInspected}`);
-    console.log(`  • Records Excluded:              ${summary.recordsExcluded}`);
-    console.log(`    - EXCLUDED_FOREIGN_ONLY:         ${summary.exclusionReasonsCount.EXCLUDED_FOREIGN_ONLY || 0}`);
-    console.log(`    - EXCLUDED_CONTEXTUALLY_IRRELEVANT: ${summary.exclusionReasonsCount.EXCLUDED_CONTEXTUALLY_IRRELEVANT || 0}`);
-    console.log(`    - EXCLUDED_RFI:                  ${summary.exclusionReasonsCount.EXCLUDED_RFI || 0}`);
-    console.log(`    - EXCLUDED_INVITED_ONLY:         ${summary.exclusionReasonsCount.EXCLUDED_INVITED_ONLY || 0}`);
-    console.log(`    - EXCLUDED_REIMBURSEMENT_PROGRAM: ${summary.exclusionReasonsCount.EXCLUDED_REIMBURSEMENT_PROGRAM || 0}`);
-    console.log(`  • Records Deduplicated:          ${summary.recordsDeduplicated}`);
-    console.log(`  • Records Accepted:              ${summary.recordsAccepted}`);
-    console.log(`  • Records Created:               ${summary.recordsCreated}`);
-    console.log(`  • Records Updated:               ${summary.recordsUpdated}`);
-    console.log(`  • Records Unchanged:             ${summary.recordsUnchanged}`);
-    console.log(`  • Records Failed:                ${summary.recordsFailed}`);
-    console.log(`  • Persisted Opportunity Numbers: ${summary.persistedOpportunityNumbers.length > 0 ? summary.persistedOpportunityNumbers.join(', ') : 'None'}`);
+    console.log(`  • Run ID:                            ${summary.ingestionRunId}`);
+    console.log(`  • Mode:                              ${summary.dryRun ? 'DRY RUN (No DB changes)' : 'PERSISTED TO DB'}`);
+    console.log(`  • Status:                            ${summary.status}`);
+    console.log(`  • Raw Search Hits Discovered:        ${summary.rawSearchHitsCount}`);
+    console.log(`  • Detailed Records Inspected:        ${summary.recordsInspected}`);
+    console.log(`  • Records Excluded:                  ${summary.recordsExcluded}`);
+    console.log(`    - EXCLUDED_FOREIGN_PLACE_OF_PERFORMANCE: ${summary.exclusionReasonsCount.EXCLUDED_FOREIGN_PLACE_OF_PERFORMANCE || 0}`);
+    console.log(`    - EXCLUDED_RESEARCH_ONLY:             ${summary.exclusionReasonsCount.EXCLUDED_RESEARCH_ONLY || 0}`);
+    console.log(`    - EXCLUDED_CLINICAL_RESEARCH:         ${summary.exclusionReasonsCount.EXCLUDED_CLINICAL_RESEARCH || 0}`);
+    console.log(`    - EXCLUDED_LAW_ENFORCEMENT_PROGRAM:   ${summary.exclusionReasonsCount.EXCLUDED_LAW_ENFORCEMENT_PROGRAM || 0}`);
+    console.log(`    - EXCLUDED_APPLICANT_TYPE:            ${summary.exclusionReasonsCount.EXCLUDED_APPLICANT_TYPE || 0}`);
+    console.log(`    - EXCLUDED_RFI:                       ${summary.exclusionReasonsCount.EXCLUDED_RFI || 0}`);
+    console.log(`    - EXCLUDED_INVITED_ONLY:              ${summary.exclusionReasonsCount.EXCLUDED_INVITED_ONLY || 0}`);
+    console.log(`    - EXCLUDED_REIMBURSEMENT_PROGRAM:     ${summary.exclusionReasonsCount.EXCLUDED_REIMBURSEMENT_PROGRAM || 0}`);
+    console.log(`    - EXCLUDED_CONTEXTUALLY_IRRELEVANT:   ${summary.exclusionReasonsCount.EXCLUDED_CONTEXTUALLY_IRRELEVANT || 0}`);
+    console.log(`    - NO_MISSION_LANE_MATCH:              ${summary.exclusionReasonsCount.NO_MISSION_LANE_MATCH || 0}`);
+    console.log(`  • Records Routed to FUTURE_OPPORTUNITY: ${summary.recordsRoutedFuture}`);
+    console.log(`  • Records Routed to PARTNERSHIP_REQUIRED: ${summary.recordsRoutedPartnership}`);
+    console.log(`  • Records Deduplicated:              ${summary.recordsDeduplicated}`);
+    console.log(`  • Records Accepted (Actionable):     ${summary.recordsAccepted}`);
+    console.log(`  • Records Created:                   ${summary.recordsCreated}`);
+    console.log(`  • Records Updated:                   ${summary.recordsUpdated}`);
+    console.log(`  • Records Unchanged:                 ${summary.recordsUnchanged}`);
+    console.log(`  • Records Failed:                    ${summary.recordsFailed}`);
+    console.log(`  • Persisted Opportunity Numbers:     ${summary.persistedOpportunityNumbers.length > 0 ? summary.persistedOpportunityNumbers.join(', ') : 'None'}`);
 
     if (summary.errorSummary) {
       console.warn(`\n⚠️ Error Summary: ${summary.errorSummary}`);
@@ -99,6 +106,6 @@ async function main() {
   }
 }
 
-if (process.env.NODE_ENV !== 'test' && !process.env.VITEST) {
+if (process.argv[1]?.includes('ingestGrantsGov')) {
   main();
 }

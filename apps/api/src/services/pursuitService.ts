@@ -74,17 +74,24 @@ export class PursuitService {
       currentAnalysis?.eligibilityDecision === 'NOT_ELIGIBLE' ||
       currentAnalysis?.eligibilityStatus === 'NOT_ELIGIBLE';
 
+    const isDismissedOrRouted = Boolean(
+      opp.dismissedReason &&
+        (opp.dismissedReason.startsWith('EXCLUDED') ||
+          opp.dismissedReason.startsWith('FUTURE_OPPORTUNITY') ||
+          opp.dismissedReason.startsWith('PARTNERSHIP_REQUIRED'))
+    );
+
     // Action Gate 1: Mark Qualified
     if (targetStage === 'QUALIFIED') {
-      if (isIrrelevant || isNotEligible) {
-        throw new Error('Opportunity is contextually IRRELEVANT or NOT_ELIGIBLE and cannot be marked QUALIFIED');
+      if (isIrrelevant || isNotEligible || isDismissedOrRouted) {
+        throw new Error('Opportunity is contextually IRRELEVANT, non-actionable, or NOT_ELIGIBLE and cannot be marked QUALIFIED');
       }
     }
 
     // Action Gate 2: Lock Match
     if (targetStage === 'LOCKED') {
-      if (isIrrelevant || isNotEligible) {
-        throw new Error('Opportunity is contextually IRRELEVANT or NOT_ELIGIBLE and cannot be marked LOCKED');
+      if (isIrrelevant || isNotEligible || isDismissedOrRouted) {
+        throw new Error('Opportunity is contextually IRRELEVANT, non-actionable, or NOT_ELIGIBLE and cannot be marked LOCKED');
       }
       if (currentStage !== 'QUALIFIED' && currentStage !== 'LOCKED') {
         throw new Error('Opportunity must be in QUALIFIED pursuit stage before locking match');
