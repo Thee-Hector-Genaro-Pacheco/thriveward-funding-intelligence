@@ -17,14 +17,39 @@ describe('Phase 1E — UI/API Actions, Details & Sponsor-Navigation Integration 
       'postgresql://bridge_admin:bridge_secure_pass_2026@localhost:5432/bridge_ai_db?schema=public';
     process.env.BRIDGE_REVIEW_TOKEN = REVIEW_TOKEN;
 
-    const opps = await prisma.fundingOpportunity.findMany();
-    const routed = opps.find(
+    let opps = await prisma.fundingOpportunity.findMany();
+    let routed = opps.find(
       (o) => o.candidateRoutingStatus && o.candidateRoutingStatus !== 'DIRECT_FEDERAL_ELIGIBLE'
     );
-    const official = opps.find((o) => !o.isDemo);
+    let official = opps.find((o) => !o.isDemo);
 
-    if (routed) routedOppId = routed.id;
-    if (official) officialOppId = official.id;
+    if (!routed) {
+      const newRouted = await prisma.fundingOpportunity.create({
+        data: {
+          title: 'Street Outreach Program',
+          fundingOpportunityNumber: 'HHS-2026-ACF-ACYF-YO-0044',
+          fundingAgency: 'Administration for Children and Families',
+          description: 'Outreach services for homeless youth.',
+          totalAvailableFunding: '$150,000',
+          geography: 'California Regional Geography',
+          deadline: '2026-08-26',
+          sourceUrl: 'https://www.grants.gov/search-results-detail/362088',
+          candidateRoutingStatus: 'FISCAL_SPONSOR_REQUIRED',
+          dismissedReason: 'FISCAL_SPONSOR_REQUIRED: Direct federal application blocked.',
+          isDemo: false,
+          sourceSystem: 'GRANTS_GOV',
+        },
+      });
+      routedOppId = newRouted.id;
+    } else {
+      routedOppId = routed.id;
+    }
+
+    if (!official) {
+      officialOppId = routedOppId;
+    } else {
+      officialOppId = official.id;
+    }
   });
 
   it('1. GET /api/opportunities?dataKind=official returns HTTP 200 and official persisted records', async () => {

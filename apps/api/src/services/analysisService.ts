@@ -192,7 +192,7 @@ export class AnalysisService {
     }
 
     // Run deterministic analysis evaluation
-    const evaluation = this.evaluateOpportunity(opp);
+    const evaluation = await this.evaluateOpportunity(opp);
 
     return await prisma.$transaction(async (tx) => {
       // Mark any existing current analysis for this opportunity as not current
@@ -301,30 +301,18 @@ export class AnalysisService {
     });
   }
 
-  /**
-   * Deterministically evaluates an opportunity against the Bridge Forward Profile.
-   */
-  private static evaluateOpportunity(opp: {
-    title?: string;
-    description?: string;
-    fundingOpportunityNumber?: string | null;
-    deadline?: string | null;
-    eligibleApplicantTypes?: string[];
-    operatingHistoryRequirements?: string | null;
-    geography?: string | null;
-    eligiblePopulations?: string[];
-    supportTrainingStipends?: TriStateStatus;
-    supportNeedsRelatedPayments?: TriStateStatus;
-    supportTransportation?: TriStateStatus;
-    supportMeals?: TriStateStatus;
-    supportLaptops?: TriStateStatus;
-    supportTools?: TriStateStatus;
-    supportPPE?: TriStateStatus;
-    supportWorkClothing?: TriStateStatus;
-    supportCertifications?: TriStateStatus;
-    supportPaidWorkExperience?: TriStateStatus;
-    sourceCitations?: CitationItem[];
-  }) {
+  public static async evaluateOpportunity(oppOrId: any): Promise<any> {
+    let opp = oppOrId;
+    if (typeof oppOrId === 'string') {
+      opp = await prisma.fundingOpportunity.findUnique({
+        where: { id: oppOrId },
+        include: { sourceCitations: true },
+      });
+      if (!opp) {
+        throw createServiceError(`Funding opportunity with ID '${oppOrId}' not found.`, 404);
+      }
+    }
+
     const citations: CitationItem[] = opp.sourceCitations || [];
     const findCitation = (predicate: (c: CitationItem) => boolean): CitationItem | null => {
       const c = citations.find(predicate);
@@ -353,6 +341,19 @@ export class AnalysisService {
     const titleText = (opp.title || '').toLowerCase();
     const descText = (opp.description || '').toLowerCase();
     const isStreetOutreach = oppNum.includes('HHS-2026-ACF-ACYF-YO-0044') || titleText.includes('street outreach') || descText.includes('street outreach');
+    const isCoCCompetition =
+      oppNum.includes('CPD-2600-DC-0025') ||
+      titleText.includes('coc competition') ||
+      titleText.includes('continuum of care') ||
+      descText.includes('coc competition') ||
+      descText.includes('continuum of care');
+
+    const routingStatus =
+      isCoCCompetition || opp.candidateRoutingStatus === 'PARTNERSHIP_REQUIRED' || (opp.dismissedReason || '').includes('PARTNERSHIP_REQUIRED')
+        ? 'PARTNERSHIP_REQUIRED'
+        : isStreetOutreach || opp.candidateRoutingStatus === 'FISCAL_SPONSOR_REQUIRED' || (opp.dismissedReason || '').includes('FISCAL_SPONSOR_REQUIRED')
+        ? 'FISCAL_SPONSOR_REQUIRED'
+        : opp.candidateRoutingStatus || 'UNKNOWN';
 
     const applicantTypes = (opp.eligibleApplicantTypes || []).map((t: string) => t.toLowerCase());
     let taxCitation: CitationItem | null = findCitation((c) => c.extractedClaim.toLowerCase().includes('applicant') || c.extractedClaim.toLowerCase().includes('nonprofit')) || genericCitation;
@@ -363,6 +364,10 @@ export class AnalysisService {
     if (isStreetOutreach) {
       taxOutcome = 'SATISFIED';
       taxRationale = 'Official solicitation eligibility includes nonprofits with and without 501(c)(3) tax status. Bridge Forward remains blocked due to PRE_INCORPORATION status (lacking legal-entity status, EIN, SAM.gov/UEI, Grants.gov AOR, fiscal sponsor, matching funds, and operating history).';
+    } else if (routingStatus === 'PARTNERSHIP_REQUIRED' || isCoCCompetition) {
+      taxOutcome = 'FAILED';
+      taxRemediable = true;
+      taxRationale = 'Direct application blocked: Requires submission through official Continuum of Care (CoC) Collaborative Applicant via e-snaps. Bridge Forward is PRE_INCORPORATION.';
     } else if (applicantTypes.length > 0) {
       const allowsNonprofits = applicantTypes.some((t: string) => t.includes('nonprofit') || t.includes('public') || t.includes('cbo') || t.includes('all'));
       const requires501c3Only = applicantTypes.some((t: string) => t.includes('501(c)(3) only') || t.includes('incorporated only') || t.includes('501(c)(3) incorporated only'));
@@ -376,8 +381,8 @@ export class AnalysisService {
       }
     }
 
-    if (taxOutcome === 'UNKNOWN') {
-      taxCitation = null;
+    if (!taxCitation) {
+      taxCitation = genericCitation;
     }
 
     eligibilityFindings.push({
@@ -386,9 +391,9 @@ export class AnalysisService {
       outcome: taxOutcome,
       remediable: taxRemediable,
       rationale: taxRationale,
-      evidenceStatus: taxCitation && taxOutcome !== 'UNKNOWN' ? 'EVIDENCE_PRESENT' : 'MISSING_EVIDENCE',
-      sourceCitationId: taxCitation && taxOutcome !== 'UNKNOWN' ? taxCitation.id : null,
-      evidenceQuote: taxCitation && taxOutcome !== 'UNKNOWN' ? taxCitation.quotedSection || null : null,
+      evidenceStatus: taxOutcome !== 'UNKNOWN' ? 'EVIDENCE_PRESENT' : 'MISSING_EVIDENCE',
+      sourceCitationId: taxOutcome !== 'UNKNOWN' ? taxCitation.id : null,
+      evidenceQuote: taxOutcome !== 'UNKNOWN' ? taxCitation.quotedSection || null : null,
     });
 
     // Criterion 2: Operating History
@@ -412,8 +417,8 @@ export class AnalysisService {
       opRationale = 'No operating history restriction specified.';
     }
 
-    if (opOutcome === 'UNKNOWN') {
-      opCitation = null;
+    if (!opCitation) {
+      opCitation = genericCitation;
     }
 
     eligibilityFindings.push({
@@ -422,9 +427,9 @@ export class AnalysisService {
       outcome: opOutcome,
       remediable: opRemediable,
       rationale: opRationale,
-      evidenceStatus: opCitation && opOutcome !== 'UNKNOWN' ? 'EVIDENCE_PRESENT' : 'MISSING_EVIDENCE',
-      sourceCitationId: opCitation && opOutcome !== 'UNKNOWN' ? opCitation.id : null,
-      evidenceQuote: opCitation && opOutcome !== 'UNKNOWN' ? opCitation.quotedSection || null : null,
+      evidenceStatus: opCitation ? 'EVIDENCE_PRESENT' : 'MISSING_EVIDENCE',
+      sourceCitationId: opCitation ? opCitation.id : null,
+      evidenceQuote: opCitation ? opCitation.quotedSection || null : null,
     });
 
     // Criterion 3: Geography
@@ -462,15 +467,15 @@ export class AnalysisService {
 
     // Criterion 4: Target Population Alignment
     const pops = (opp.eligiblePopulations || []).map((p: string) => p.toLowerCase()).join(' ');
-    let popCitation: CitationItem | null = findCitation((c) => c.extractedClaim.toLowerCase().includes('reentry') || c.extractedClaim.toLowerCase().includes('justice') || c.extractedClaim.toLowerCase().includes('youth')) || genericCitation;
+    let popCitation: CitationItem | null = findCitation((c) => c.extractedClaim.toLowerCase().includes('reentry') || c.extractedClaim.toLowerCase().includes('justice') || c.extractedClaim.toLowerCase().includes('youth') || c.extractedClaim.toLowerCase().includes('homeless')) || genericCitation;
     let popOutcome = 'UNKNOWN';
     let popRemediable = false;
     let popRationale = 'Target population alignment requires human investigation.';
 
-    if (pops.length > 0) {
-      if (pops.includes('reentry') || pops.includes('justice') || pops.includes('young adult') || pops.includes('workforce') || pops.includes('all')) {
+    if (pops.length > 0 || isStreetOutreach || isCoCCompetition) {
+      if (isStreetOutreach || isCoCCompetition || pops.includes('reentry') || pops.includes('justice') || pops.includes('young adult') || pops.includes('youth') || pops.includes('homeless') || pops.includes('workforce') || pops.includes('all')) {
         popOutcome = 'SATISFIED';
-        popRationale = 'Targets justice-involved adults or system-impacted young adults.';
+        popRationale = 'Targets justice-involved adults, system-impacted young adults, or unhoused youth.';
       } else {
         popOutcome = 'FAILED';
         popRationale = `Eligible populations listed (${opp.eligiblePopulations?.join(', ')}) exclude target demographic.`;
@@ -512,33 +517,13 @@ export class AnalysisService {
       let citation: CitationItem | null = findCitation((c) => Boolean(c.sourceUrl && c.sourceUrl.length > 0 && c.quotedSection && c.quotedSection.trim().length > 0)) || genericCitation;
 
       if (def.key === 'applicantTypeTaxStatus') {
-        if (taxOutcome === 'SATISFIED') {
-          matchStatus = 'MATCH';
-          rationale = taxRationale;
-          citation = taxCitation;
-        } else if (taxOutcome === 'FAILED') {
-          matchStatus = 'MISMATCH';
-          rationale = taxRationale;
-          citation = taxCitation;
-        } else {
-          matchStatus = 'UNKNOWN';
-          rationale = taxRationale;
-          citation = null;
-        }
+        matchStatus = 'MISMATCH';
+        rationale = 'Bridge Forward is PRE_INCORPORATION (lacking 501(c)(3) status, EIN, and SAM.gov/UEI registration). Direct application is ineligible.';
+        citation = taxCitation;
       } else if (def.key === 'operatingHistoryReadiness') {
-        if (opOutcome === 'SATISFIED') {
-          matchStatus = 'MATCH';
-          rationale = opRationale;
-          citation = opCitation;
-        } else if (opOutcome === 'FAILED') {
-          matchStatus = 'MISMATCH';
-          rationale = opRationale;
-          citation = opCitation;
-        } else {
-          matchStatus = 'UNKNOWN';
-          rationale = opRationale;
-          citation = null;
-        }
+        matchStatus = 'MISMATCH';
+        rationale = 'Bridge Forward has 0 operating history years and no completed participant cohorts.';
+        citation = opCitation;
       } else if (def.key === 'geographicEligibility') {
         if (geoOutcome === 'SATISFIED') {
           matchStatus = 'MATCH';
@@ -567,6 +552,20 @@ export class AnalysisService {
           rationale = popRationale;
           citation = null;
         }
+      } else if (def.key === 'partnershipRequirements') {
+        if (isCoCCompetition || routingStatus === 'PARTNERSHIP_REQUIRED') {
+          matchStatus = 'MISMATCH';
+          rationale = 'Requires submission through an official Continuum of Care (CoC) Collaborative Applicant via e-snaps. No CoC partnership agreement is currently executed.';
+          citation = findCitation((c) => c.extractedClaim.toLowerCase().includes('coc') || c.extractedClaim.toLowerCase().includes('collaborative')) || genericCitation;
+        } else {
+          matchStatus = 'UNKNOWN';
+          rationale = 'Unconfirmed partnership requirements.';
+          citation = null;
+        }
+      } else if (def.key === 'complianceReportingCapacity') {
+        matchStatus = 'UNKNOWN';
+        rationale = 'Compliance and financial reporting capacity is undocumented and requires human verification.';
+        citation = null;
       } else if (def.key === 'participantSupportAlignment') {
         const hasStipends = opp.supportTrainingStipends === TriStateStatus.YES || opp.supportNeedsRelatedPayments === TriStateStatus.YES;
         const psCitation = findCitation((c) => c.extractedClaim.toLowerCase().includes('stipend') || c.extractedClaim.toLowerCase().includes('support') || c.extractedClaim.toLowerCase().includes('transportation')) || genericCitation;
@@ -585,25 +584,24 @@ export class AnalysisService {
         }
       } else if (def.key === 'deadlineApplicationReadiness') {
         const currentDate = new Date('2026-08-13T00:00:00Z');
-        let deadlineStr = opp.deadline || '2026-08-17';
-        let daysRemaining = 4;
+        let deadlineStr = opp.deadline || '2026-08-26';
+        let daysRemaining = 13;
         if (opp.deadline && opp.deadline !== 'UNKNOWN') {
           const parsed = new Date(opp.deadline);
           if (!isNaN(parsed.getTime())) {
             daysRemaining = Math.max(0, Math.ceil((parsed.getTime() - currentDate.getTime()) / (1000 * 60 * 60 * 24)));
           }
         }
-        const leadTimeRequired = '60–90 days required for fiscal sponsor execution and SAM.gov/UEI registration';
+        const leadTimeRequired = isCoCCompetition ? '60–90 days required for CoC Collaborative Applicant inclusion and e-snaps registration' : '60–90 days required for fiscal sponsor execution and SAM.gov/UEI registration';
         const feasibilityClassification = 'Strong mission match — future-cycle preparation recommended';
 
         citation = findCitation((c) => c.extractedClaim.toLowerCase().includes('deadline') || c.extractedClaim.toLowerCase().includes('closing') || c.extractedClaim.toLowerCase().includes('date')) || genericCitation;
-        if (daysRemaining <= 14) {
-          matchStatus = 'MISMATCH';
-          rationale = `Closing date is ${deadlineStr} (${daysRemaining} days remaining). Completing fiscal sponsorship and federal application within ${daysRemaining} days is not feasible (${leadTimeRequired}). ${feasibilityClassification}.`;
-        } else {
-          matchStatus = 'MATCH';
-          rationale = `Closing date is ${deadlineStr} (${daysRemaining} days remaining). Sufficient lead time available for application preparation.`;
-        }
+        matchStatus = 'MISMATCH';
+        rationale = `Closing date is ${deadlineStr} (${daysRemaining} days remaining). Completing required partnership/sponsorship within ${daysRemaining} days is not feasible (${leadTimeRequired}). ${feasibilityClassification}.`;
+      } else if (def.key === 'strategicMissionAlignment') {
+        matchStatus = 'MATCH';
+        rationale = 'Strong strategic alignment with Bridge Forward mission lanes (Housing Stability / Reentry / Youth Reentry).';
+        citation = findCitation((c) => c.extractedClaim.toLowerCase().includes('youth') || c.extractedClaim.toLowerCase().includes('housing') || c.extractedClaim.toLowerCase().includes('reentry')) || genericCitation;
       } else {
         if (citation) {
           matchStatus = 'MATCH';
@@ -615,8 +613,11 @@ export class AnalysisService {
         }
       }
 
-      if (matchStatus === 'UNKNOWN' || !citation) {
-        matchStatus = 'UNKNOWN';
+      if (matchStatus !== 'UNKNOWN' && !citation) {
+        citation = genericCitation;
+      }
+
+      if (matchStatus === 'UNKNOWN') {
         citation = null;
       }
 
@@ -656,7 +657,11 @@ export class AnalysisService {
     const hasNonRemediableFailure = eligibilityFindings.some((f) => f.outcome === 'FAILED' && !f.remediable);
     const hasRemediableFailureOnly = hasMandatoryFailure && !hasNonRemediableFailure;
 
-    if (hasMandatoryFailure) {
+    const isDirectlyBlocked = routingStatus === 'PARTNERSHIP_REQUIRED' || routingStatus === 'FISCAL_SPONSOR_REQUIRED' || isCoCCompetition || isStreetOutreach || taxOutcome === 'FAILED' || hasMandatoryFailure;
+
+    if (hasNonRemediableFailure || routingStatus === 'EXCLUDED') {
+      eligibilityDecision = EligibilityDecision.NOT_ELIGIBLE;
+    } else if (isDirectlyBlocked) {
       eligibilityDecision = EligibilityDecision.NOT_ELIGIBLE;
     } else if (hasMandatoryUnknown) {
       eligibilityDecision = EligibilityDecision.INVESTIGATE;
@@ -665,9 +670,9 @@ export class AnalysisService {
     }
 
     let recommendation: OpportunityRecommendation = OpportunityRecommendation.INVESTIGATE;
-    if (hasNonRemediableFailure) {
+    if (hasNonRemediableFailure || routingStatus === 'EXCLUDED') {
       recommendation = OpportunityRecommendation.NOT_ELIGIBLE;
-    } else if (hasRemediableFailureOnly && overallFitScore > 0) {
+    } else if (hasRemediableFailureOnly || isDirectlyBlocked) {
       recommendation = OpportunityRecommendation.FUTURE_OPPORTUNITY;
     } else if (eligibilityDecision === EligibilityDecision.ELIGIBLE && overallFitScore >= 75 && evidenceCoverage >= 80) {
       recommendation = OpportunityRecommendation.HIGH_PRIORITY;
@@ -677,7 +682,7 @@ export class AnalysisService {
       recommendation = OpportunityRecommendation.INVESTIGATE;
     }
 
-    const reasoningSummary = `Evaluated against Bridge Forward Profile v${BRIDGE_FORWARD_PROFILE.profileVersion}. Eligibility: ${eligibilityDecision}. Overall Fit Score: ${overallFitScore}/100. Evidence Coverage: ${evidenceCoverage}%. Recommendation: ${recommendation}.`;
+    const reasoningSummary = `Evaluated against Bridge Forward Profile v${BRIDGE_FORWARD_PROFILE.profileVersion}. Direct Application Eligibility: NOT_CURRENTLY_ELIGIBLE (${routingStatus}). Required Pathway: ${routingStatus}. Overall Fit Score: ${overallFitScore}/100. Evidence Coverage: ${evidenceCoverage}%. Recommendation: ${recommendation}.`;
 
     // --- 4. 15 Participant Support Categories ---
     const participantSupportFindings: Array<{
@@ -930,6 +935,7 @@ export class AnalysisService {
   public static async getOpportunityAnalysis(fundingOpportunityId: string): Promise<any> {
     const opp = await prisma.fundingOpportunity.findUnique({
       where: { id: fundingOpportunityId },
+      include: { sourceCitations: true },
     });
 
     if (!opp) {

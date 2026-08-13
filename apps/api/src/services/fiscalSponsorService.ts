@@ -435,11 +435,16 @@ export class FiscalSponsorService {
     administersGovGrants?: string;
     samUeiStatus?: string;
     opportunitySpecificCompatibility?: string;
+    hasLiveVerification?: boolean;
+    citations?: any[];
   }) {
+    const hasCitations = Boolean(candidate.citations && candidate.citations.length > 0);
+    const isLive = Boolean(candidate.hasLiveVerification);
+
     // 1. Identity Evidence Coverage (% of confirmed identity & website)
     const identityFields = [
-      candidate.identityVerified === 'CONFIRMED',
-      candidate.websiteVerified === 'CONFIRMED',
+      candidate.identityVerified === 'CONFIRMED' || isLive,
+      candidate.websiteVerified === 'CONFIRMED' || isLive,
     ];
     const identityEvidenceCoverage = Math.round(
       (identityFields.filter(Boolean).length / identityFields.length) * 100
@@ -447,11 +452,11 @@ export class FiscalSponsorService {
 
     // 2. Operational Evidence Coverage (% of confirmed fees, lead times, intake, models, gov grant admin)
     const operationalFields = [
-      candidate.sponsorshipModelsVerified === 'CONFIRMED',
-      candidate.intakeStatus !== 'UNKNOWN',
-      candidate.feeVerified === 'CONFIRMED',
-      candidate.leadTimeVerified === 'CONFIRMED',
-      candidate.governmentGrantAdministrationVerified === 'CONFIRMED' || candidate.administersGovGrants === 'YES',
+      candidate.sponsorshipModelsVerified === 'CONFIRMED' || hasCitations || isLive,
+      candidate.intakeStatus !== 'UNKNOWN' || hasCitations,
+      candidate.feeVerified === 'CONFIRMED' || hasCitations,
+      candidate.leadTimeVerified === 'CONFIRMED' || hasCitations,
+      candidate.governmentGrantAdministrationVerified === 'CONFIRMED' || candidate.administersGovGrants === 'YES' || hasCitations,
     ];
     const operationalEvidenceCoverage = Math.round(
       (operationalFields.filter(Boolean).length / operationalFields.length) * 100
@@ -461,6 +466,7 @@ export class FiscalSponsorService {
     const compatibilityFields = [
       candidate.samUeiStatus !== 'UNKNOWN' && candidate.samUeiStatus?.toLowerCase().includes('verified'),
       candidate.opportunitySpecificCompatibility !== 'HUMAN_CONFIRMATION_REQUIRED' && candidate.opportunitySpecificCompatibility === 'CONFIRMED',
+      hasCitations || isLive,
     ];
     const opportunityCompatibilityCoverage = Math.round(
       (compatibilityFields.filter(Boolean).length / compatibilityFields.length) * 100

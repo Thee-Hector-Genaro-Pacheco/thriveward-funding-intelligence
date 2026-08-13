@@ -798,13 +798,15 @@ export function App() {
                 const analyzeState = analyzingStatus[opp.id] || 'IDLE';
 
                 return (
-                  <div key={opp.id} className="opp-card" onClick={(e) => handleOpenDrawer(opp, e)} style={{ background: 'rgba(15, 23, 42, 0.65)', border: '1px solid var(--border-color)', borderRadius: '0.85rem', padding: '1.35rem', cursor: 'pointer' }}>
+                    <div className="opp-card" onClick={(e) => handleOpenDrawer(opp, e)} style={{ background: 'rgba(15, 23, 42, 0.65)', border: '1px solid var(--border-color)', borderRadius: '0.85rem', padding: '1.35rem', cursor: 'pointer' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem' }}>
                       <div style={{ flex: 1 }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.55rem', flexWrap: 'wrap' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.55rem', flexWrap: 'wrap' }}>
                           <span className="badge badge-purple">{opp.isDemo ? 'DEMO FIXTURE' : 'OFFICIAL SOURCE'}</span>
-                          <span className="badge badge-blue">{isRouted ? `Pipeline: ${opp.candidateRoutingStatus || 'POTENTIAL PATHWAY'}` : `Pipeline: ${opp.pursuitStage}`}</span>
+                          <span className="badge badge-rose" style={{ background: '#881337', color: '#fecdd3' }}>Direct Eligibility: NOT_CURRENTLY_ELIGIBLE</span>
                           <span className="badge badge-amber" style={{ background: '#78350f' }}>Readiness: PRE-INCORPORATION</span>
+                          <span className="badge badge-blue">Required Pathway: {opp.candidateRoutingStatus || 'POTENTIAL_PATHWAY'}</span>
+                          <span className="badge badge-purple" style={{ background: '#4c1d95' }}>Recommendation: {opp.candidateRoutingStatus === 'PARTNERSHIP_REQUIRED' ? 'PARTNER_DISCOVERY' : opp.candidateRoutingStatus === 'FISCAL_SPONSOR_REQUIRED' ? 'FISCAL_SPONSOR_DISCOVERY' : 'FUTURE_CYCLE_PREPARATION'}</span>
                         </div>
                         <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#f8fafc' }}>{sanitizeHtmlToText(opp.title)}</h3>
                         <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
@@ -825,10 +827,10 @@ export function App() {
                     {analysis ? (
                       <div style={{ marginTop: '0.85rem', padding: '0.75rem 0.9rem', background: 'rgba(30, 41, 59, 0.65)', borderRadius: '0.5rem', border: '1px solid rgba(59, 130, 246, 0.2)', fontSize: '0.825rem', color: '#cbd5e1' }}>
                         <div style={{ display: 'flex', gap: '1.2rem', flexWrap: 'wrap', fontWeight: 600 }}>
-                          <div>🎯 Relevance: <strong style={{ color: '#60a5fa' }}>{relevance?.relevanceScore ?? 95}%</strong></div>
+                          <div>🎯 Mission Relevance: <strong style={{ color: '#60a5fa' }}>{relevance?.relevanceScore ?? 95}% (Strong)</strong></div>
                           <div>📊 Org Fit Score: <strong style={{ color: '#34d399' }}>{analysis.overallFitScore}%</strong></div>
                           <div>📋 Evidence Coverage: <strong style={{ color: '#c084fc' }}>{analysis.evidenceCoverage}%</strong></div>
-                          <div>⚖️ Decision: <strong style={{ color: '#fbbf24' }}>{analysis.eligibilityDecision}</strong></div>
+                          <div>⚖️ Direct Eligibility: <strong style={{ color: '#f87171' }}>{analysis.eligibilityDecision}</strong></div>
                         </div>
                         {analysis.updatedAt && (
                           <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.3rem' }}>
@@ -842,7 +844,7 @@ export function App() {
                       </div>
                     )}
 
-                    {/* Action Toolbar with Pursuit Safeguards */}
+                    {/* Action Toolbar with Pathway-Specific Routing Buttons */}
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)', flexWrap: 'wrap', gap: '0.5rem' }}>
                       <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
                         <button
@@ -862,21 +864,62 @@ export function App() {
                           {analyzeState === 'RUNNING' ? 'Analyzing…' : analyzeState === 'COMPLETED' ? '✓ Analysis Updated' : '⚡ Analyze & Score'}
                         </button>
 
-                        <button
-                          onClick={(e) => handleNavigateToOpportunitySponsors(opp, e)}
-                          style={{
-                            background: 'rgba(139, 92, 246, 0.2)',
-                            border: '1px solid #8b5cf6',
-                            color: '#c084fc',
-                            padding: '0.35rem 0.75rem',
-                            borderRadius: '0.4rem',
-                            fontSize: '0.8rem',
-                            cursor: 'pointer',
-                            fontWeight: 600,
-                          }}
-                        >
-                          🤝 View Possible Sponsors ({matchCount})
-                        </button>
+                        {/* Pathway-Specific Actions */}
+                        {opp.candidateRoutingStatus === 'PARTNERSHIP_REQUIRED' || opp.fundingOpportunityNumber?.includes('CPD-2600-DC-0025') ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActivePrimaryTab('PARTNERS');
+                            }}
+                            style={{
+                              background: 'rgba(59, 130, 246, 0.25)',
+                              border: '1px solid #3b82f6',
+                              color: '#93c5fd',
+                              padding: '0.35rem 0.75rem',
+                              borderRadius: '0.4rem',
+                              fontSize: '0.8rem',
+                              cursor: 'pointer',
+                              fontWeight: 600,
+                            }}
+                          >
+                            🏛️ Find CoC Collaborative Applicant / Strategic Partners
+                          </button>
+                        ) : opp.candidateRoutingStatus === 'FISCAL_SPONSOR_REQUIRED' || opp.fundingOpportunityNumber?.includes('HHS-2026-ACF-ACYF-YO-0044') ? (
+                          <button
+                            onClick={(e) => handleNavigateToOpportunitySponsors(opp, e)}
+                            style={{
+                              background: 'rgba(139, 92, 246, 0.2)',
+                              border: '1px solid #8b5cf6',
+                              color: '#c084fc',
+                              padding: '0.35rem 0.75rem',
+                              borderRadius: '0.4rem',
+                              fontSize: '0.8rem',
+                              cursor: 'pointer',
+                              fontWeight: 600,
+                            }}
+                          >
+                            🤝 View Possible Sponsors ({matchCount})
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setActivePrimaryTab('READINESS');
+                            }}
+                            style={{
+                              background: 'rgba(245, 158, 11, 0.2)',
+                              border: '1px solid #f59e0b',
+                              color: '#fde68a',
+                              padding: '0.35rem 0.75rem',
+                              borderRadius: '0.4rem',
+                              fontSize: '0.8rem',
+                              cursor: 'pointer',
+                              fontWeight: 600,
+                            }}
+                          >
+                            📋 View Readiness Plan
+                          </button>
+                        )}
 
                         {/* Disabled Qualification / Lock Safeguards for Routed Opportunities */}
                         {isRouted && (
@@ -989,10 +1032,9 @@ export function App() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem' }}>
                     <div>
                       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.4rem', flexWrap: 'wrap' }}>
-                        {s.isFixture && !s.hasLiveVerification && <span className="badge badge-amber">🧪 Seed-only example</span>}
-                        {!s.isFixture && s.hasLiveVerification && <span className="badge badge-purple">🌐 Live verified</span>}
-                        {s.isFixture && s.hasLiveVerification && <span className="badge badge-blue">🔄 Seeded identity with live verification</span>}
-                        {s.verificationLevel === 'DIRECTORY_REPORTED' && <span className="badge badge-amber">📋 Directory-reported</span>}
+                        {!s.isFixture && <span className="badge badge-purple">🌐 Live HTTP Discovered</span>}
+                        {s.isFixture && !s.hasLiveVerification && <span className="badge badge-amber">🧪 Seeded origin</span>}
+                        {s.isFixture && s.hasLiveVerification && <span className="badge badge-blue">🔄 Seeded origin with live verification</span>}
                         <span className="badge badge-purple">Possible sponsor — human confirmation required</span>
                         <span className="badge badge-blue" style={{ background: '#1e293b' }}>Status: NOT CONTACTED</span>
                       </div>
@@ -1266,12 +1308,14 @@ export function App() {
 
                       {drawerAnalysis.analysisDimensions && drawerAnalysis.analysisDimensions.length > 0 && (
                         <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '0.75rem' }}>
-                          <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#93c5fd', marginBottom: '0.5rem' }}>Dimension Scores</div>
+                          <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#93c5fd', marginBottom: '0.5rem' }}>Dimension Breakdown (Points Awarded / Weight)</div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
                             {drawerAnalysis.analysisDimensions.map((dim: any, idx: number) => (
                               <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#cbd5e1' }}>
                                 <span>• {dim.dimensionKey} ({dim.matchStatus})</span>
-                                <strong style={{ color: '#38bdf8' }}>{dim.scoreAwarded} / 100</strong>
+                                <strong style={{ color: dim.matchStatus === 'MATCH' ? '#34d399' : dim.matchStatus === 'MISMATCH' ? '#f87171' : '#fbbf24' }}>
+                                  {dim.scoreAwarded} / {dim.weight}
+                                </strong>
                               </div>
                             ))}
                           </div>
@@ -1285,21 +1329,41 @@ export function App() {
                   )}
                 </div>
 
-                {/* Possible Sponsors Navigation Action */}
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(139, 92, 246, 0.12)', border: '1px solid #8b5cf6', padding: '1rem', borderRadius: '0.65rem' }}>
-                  <div>
-                    <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#c084fc' }}>🤝 Possible Fiscal Sponsor Pathways</h4>
-                    <p style={{ fontSize: '0.825rem', color: '#cbd5e1', marginTop: '0.15rem' }}>
-                      {drawerSponsorMatches.length} calculated sponsor match(es) for this opportunity requirement.
-                    </p>
+                {/* Dynamic Routing Navigation Action (Partnership vs Sponsor) */}
+                {selectedOppForDrawer.candidateRoutingStatus === 'PARTNERSHIP_REQUIRED' || selectedOppForDrawer.fundingOpportunityNumber?.includes('CPD-2600-DC-0025') ? (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(59, 130, 246, 0.12)', border: '1px solid #3b82f6', padding: '1rem', borderRadius: '0.65rem' }}>
+                    <div>
+                      <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#93c5fd' }}>🏛️ Continuum of Care (CoC) Partner Required</h4>
+                      <p style={{ fontSize: '0.825rem', color: '#cbd5e1', marginTop: '0.15rem' }}>
+                        This opportunity requires submission through an official CoC Collaborative Applicant. A fiscal sponsor cannot substitute for a CoC Collaborative Applicant.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setSelectedOppForDrawer(null);
+                        setActivePrimaryTab('PARTNERS');
+                      }}
+                      style={{ background: '#2563eb', color: '#fff', padding: '0.5rem 1rem', borderRadius: '0.4rem', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', border: 'none' }}
+                    >
+                      Find Strategic Partners →
+                    </button>
                   </div>
-                  <button
-                    onClick={() => handleNavigateToOpportunitySponsors(selectedOppForDrawer)}
-                    style={{ background: '#8b5cf6', color: '#fff', padding: '0.5rem 1rem', borderRadius: '0.4rem', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', border: 'none' }}
-                  >
-                    View Possible Sponsors ({drawerSponsorMatches.length}) →
-                  </button>
-                </div>
+                ) : (
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(139, 92, 246, 0.12)', border: '1px solid #8b5cf6', padding: '1rem', borderRadius: '0.65rem' }}>
+                    <div>
+                      <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#c084fc' }}>🤝 Possible Fiscal Sponsor Pathways</h4>
+                      <p style={{ fontSize: '0.825rem', color: '#cbd5e1', marginTop: '0.15rem' }}>
+                        {drawerSponsorMatches.length} calculated sponsor match(es) for this opportunity requirement.
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => handleNavigateToOpportunitySponsors(selectedOppForDrawer)}
+                      style={{ background: '#8b5cf6', color: '#fff', padding: '0.5rem 1rem', borderRadius: '0.4rem', fontWeight: 700, fontSize: '0.85rem', cursor: 'pointer', border: 'none' }}
+                    >
+                      View Possible Sponsors ({drawerSponsorMatches.length}) →
+                    </button>
+                  </div>
+                )}
               </>
             )}
           </div>

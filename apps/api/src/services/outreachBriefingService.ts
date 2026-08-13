@@ -82,6 +82,10 @@ export class OutreachBriefingService {
       opp = await prisma.fundingOpportunity.findUnique({
         where: { id: fundingOpportunityId },
       });
+
+      if (opp && (opp.candidateRoutingStatus === 'PARTNERSHIP_REQUIRED' || opp.fundingOpportunityNumber?.includes('CPD-2600-DC-0025'))) {
+        throw new Error(`Opportunity '${opp.fundingOpportunityNumber || opp.title}' requires a Continuum of Care Collaborative Applicant (Strategic Partner), not a Fiscal Sponsor. Direct application is blocked. Please use Strategic Partner outreach briefing instead.`);
+      }
     }
 
     const initialAreas = BRIDGE_FORWARD_PROFILE.initialServiceAreas;
@@ -142,7 +146,7 @@ export class OutreachBriefingService {
 
 I am writing on behalf of Bridge Forward Foundation, an emerging Southern California organization focused on stabilizing housing, career pathways, and technology education for justice-involved adults and system-impacted young people in ${verifiedCountiesStr}.
 
-We are actively preparing for the federal grant solicitation "${opp.title}" (Notice #${opp.fundingOpportunityNumber}, Agency: ${opp.fundingAgency}), which explicitly aligns with our service model.
+We are actively preparing for the federal grant solicitation "${opp.title}" (Notice #${opp.fundingOpportunityNumber}, Agency: ${opp.fundingAgency}), which appears potentially aligned with our mission based on preliminary, human-review-required analysis.
 
 Key Opportunity Details:
 - Official Title: ${opp.title}
