@@ -95,6 +95,22 @@ describe('Phase 1F — Contact-Integrity and Current-Cycle Status Hotfix Test Su
       'CES_INTEGRATION'
     );
     expect(cesBriefing.draftInquiryEmail.to).toBe('CoordinatedEntry@ceo.oc.gov');
+
+    // Assert canonical source URLs and verbatim evidence quotes
+    const channels = await prisma.partnerContactChannel.findMany({
+      where: { strategicPartnerCandidateId: orangeCandidate.id },
+    });
+    expect(channels.length).toBeGreaterThanOrEqual(2);
+
+    const careChan = channels.find((c) => c.contactValue === 'CareCoordination@ceo.oc.gov');
+    expect(careChan).toBeDefined();
+    expect(careChan?.sourceUrl).toBe('https://ceo.oc.gov/office-care-coordination');
+    expect(careChan?.quotedCitation).toBe('For further information, contact CareCoordination@ceo.oc.gov');
+
+    const cesChan = channels.find((c) => c.contactValue === 'CoordinatedEntry@ceo.oc.gov');
+    expect(cesChan).toBeDefined();
+    expect(cesChan?.sourceUrl).toBe('https://ceo.ocgov.com/care-coordination/homeless-services/coordinated-entry-system');
+    expect(cesChan?.quotedCitation).toBe('For additional information about the Coordinated Entry System, email CoordinatedEntry@ceo.oc.gov.');
   });
 
   it('Requirement 2 & 3: LAHSA routes NOFA@lahsa.org for grant inquiries and LACoCBoard@lahsa.org for board inquiries', async () => {
