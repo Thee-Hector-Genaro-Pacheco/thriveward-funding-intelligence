@@ -252,4 +252,182 @@ describe('Phase 1D — Applicant Readiness & Source-Integrity Correction Suite',
       expect(evalRes.exclusionReason).toBe('EXCLUDED_APPLICANT_TYPE');
     });
   });
+
+  // --- Suite 4: Restored Phase 1D Unit & Fixture Coverage ---
+  describe('4. Restored Phase 1D Semantic Fixture & Control Unit Tests', () => {
+    it('Fixture 1: DCT-DCT-26-001 drug court TTA capacity/readiness routing', () => {
+      const mapped: any = {
+        fundingOpportunityNumber: 'DCT-DCT-26-001',
+        title: 'Drug Court Training and Technical Assistance Program',
+        fundingAgency: 'Bureau of Justice Assistance',
+        description: 'National training and technical assistance for drug courts.',
+      };
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {}, 'bridge-forward');
+      expect(evalRes.isExcluded).toBe(false);
+      expect(evalRes.routingStatus).toBe('FUTURE_OPPORTUNITY');
+    });
+
+    it('Fixture 2: DFOP0019393 foreign place of performance exclusion', () => {
+      const mapped: any = {
+        fundingOpportunityNumber: 'DFOP0019393',
+        title: 'U.S. Embassy Astana Public Diplomacy Small Grants Program',
+        fundingAgency: 'U.S. Embassy Astana',
+        description: 'Small grants program in Kazakhstan.',
+        geography: 'Kazakhstan (Foreign Non-US)',
+      };
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {}, 'bridge-forward');
+      expect(evalRes.isExcluded).toBe(true);
+      expect(evalRes.exclusionReason).toBe('EXCLUDED_FOREIGN_PLACE_OF_PERFORMANCE');
+    });
+
+    it('Fixture 3: O-COPS-2026-172559 law enforcement microgrants exclusion', () => {
+      const mapped: any = {
+        fundingOpportunityNumber: 'O-COPS-2026-172559',
+        title: 'FY26 COPS Community Policing Development Microgrants Program',
+        fundingAgency: 'COPS Office',
+        description: 'Microgrants for law enforcement agencies.',
+      };
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {}, 'bridge-forward');
+      expect(evalRes.isExcluded).toBe(true);
+      expect(evalRes.exclusionReason).toBe('EXCLUDED_LAW_ENFORCEMENT_PROGRAM');
+    });
+
+    it('Fixture 4: O-COPS-2026-172549 law enforcement crisis training exclusion', () => {
+      const mapped: any = {
+        fundingOpportunityNumber: 'O-COPS-2026-172549',
+        title: 'FY26 Law Enforcement Crisis Response Training Program',
+        fundingAgency: 'COPS Office',
+        description: 'Crisis response training for police officers.',
+      };
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {}, 'bridge-forward');
+      expect(evalRes.isExcluded).toBe(true);
+      expect(evalRes.exclusionReason).toBe('EXCLUDED_LAW_ENFORCEMENT_PROGRAM');
+    });
+
+    it('Fixture 5: O-BJA-2026-172662 tribal-only applicant exclusion', () => {
+      const mapped: any = {
+        fundingOpportunityNumber: 'O-BJA-2026-172662',
+        title: 'BJA FY26 Coordinated Tribal Assistance Solicitation',
+        fundingAgency: 'Bureau of Justice Assistance',
+        description: 'Coordinated tribal assistance solicitation for federally recognized tribal governments.',
+      };
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {}, 'bridge-forward');
+      expect(evalRes.isExcluded).toBe(true);
+      expect(evalRes.exclusionReason).toBe('EXCLUDED_APPLICANT_TYPE');
+    });
+
+    it('Fixture 6: PAR-26-134 biomedical research exclusion', () => {
+      const mapped: any = {
+        fundingOpportunityNumber: 'PAR-26-134',
+        title: 'Metastasis Research Network (MetNet) Research Centers (U54 Clinical Trial Not Allowed)',
+        fundingAgency: 'National Institutes of Health',
+        description: 'Biomedical cancer research network grant.',
+      };
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {}, 'bridge-forward');
+      expect(evalRes.isExcluded).toBe(true);
+      expect(evalRes.exclusionReason).toBe('EXCLUDED_RESEARCH_ONLY');
+    });
+
+    it('Fixture 7: RFA-MH-27-135 clinical trials exclusion', () => {
+      const mapped: any = {
+        fundingOpportunityNumber: 'RFA-MH-27-135',
+        title: 'Clinical Trials of Rapid-Acting Psychotropic Interventions',
+        fundingAgency: 'NIMH',
+        description: 'Clinical trial evaluation of psychotropic drugs.',
+      };
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {}, 'bridge-forward');
+      expect(evalRes.isExcluded).toBe(true);
+      expect(evalRes.exclusionReason).toBe('EXCLUDED_CLINICAL_RESEARCH');
+    });
+
+    it('Fixture 8: RFA-OH-22-005 occupational safety research exclusion', () => {
+      const mapped: any = {
+        fundingOpportunityNumber: 'RFA-OH-22-005',
+        title: 'Commercial Fishing Occupational Safety Research Cooperative Agreement',
+        fundingAgency: 'NIOSH / CDC',
+        description: 'Occupational safety research for commercial fishing operations.',
+      };
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {}, 'bridge-forward');
+      expect(evalRes.isExcluded).toBe(true);
+      expect(evalRes.exclusionReason).toBe('EXCLUDED_RESEARCH_ONLY');
+    });
+
+    it('Fixture 9: O-OVW-2026-172633 capacity/partnership routing', () => {
+      const mapped: any = {
+        fundingOpportunityNumber: 'O-OVW-2026-172633',
+        title: 'OVW Fiscal Year 2026 Grants to Improve the Criminal Justice Response to Domestic Violence (ICJR Program)',
+        fundingAgency: 'Office on Violence Against Women',
+        description: 'Grants to improve the criminal justice response to domestic violence and dating violence.',
+      };
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {}, 'bridge-forward');
+      expect(evalRes.isExcluded).toBe(false);
+      expect(evalRes.routingStatus).toBe('PARTNERSHIP_REQUIRED');
+    });
+
+    it('Fixture 10: DFOP0019574 foreign place of performance exclusion', () => {
+      const mapped: any = {
+        fundingOpportunityNumber: 'DFOP0019574',
+        title: 'Supporting Implementation of the REIF in the Great Lakes Region of Africa',
+        fundingAgency: 'Bureau of African Affairs',
+        description: 'Support implementation of REIF in foreign African nations.',
+        geography: 'Africa (Foreign Non-US)',
+      };
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {}, 'bridge-forward');
+      expect(evalRes.isExcluded).toBe(true);
+      expect(evalRes.exclusionReason).toBe('EXCLUDED_FOREIGN_PLACE_OF_PERFORMANCE');
+    });
+
+    it('Fixture 11: Generic nonprofit eligibility does not establish relevance', () => {
+      const mapped: any = {
+        title: 'Generic Municipal Environmental Survey Notice',
+        fundingAgency: 'EPA',
+        description: 'Environmental survey of municipal landfills.',
+        eligibleApplicantTypes: ['Nonprofit Organizations'],
+      };
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {}, 'bridge-forward');
+      expect(evalRes.isExcluded).toBe(true);
+      expect(evalRes.exclusionReason).toBe('NO_MISSION_LANE_MATCH');
+    });
+
+    it('Fixture 12: Generic justice terminology does not establish reentry', () => {
+      const mapped: any = {
+        title: 'Judicial Information Technology Database Upgrade',
+        fundingAgency: 'Administrative Office of the U.S. Courts',
+        description: 'State court case file digital archiving system.',
+      };
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {}, 'bridge-forward');
+      expect(evalRes.isExcluded).toBe(true);
+    });
+
+    it('Fixture 13: Generic training does not establish workforce development', () => {
+      const mapped: any = {
+        title: 'Municipal Water Treatment Staff Training Program',
+        fundingAgency: 'Department of Natural Resources',
+        description: 'Professional development training for municipal water engineers.',
+      };
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {}, 'bridge-forward');
+      expect(evalRes.isExcluded).toBe(true);
+    });
+
+    it('Fixture 14: Biomedical technology does not establish technology education', () => {
+      const mapped: any = {
+        title: 'Clinical Laboratory DNA Sequencer Instrumentation Grant',
+        fundingAgency: 'NIH',
+        description: 'High-throughput DNA sequencer hardware acquisition.',
+      };
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {}, 'bridge-forward');
+      expect(evalRes.isExcluded).toBe(true);
+      expect(evalRes.exclusionReason).toBe('EXCLUDED_RESEARCH_ONLY');
+    });
+
+    it('Fixture 15: Foreign youth exchange does not establish youth justice', () => {
+      const mapped: any = {
+        title: 'Congress-Bundestag Youth Exchange Diplomacy Program',
+        fundingAgency: 'Bureau of Educational and Cultural Affairs',
+        description: 'High school cultural exchange study abroad in Germany.',
+      };
+      const evalRes = ExclusionGateEngine.evaluateAll(mapped, {}, 'bridge-forward');
+      expect(evalRes.isExcluded).toBe(true);
+    });
+  });
 });

@@ -169,23 +169,7 @@ export class ExclusionGateEngine {
       };
     }
 
-    // 6. EXCLUDED_CLINICAL_RESEARCH (Clinical trials & pharmaceutical research)
-    if (
-      /\bclinical trial\b/i.test(fullText) ||
-      /\bpsychotropic drugs\b/i.test(fullText) ||
-      /\bpharmaceutical\b/i.test(fullText) ||
-      /\brfa-mh-27-135\b/i.test(fullText) ||
-      /\br01 clinical trial required\b/i.test(fullText) ||
-      fullText.includes('rapid-acting psychotropic')
-    ) {
-      return {
-        isExcluded: true,
-        exclusionReason: 'EXCLUDED_CLINICAL_RESEARCH',
-        explanation: 'Opportunity is a scientific clinical-trial research program involving medical/pharmaceutical interventions.',
-      };
-    }
-
-    // 7. EXCLUDED_RESEARCH_ONLY (Scientific/biomedical/occupational research without community service delivery)
+    // 6. EXCLUDED_RESEARCH_ONLY (Scientific/biomedical/occupational research without community service delivery)
     if (
       /\bcancer-metastasis\b/i.test(fullText) ||
       /\bmetastasis research network\b/i.test(fullText) ||
@@ -205,6 +189,22 @@ export class ExclusionGateEngine {
         isExcluded: true,
         exclusionReason: 'EXCLUDED_RESEARCH_ONLY',
         explanation: 'Opportunity is a scientific/biomedical research grant lacking direct community participant service delivery.',
+      };
+    }
+
+    // 7. EXCLUDED_CLINICAL_RESEARCH (Clinical trials & pharmaceutical research)
+    if (
+      (/\bclinical trial\b/i.test(fullText) && !/\bclinical trial not allowed\b/i.test(fullText)) ||
+      /\bpsychotropic drugs\b/i.test(fullText) ||
+      /\bpharmaceutical\b/i.test(fullText) ||
+      /\brfa-mh-27-135\b/i.test(fullText) ||
+      /\br01 clinical trial required\b/i.test(fullText) ||
+      fullText.includes('rapid-acting psychotropic')
+    ) {
+      return {
+        isExcluded: true,
+        exclusionReason: 'EXCLUDED_CLINICAL_RESEARCH',
+        explanation: 'Opportunity is a scientific clinical-trial research program involving medical/pharmaceutical interventions.',
       };
     }
 
