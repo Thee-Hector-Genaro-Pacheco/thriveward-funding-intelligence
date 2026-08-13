@@ -318,9 +318,9 @@ export class FiscalSponsorService {
             isMerged: true,
             mergedIntoId: canonical.id,
             canonicalDomain: domain,
+            isFixture: false,
           },
         });
-        mergedCount++;
       }
     }
 
@@ -339,6 +339,86 @@ export class FiscalSponsorService {
     }
 
     return { mergedCount };
+  }
+
+  /**
+   * Performs an auditable forward repair on existing database provenance state.
+   * Fixes SEE candidate (id 3264d2c7-9803-456f-a907-61205e9f6d0c) to isFixture: false, hasLiveVerification: true.
+   * Ensures fixture status on seeded records and correct isMerged status on historical alias records.
+   */
+  public static async repairExistingDatabaseProvenance(): Promise<{ repairedCount: number }> {
+    let repairedCount = 0;
+
+    // 1. Repair SEE provenance
+    const see = await prisma.fiscalSponsorCandidate.findUnique({
+      where: { id: '3264d2c7-9803-456f-a907-61205e9f6d0c' },
+    });
+    if (see) {
+      if (see.isFixture || !see.hasLiveVerification || see.isMerged || see.mergedIntoId !== null) {
+        await prisma.fiscalSponsorCandidate.update({
+          where: { id: '3264d2c7-9803-456f-a907-61205e9f6d0c' },
+          data: {
+            isFixture: false,
+            hasLiveVerification: true,
+            isMerged: false,
+            mergedIntoId: null,
+          },
+        });
+        repairedCount++;
+      }
+    }
+
+    // 2. Ensure Community Partners fixture flag
+    const cp = await prisma.fiscalSponsorCandidate.findUnique({
+      where: { id: 'sponsor-community-partners-la' },
+    });
+    if (cp && !cp.isFixture) {
+      await prisma.fiscalSponsorCandidate.update({
+        where: { id: 'sponsor-community-partners-la' },
+        data: { isFixture: true },
+      });
+      repairedCount++;
+    }
+
+    // 3. Ensure Community Initiatives fixture flag
+    const ci = await prisma.fiscalSponsorCandidate.findUnique({
+      where: { id: 'sponsor-community-initiatives-sf' },
+    });
+    if (ci && !ci.isFixture) {
+      await prisma.fiscalSponsorCandidate.update({
+        where: { id: 'sponsor-community-initiatives-sf' },
+        data: { isFixture: true },
+      });
+      repairedCount++;
+    }
+
+    // 4. Ensure historical merged aliases (if present in existing DB) remain merged and isFixture: false
+    const historicalAliases = [
+      { id: '00fe8e92-0a44-4942-b790-636d02d7556b', target: 'sponsor-community-partners-la' },
+      { id: 'b14be6d6-a5b3-4f9a-be08-02cef38ead61', target: 'sponsor-community-initiatives-sf' },
+      { id: '57bc028c-0161-4b60-be39-e2b11dcfea3d', target: '3264d2c7-9803-456f-a907-61205e9f6d0c' },
+    ];
+
+    for (const alias of historicalAliases) {
+      const aliasRecord = await prisma.fiscalSponsorCandidate.findUnique({
+        where: { id: alias.id },
+      });
+      if (aliasRecord) {
+        if (!aliasRecord.isMerged || aliasRecord.mergedIntoId !== alias.target || aliasRecord.isFixture) {
+          await prisma.fiscalSponsorCandidate.update({
+            where: { id: alias.id },
+            data: {
+              isFixture: false,
+              isMerged: true,
+              mergedIntoId: alias.target,
+            },
+          });
+          repairedCount++;
+        }
+      }
+    }
+
+    return { repairedCount };
   }
 
   /**

@@ -493,12 +493,23 @@ async function main() {
     internalNotes: 'Community Partners offers Model A & Model C. Concerns: Model A does not accept projects where housing is a key element; Model C does not accept government cost-reimbursement projects.',
   };
 
+  const existingSponsor1 = await prisma.fiscalSponsorCandidate.findUnique({
+    where: { id: 'sponsor-community-partners-la' },
+  });
+
   const sponsor1 = await prisma.fiscalSponsorCandidate.upsert({
     where: { id: 'sponsor-community-partners-la' },
-    update: sponsor1Data,
+    update: {
+      ...sponsor1Data,
+      isFixture: true,
+      hasLiveVerification: existingSponsor1?.hasLiveVerification ?? false,
+      lastVerifiedTimestamp: existingSponsor1?.lastVerifiedTimestamp ?? sponsor1Data.lastVerifiedTimestamp,
+    },
     create: {
       id: 'sponsor-community-partners-la',
       ...sponsor1Data,
+      isFixture: true,
+      hasLiveVerification: false,
       citations: {
         create: [
           {
@@ -547,12 +558,23 @@ async function main() {
     internalNotes: 'Community Initiatives offers Model A comprehensive sponsorship with 10% standard / 15% government fee and $50,000 annual fundraising / $5,000 min admin fee.',
   };
 
+  const existingSponsor2 = await prisma.fiscalSponsorCandidate.findUnique({
+    where: { id: 'sponsor-community-initiatives-sf' },
+  });
+
   const sponsor2 = await prisma.fiscalSponsorCandidate.upsert({
     where: { id: 'sponsor-community-initiatives-sf' },
-    update: sponsor2Data,
+    update: {
+      ...sponsor2Data,
+      isFixture: true,
+      hasLiveVerification: existingSponsor2?.hasLiveVerification ?? false,
+      lastVerifiedTimestamp: existingSponsor2?.lastVerifiedTimestamp ?? sponsor2Data.lastVerifiedTimestamp,
+    },
     create: {
       id: 'sponsor-community-initiatives-sf',
       ...sponsor2Data,
+      isFixture: true,
+      hasLiveVerification: false,
       citations: {
         create: [
           {
@@ -565,173 +587,6 @@ async function main() {
       },
     },
   });
-
-  const sponsor3Data = {
-    name: 'Social and Environmental Entrepreneurs (SEE)',
-    canonicalDomain: 'saveourplanet.org',
-    websiteUrl: 'https://saveourplanet.org',
-    directorySourceUrl: 'https://fiscalsponsordirectory.org/service/social-environmental-entrepreneurs/',
-    geography: 'California & National Scope',
-    mission: 'Provides fiscal sponsorship and project incubation for educational, social justice, and community initiatives.',
-    populationsServed: ['Community youth', 'Environmental justice', 'Education & workforce'],
-    modelsOffered: ['UNKNOWN'],
-    acceptingNewProjects: 'UNKNOWN',
-    intakeStatus: 'UNKNOWN',
-    intakeStatusVerifiedAt: null,
-    applicationProcess: 'UNKNOWN',
-    estimatedReviewTime: 'UNKNOWN',
-    setupFee: 'UNKNOWN',
-    adminPercentage: 'UNKNOWN',
-    minRevenueRequirement: 'UNKNOWN',
-    administersGovGrants: 'UNKNOWN',
-    federalGrantCapability: 'Federal registration status not independently verified',
-    samUeiStatus: 'UNKNOWN',
-    contactChannel: 'see@saveourplanet.org',
-    verificationStatus: 'PENDING_HUMAN_REVIEW',
-    identityVerified: 'CONFIRMED',
-    websiteVerified: 'CONFIRMED',
-    sponsorshipModelsVerified: 'DIRECTORY_REPORTED',
-    governmentGrantAdministrationVerified: 'UNKNOWN',
-    feeVerified: 'DIRECTORY_REPORTED',
-    leadTimeVerified: 'UNKNOWN',
-    opportunitySpecificCompatibility: 'HUMAN_CONFIRMATION_REQUIRED',
-    verificationLevel: 'DIRECTORY_REPORTED',
-    isFixture: true,
-    lastVerifiedTimestamp: new Date(),
-    internalNotes: 'SEE official website saveourplanet.org verifies organization identity and general mission only.',
-  };
-
-  const sponsor3 = await prisma.fiscalSponsorCandidate.upsert({
-    where: { id: '3264d2c7-9803-456f-a907-61205e9f6d0c' },
-    update: sponsor3Data,
-    create: {
-      id: '3264d2c7-9803-456f-a907-61205e9f6d0c',
-      ...sponsor3Data,
-      citations: {
-        create: [
-          {
-            sourceUrl: 'https://fiscalsponsordirectory.org/service/social-environmental-entrepreneurs/',
-            quotedSection: 'Directory Listing for SEE',
-            extractedClaim: 'SEE Directory Listing for California programs (Directory-reported claim — official site verifies identity & mission only).',
-            verificationLevel: 'DIRECTORY_REPORTED',
-          },
-        ],
-      },
-    },
-  });
-
-  // Seed merged alias records for historical tracking
-  await prisma.fiscalSponsorCandidate.upsert({
-    where: { id: '00fe8e92-0a44-4942-b790-636d02d7556b' },
-    update: {
-      isMerged: true,
-      mergedIntoId: 'sponsor-community-partners-la',
-    },
-    create: {
-      id: '00fe8e92-0a44-4942-b790-636d02d7556b',
-      name: 'Community Partners',
-      canonicalDomain: 'communitypartners.org',
-      websiteUrl: 'https://communitypartners.org',
-      directorySourceUrl: 'https://portal.communitypartners.org/how-to-apply-new',
-      geography: 'California & Southern California',
-      mission: 'Fosters civic engagement and manages community-based initiatives.',
-      populationsServed: ['Unhoused youth', 'Justice-impacted adults'],
-      modelsOffered: ['MODEL_A', 'MODEL_C'],
-      acceptingNewProjects: 'UNKNOWN',
-      intakeStatus: 'UNKNOWN',
-      applicationProcess: 'Online application',
-      estimatedReviewTime: 'Minimum 6 weeks',
-      setupFee: 'UNKNOWN',
-      adminPercentage: '9% private / 15% public',
-      minRevenueRequirement: '$22,500 annual raise',
-      administersGovGrants: 'YES',
-      federalGrantCapability: 'Active federal government grant administration capability',
-      samUeiStatus: 'Active SAM.gov registration',
-      contactChannel: 'info@communitypartners.org',
-      verificationStatus: 'VERIFIED_OFFICIAL',
-      isMerged: true,
-      mergedIntoId: 'sponsor-community-partners-la',
-      isFixture: false,
-      hasLiveVerification: true,
-      verificationLevel: 'DIRECTORY_REPORTED',
-      lastVerifiedTimestamp: new Date(),
-    },
-  });
-
-  await prisma.fiscalSponsorCandidate.upsert({
-    where: { id: 'b14be6d6-a5b3-4f9a-be08-02cef38ead61' },
-    update: {
-      isMerged: true,
-      mergedIntoId: 'sponsor-community-initiatives-sf',
-    },
-    create: {
-      id: 'b14be6d6-a5b3-4f9a-be08-02cef38ead61',
-      name: 'Community Initiatives',
-      canonicalDomain: 'communityinitiatives.org',
-      websiteUrl: 'https://communityinitiatives.org',
-      directorySourceUrl: 'https://communityinitiatives.org/learn/fees-and-minimums/',
-      geography: 'California Statewide',
-      mission: 'Provides fiscal sponsorship and administrative infrastructure.',
-      populationsServed: ['Youth & young adults', 'Reentry communities'],
-      modelsOffered: ['MODEL_A'],
-      acceptingNewProjects: 'UNKNOWN',
-      intakeStatus: 'UNKNOWN',
-      applicationProcess: 'Inquiry form',
-      estimatedReviewTime: 'UNKNOWN',
-      setupFee: 'UNKNOWN',
-      adminPercentage: '10% standard / 15% government',
-      minRevenueRequirement: '$50,000 minimum annual fundraising / $5,000 minimum annual admin fee',
-      administersGovGrants: 'YES',
-      federalGrantCapability: 'Active federal grant management capability',
-      samUeiStatus: 'Active SAM.gov registration',
-      contactChannel: 'info@communityinitiatives.org',
-      verificationStatus: 'VERIFIED_OFFICIAL',
-      isMerged: true,
-      mergedIntoId: 'sponsor-community-initiatives-sf',
-      isFixture: false,
-      hasLiveVerification: true,
-      verificationLevel: 'DIRECTORY_REPORTED',
-      lastVerifiedTimestamp: new Date(),
-    },
-  });
-
-  await prisma.fiscalSponsorCandidate.upsert({
-    where: { id: '57bc028c-0161-4b60-be39-e2b11dcfea3d' },
-    update: {
-      isMerged: true,
-      mergedIntoId: '3264d2c7-9803-456f-a907-61205e9f6d0c',
-    },
-    create: {
-      id: '57bc028c-0161-4b60-be39-e2b11dcfea3d',
-      name: 'Social and Environmental Entrepreneurs (SEE)',
-      canonicalDomain: 'saveourplanet.org',
-      websiteUrl: 'https://saveourplanet.org',
-      directorySourceUrl: 'https://fiscalsponsordirectory.org/service/social-environmental-entrepreneurs/',
-      geography: 'California & National Scope',
-      mission: 'Provides fiscal sponsorship and project incubation.',
-      populationsServed: ['Community youth', 'Environmental justice'],
-      modelsOffered: ['UNKNOWN'],
-      acceptingNewProjects: 'UNKNOWN',
-      intakeStatus: 'UNKNOWN',
-      applicationProcess: 'UNKNOWN',
-      estimatedReviewTime: 'UNKNOWN',
-      setupFee: 'UNKNOWN',
-      adminPercentage: 'UNKNOWN',
-      minRevenueRequirement: 'UNKNOWN',
-      administersGovGrants: 'UNKNOWN',
-      federalGrantCapability: 'Federal registration status not independently verified',
-      samUeiStatus: 'UNKNOWN',
-      contactChannel: 'see@saveourplanet.org',
-      verificationStatus: 'PENDING_HUMAN_REVIEW',
-      isMerged: true,
-      mergedIntoId: '3264d2c7-9803-456f-a907-61205e9f6d0c',
-      isFixture: false,
-      hasLiveVerification: true,
-      verificationLevel: 'DIRECTORY_REPORTED',
-      lastVerifiedTimestamp: new Date(),
-    },
-  });
-
   // 5. Phase 1E — Strategic Partners Seed
   const partner1 = await prisma.strategicPartnerCandidate.upsert({
     where: { id: 'partner-riverside-coc' },

@@ -45,6 +45,38 @@ describe('Phase 1E — Canonical-ID Lineage Finalization Test Suite', () => {
 
   it('3. Recursive merge-chain resolution correctly traverses mergedIntoId links', async () => {
     const aliasId = '00fe8e92-0a44-4942-b790-636d02d7556b';
+    await prisma.fiscalSponsorCandidate.upsert({
+      where: { id: aliasId },
+      update: { isMerged: true, mergedIntoId: 'sponsor-community-partners-la' },
+      create: {
+        id: aliasId,
+        name: 'Community Partners Test Alias',
+        canonicalDomain: 'communitypartners.org',
+        websiteUrl: 'https://communitypartners.org',
+        directorySourceUrl: 'https://portal.communitypartners.org/how-to-apply-new',
+        geography: 'California',
+        mission: 'Test alias',
+        populationsServed: [],
+        modelsOffered: [],
+        acceptingNewProjects: 'UNKNOWN',
+        applicationProcess: 'Test',
+        estimatedReviewTime: 'Test',
+        setupFee: 'Test',
+        adminPercentage: 'Test',
+        minRevenueRequirement: 'Test',
+        administersGovGrants: 'UNKNOWN',
+        federalGrantCapability: 'Test',
+        samUeiStatus: 'Test',
+        contactChannel: 'test@example.com',
+        verificationStatus: 'VERIFIED_OFFICIAL',
+        isMerged: true,
+        mergedIntoId: 'sponsor-community-partners-la',
+        isFixture: false,
+        hasLiveVerification: false,
+        verificationLevel: 'DIRECTORY_REPORTED',
+      },
+    });
+
     const finalId = await FiscalSponsorService.resolveFinalCanonicalCandidateId(aliasId);
     expect(finalId).toBe('sponsor-community-partners-la');
   });
