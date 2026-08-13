@@ -164,6 +164,51 @@ export class FiscalSponsorService {
   }
 
   /**
+   * Resolves a candidate ID to its final active canonical candidate ID.
+   * Recursively follows `mergedIntoId` pointers until reaching `isMerged = false, mergedIntoId = null`.
+   * Fails closed with structured errors if a cycle, missing target, or self-reference is detected.
+   */
+  public static async resolveFinalCanonicalCandidateId(candidateId: string): Promise<string> {
+    if (!candidateId) {
+      throw new Error('Canonical ID Resolver Error: candidateId must be provided.');
+    }
+
+    const visited = new Set<string>();
+    let currentId = candidateId;
+
+    while (currentId) {
+      if (visited.has(currentId)) {
+        throw new Error(`Canonical ID Resolver Error: Merge cycle or self-reference detected for candidate '${candidateId}' at '${currentId}'.`);
+      }
+      visited.add(currentId);
+
+      const candidate = await prisma.fiscalSponsorCandidate.findUnique({
+        where: { id: currentId },
+        select: { id: true, isMerged: true, mergedIntoId: true },
+      });
+
+      if (!candidate) {
+        throw new Error(`Canonical ID Resolver Error: Candidate record '${currentId}' not found in database.`);
+      }
+
+      if (!candidate.isMerged) {
+        if (candidate.mergedIntoId) {
+          throw new Error(`Canonical ID Resolver Error: Invalid candidate state for '${currentId}' (isMerged is false but mergedIntoId is set).`);
+        }
+        return candidate.id;
+      }
+
+      if (!candidate.mergedIntoId) {
+        throw new Error(`Canonical ID Resolver Error: Merged candidate '${currentId}' has missing mergedIntoId target.`);
+      }
+
+      currentId = candidate.mergedIntoId;
+    }
+
+    throw new Error(`Canonical ID Resolver Error: Unable to resolve canonical candidate ID for '${candidateId}'.`);
+  }
+
+  /**
    * Reconciles duplicate fiscal sponsor candidates by canonical domain.
    * Merges duplicate candidates into a single canonical record, re-links citations & matches,
    * and marks merged candidates with `isMerged: true` and `mergedIntoId`.
@@ -184,6 +229,12 @@ export class FiscalSponsorService {
 
     let mergedCount = 0;
 
+    const canonicalMap: Record<string, string> = {
+      'communitypartners.org': 'sponsor-community-partners-la',
+      'communityinitiatives.org': 'sponsor-community-initiatives-sf',
+      'saveourplanet.org': '3264d2c7-9803-456f-a907-61205e9f6d0c',
+    };
+
     for (const [domain, candidates] of domainMap.entries()) {
       if (candidates.length <= 1) {
         if (candidates.length === 1 && !candidates[0].canonicalDomain) {
@@ -195,8 +246,9 @@ export class FiscalSponsorService {
         continue;
       }
 
-      // Designate canonical candidate (prefer original ID 3264d2c7-9803-456f-a907-61205e9f6d0c for SEE, then fixture or oldest)
-      let canonical = candidates.find((c) => c.id === '3264d2c7-9803-456f-a907-61205e9f6d0c');
+      // Designate canonical candidate (prefer explicitly mapped ID, fixture, or oldest)
+      const preferredId = canonicalMap[domain];
+      let canonical = candidates.find((c) => c.id === preferredId);
       if (!canonical) {
         canonical = candidates.find((c) => c.isFixture || c.hasLiveVerification) || candidates[0];
       }
@@ -211,7 +263,9 @@ export class FiscalSponsorService {
       const duplicates = candidates.filter((c) => c.id !== canonical.id);
 
       for (const dup of duplicates) {
-        if (dup.isMerged) continue;
+        if (!dup.isMerged) {
+          mergedCount++;
+        }
 
         // Re-link citations cleanly without creating duplicate rows
         const dupCitations = await prisma.sponsorSourceCitation.findMany({
@@ -267,6 +321,20 @@ export class FiscalSponsorService {
           },
         });
         mergedCount++;
+      }
+    }
+
+    // Global citation deduplication cleanup for active canonical candidates
+    const allCitations = await prisma.sponsorSourceCitation.findMany({
+      orderBy: { fetchedAt: 'asc' },
+    });
+    const seenCitations = new Set<string>();
+    for (const citation of allCitations) {
+      const key = `${citation.fiscalSponsorCandidateId}:${citation.sourceUrl}`;
+      if (seenCitations.has(key)) {
+        await prisma.sponsorSourceCitation.delete({ where: { id: citation.id } });
+      } else {
+        seenCitations.add(key);
       }
     }
 

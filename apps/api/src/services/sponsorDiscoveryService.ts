@@ -516,15 +516,21 @@ export class SponsorDiscoveryService {
     for (const item of candidateList) {
       const domain = item.canonicalDomain || FiscalSponsorService.extractCanonicalDomain(item.websiteUrl);
 
-      // Check existing candidate in DB by canonicalDomain, websiteUrl, or name
+      // Check existing active canonical candidate in DB by canonicalDomain, websiteUrl, or name
       const existing = await prisma.fiscalSponsorCandidate.findFirst({
         where: {
+          isMerged: false,
           OR: [
             { canonicalDomain: { equals: domain, mode: 'insensitive' } },
             { websiteUrl: { contains: domain } },
             { name: { equals: item.name, mode: 'insensitive' } },
           ],
         },
+        orderBy: [
+          { isFixture: 'desc' },
+          { hasLiveVerification: 'desc' },
+          { createdAt: 'asc' },
+        ],
       });
 
       const candidateData = {
@@ -649,12 +655,14 @@ export class SponsorDiscoveryService {
         dispositionReason = 'Created new canonical candidate from live directory parsing';
       }
 
+      const finalCanonicalId = await FiscalSponsorService.resolveFinalCanonicalCandidateId(candidateRecord.id);
+
       parsedCandidateAccounting.push({
         sourceName: 'Fiscal Sponsor Directory State Listings',
         parsedName: candidateRecord.name,
         parsedDomain: domain,
         disposition,
-        canonicalCandidateId: candidateRecord.id,
+        canonicalCandidateId: finalCanonicalId,
         reason: dispositionReason,
       });
 

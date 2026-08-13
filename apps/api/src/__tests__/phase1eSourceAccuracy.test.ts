@@ -63,7 +63,7 @@ describe('Phase 1E — Source Accuracy, Sponsor Facts & Live Discovery Correctio
 
   it('5. Community Initiatives official published facts are persisted accurately', async () => {
     const ci = await prisma.fiscalSponsorCandidate.findFirst({
-      where: { name: { contains: 'Community Initiatives' } },
+      where: { canonicalDomain: 'communityinitiatives.org', isMerged: false },
     });
 
     expect(ci).toBeDefined();
@@ -75,15 +75,15 @@ describe('Phase 1E — Source Accuracy, Sponsor Facts & Live Discovery Correctio
 
   it('6. Housing and government cost-reimbursement compatibility concerns are captured', async () => {
     const cp = await prisma.fiscalSponsorCandidate.findFirst({
-      where: { name: { contains: 'Community Partners' } },
+      where: { canonicalDomain: 'communitypartners.org', isMerged: false },
     });
 
     const opp = await prisma.fundingOpportunity.create({
       data: {
         title: 'Street Outreach and Youth Emergency Housing Program',
         fundingAgency: 'HHS ACF ACYF',
-        isDemo: true,
-        sourceSystem: 'DEMO_FIXTURE',
+        isDemo: false,
+        sourceSystem: 'UNIT_TEST',
         externalOpportunityId: 'test-phase1e-compat-001',
         description: 'Youth emergency shelter and street outreach services',
         sourceUrl: 'https://www.grants.gov/search-results-detail/362088',
