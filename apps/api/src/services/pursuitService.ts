@@ -53,6 +53,10 @@ export class PursuitService {
 
     const opp = await prisma.fundingOpportunity.findUnique({
       where: { id: params.fundingOpportunityId },
+      include: {
+        relevanceAnalyses: { where: { isCurrent: true } },
+        opportunityAnalyses: { where: { isCurrent: true } },
+      },
     });
 
     if (!opp) {
@@ -61,6 +65,31 @@ export class PursuitService {
 
     const currentStage = opp.pursuitStage;
     const targetStage = params.targetStage;
+
+    const currentRelevance = opp.relevanceAnalyses[0];
+    const currentAnalysis = opp.opportunityAnalyses[0];
+
+    const isIrrelevant = currentRelevance?.relevanceStatus === 'IRRELEVANT';
+    const isNotEligible =
+      currentAnalysis?.eligibilityDecision === 'NOT_ELIGIBLE' ||
+      currentAnalysis?.eligibilityStatus === 'NOT_ELIGIBLE';
+
+    // Action Gate 1: Mark Qualified
+    if (targetStage === 'QUALIFIED') {
+      if (isIrrelevant || isNotEligible) {
+        throw new Error('Opportunity is contextually IRRELEVANT or NOT_ELIGIBLE and cannot be marked QUALIFIED');
+      }
+    }
+
+    // Action Gate 2: Lock Match
+    if (targetStage === 'LOCKED') {
+      if (isIrrelevant || isNotEligible) {
+        throw new Error('Opportunity is contextually IRRELEVANT or NOT_ELIGIBLE and cannot be marked LOCKED');
+      }
+      if (currentStage !== 'QUALIFIED' && currentStage !== 'LOCKED') {
+        throw new Error('Opportunity must be in QUALIFIED pursuit stage before locking match');
+      }
+    }
 
     // Validate Dismissed reason rule
     if (targetStage === 'DISMISSED') {
@@ -145,7 +174,7 @@ export class PursuitService {
       let staleReason: string | null = null;
 
       if (currentAnalysis) {
-        if (currentAnalysis.profileVersion !== '1.1.0-phase1d') {
+        if (currentAnalysis.profileVersion !== '1.1.1-phase1d') {
           isStale = true;
           staleReason = 'Organization profile version changed since lock';
         }

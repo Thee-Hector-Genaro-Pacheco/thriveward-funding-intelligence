@@ -1,4 +1,5 @@
 import { GrantsGovDetailResponse, GrantsGovSearchHit } from './grantsGovTypes';
+import { sanitizeHtmlToText } from '@bridge-ai/shared';
 
 export interface MappedOpportunity {
   sourceSystem: string;
@@ -47,6 +48,72 @@ export class GrantsGovMapper {
   }
 
   /**
+   * Sanitizes and parses agency name/code without grantor contact names or titles.
+   */
+  private static parseAgency(detail: GrantsGovDetailResponse | GrantsGovSearchHit): string {
+    const rawAgency = (detail as any).agencyName || (detail as any).agency || (detail as any).synopsis?.agencyName || '';
+    const agencyCode = (detail as any).agencyCode || (detail as any).owningAgencyCode || (detail as any).synopsis?.agencyCode;
+
+    if (rawAgency) {
+      const cleanAgency = sanitizeHtmlToText(rawAgency);
+      // Reject contact person names, emails, phone numbers, or "Grants.gov Contact" / "Grantor"
+      const isContactName =
+        /@/.test(cleanAgency) ||
+        /\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/.test(cleanAgency) ||
+        /grants\.gov contact/i.test(cleanAgency) ||
+        /grant officer/i.test(cleanAgency) ||
+        /program manager/i.test(cleanAgency) ||
+        /grantor/i.test(cleanAgency) ||
+        /contact/i.test(cleanAgency) ||
+        /officer/i.test(cleanAgency) ||
+        /specialist/i.test(cleanAgency);
+
+      if (!isContactName && cleanAgency.trim().length > 0) {
+        return cleanAgency.trim();
+      }
+    }
+
+    if (agencyCode && String(agencyCode).trim().length > 0) {
+      return `Agency (${String(agencyCode).trim()})`;
+    }
+
+    return 'UNKNOWN';
+  }
+
+  /**
+   * Parses official geography / place-of-performance from detail response text.
+   */
+  private static parseGeography(detail: GrantsGovDetailResponse | GrantsGovSearchHit, title: string, description: string): string {
+    const fullText = `${title} ${description} ${JSON.stringify(detail)}`.toLowerCase();
+
+    if (fullText.includes('kazakhstan') || fullText.includes('astana') || fullText.includes('almaty')) {
+      return 'Kazakhstan (Foreign Non-US)';
+    }
+    if (fullText.includes('tunisia') || fullText.includes('tunis')) {
+      return 'Tunisia (Foreign Non-US)';
+    }
+    if (fullText.includes('solomon islands')) {
+      return 'Solomon Islands (Foreign Non-US)';
+    }
+    if (fullText.includes('africa') || fullText.includes('great lakes region of africa')) {
+      return 'Africa (Foreign Non-US)';
+    }
+    if (fullText.includes('foreign-only') || fullText.includes('abroad only') || fullText.includes('overseas direct')) {
+      return 'Foreign Location (Non-US)';
+    }
+
+    if (fullText.includes('california') || fullText.includes('orange county') || fullText.includes('los angeles')) {
+      return 'United States (California)';
+    }
+
+    if (fullText.includes('united states') || fullText.includes('u.s.') || fullText.includes('national')) {
+      return 'United States';
+    }
+
+    return 'UNKNOWN';
+  }
+
+  /**
    * Pure mapping from Grants.gov detail payload.
    */
   static mapDetailToOpportunity(detail: GrantsGovDetailResponse): MappedOpportunity {
@@ -58,8 +125,13 @@ export class GrantsGovMapper {
     const officialUrl = `https://www.grants.gov/search-results-detail/${oppId}`;
     const rawNumber = detail.opportunityNumber || detail.synopsis?.opportunityNumber || oppId;
     const rawTitle = detail.opportunityTitle || detail.synopsis?.opportunityTitle || `Grants.gov Notice #${rawNumber}`;
-    const agency = detail.agencyName || detail.synopsis?.agencyName || (detail.agencyCode ? `Agency (${detail.agencyCode})` : (detail.owningAgencyCode ? `Agency (${detail.owningAgencyCode})` : 'Federal Agency'));
-    const description = detail.synopsisDescription || detail.synopsis?.synopsisDesc || detail.synopsis?.synopsisDescription || detail.description || 'Official Grants.gov opportunity notice.';
+    const cleanTitle = sanitizeHtmlToText(rawTitle);
+
+    const agency = this.parseAgency(detail);
+    const rawDescription = detail.synopsisDescription || detail.synopsis?.synopsisDesc || detail.synopsis?.synopsisDescription || detail.description || 'Official Grants.gov opportunity notice.';
+    const cleanDescription = sanitizeHtmlToText(rawDescription);
+
+    const geography = this.parseGeography(detail, cleanTitle, cleanDescription);
 
     let lastUpdated: Date | null = null;
     const dateToParse = detail.lastUpdatedDate || detail.synopsis?.lastUpdatedDate;
@@ -86,16 +158,17 @@ export class GrantsGovMapper {
     }
 
     const additionalInfo = detail.additionalInformationOnEligibility || detail.synopsis?.applicantEligibilityDesc;
+    const cleanInfo = additionalInfo ? sanitizeHtmlToText(additionalInfo) : null;
 
     return {
       sourceSystem: 'GRANTS_GOV',
       externalOpportunityId: oppId,
-      fundingOpportunityNumber: rawNumber,
-      title: rawTitle.trim(),
-      fundingAgency: agency.trim(),
+      fundingOpportunityNumber: String(rawNumber).trim(),
+      title: cleanTitle,
+      fundingAgency: agency,
       isDemo: false,
       program: detail.alnNumbers?.length ? `ALN/CFDA #${detail.alnNumbers.join(', ')}` : null,
-      description: description.trim(),
+      description: cleanDescription,
       sourceUrl: officialUrl,
       status: 'PENDING_HUMAN_REVIEW',
       verificationStatus: 'PENDING_HUMAN_REVIEW',
@@ -104,9 +177,9 @@ export class GrantsGovMapper {
       awardMin: this.formatCurrency(awardFloor),
       awardMax: this.formatCurrency(awardCeiling),
       totalAvailableFunding: this.formatCurrency(estimatedTotalProgramFunding),
-      geography: 'United States',
+      geography,
       eligibleApplicantTypes,
-      eligiblePopulations: additionalInfo ? [additionalInfo] : [],
+      eligiblePopulations: cleanInfo ? [cleanInfo] : [],
       matchRequirement: 'UNKNOWN',
       periodOfPerformance: 'UNKNOWN',
       allowableCosts: detail.fundingInstruments || [],
@@ -121,16 +194,18 @@ export class GrantsGovMapper {
   static mapSearchHitToOpportunity(hit: GrantsGovSearchHit): MappedOpportunity {
     const oppId = String(hit.id);
     const officialUrl = `https://www.grants.gov/search-results-detail/${oppId}`;
+    const cleanTitle = sanitizeHtmlToText(hit.title || `Grants.gov Notice #${oppId}`);
+    const agency = this.parseAgency(hit);
 
     return {
       sourceSystem: 'GRANTS_GOV',
       externalOpportunityId: oppId,
-      fundingOpportunityNumber: hit.number || oppId,
-      title: (hit.title || `Grants.gov Notice #${oppId}`).trim(),
-      fundingAgency: (hit.agency || hit.agencyCode || 'Federal Agency').trim(),
+      fundingOpportunityNumber: oppId,
+      title: cleanTitle,
+      fundingAgency: agency,
       isDemo: false,
-      program: hit.alnNumber ? `ALN/CFDA #${hit.alnNumber}` : null,
-      description: `Official Grants.gov notice #${hit.number || oppId} (${hit.agency || 'Federal Agency'}). Status: ${hit.oppStatus || 'posted'}.`,
+      program: null,
+      description: sanitizeHtmlToText(`Official Grants.gov opportunity hit #${oppId}.`),
       sourceUrl: officialUrl,
       status: 'PENDING_HUMAN_REVIEW',
       verificationStatus: 'PENDING_HUMAN_REVIEW',
@@ -139,7 +214,7 @@ export class GrantsGovMapper {
       awardMin: 'UNKNOWN',
       awardMax: 'UNKNOWN',
       totalAvailableFunding: 'UNKNOWN',
-      geography: 'United States',
+      geography: this.parseGeography(hit, cleanTitle, ''),
       eligibleApplicantTypes: [],
       eligiblePopulations: [],
       matchRequirement: 'UNKNOWN',

@@ -306,7 +306,7 @@ export default function App() {
               🔒 Locked Matches
             </button>
             <button className={`filter-btn ${activeFilter === 'dismissed' ? 'active' : ''}`} onClick={() => setActiveFilter('dismissed')}>
-              Dismissed
+              Dismissed / Excluded
             </button>
             <button className={`filter-btn ${activeFilter === 'official' ? 'active' : ''}`} onClick={() => setActiveFilter('official')}>
               Official Grants.gov
@@ -348,8 +348,19 @@ export default function App() {
             {opportunities.map((opp) => {
               const analysis = opp.opportunityAnalyses?.[0];
               const relevance = opp.relevanceAnalyses?.[0];
-              const fitScore = analysis?.overallFitScore ?? 0;
+
+              const hasAnalysis = Boolean(analysis || relevance);
+              const isIrrelevant = relevance?.relevanceStatus === 'IRRELEVANT';
+              const isNotEligible = analysis?.eligibilityDecision === 'NOT_ELIGIBLE' || analysis?.eligibilityStatus === 'NOT_ELIGIBLE';
+
+              const cleanTitle = sanitizeHtmlToText(opp.title);
+              const cleanAgency = sanitizeHtmlToText(opp.fundingAgency);
               const cleanDescription = sanitizeHtmlToText(opp.description);
+              const cleanGeography = sanitizeHtmlToText(opp.geography);
+
+              // Action Gate UI flags
+              const canMarkQualified = hasAnalysis && !isIrrelevant && !isNotEligible && opp.pursuitStage !== 'QUALIFIED' && opp.pursuitStage !== 'LOCKED';
+              const canLockMatch = hasAnalysis && !isIrrelevant && !isNotEligible && opp.pursuitStage === 'QUALIFIED';
 
               return (
                 <div
@@ -376,16 +387,25 @@ export default function App() {
 
                         <span className="badge badge-blue">Stage: {opp.pursuitStage}</span>
 
-                        {relevance && (
-                          <span className={`badge ${relevance.relevanceStatus === 'RELEVANT' ? 'badge-blue' : relevance.relevanceStatus === 'POSSIBLY_RELEVANT' ? 'badge-amber' : 'badge-rose'}`}>
-                            Relevance: {relevance.relevanceStatus} ({relevance.relevanceScore}/100)
-                          </span>
-                        )}
-
-                        {analysis && (
-                          <span className={`badge ${analysis.eligibilityDecision === 'ELIGIBLE' ? 'badge-blue' : analysis.eligibilityDecision === 'INVESTIGATE' ? 'badge-amber' : 'badge-rose'}`}>
-                            Eligibility: {analysis.eligibilityDecision}
-                          </span>
+                        {!hasAnalysis ? (
+                          <span className="badge badge-amber" style={{ background: '#78350f' }}>Not analyzed</span>
+                        ) : isIrrelevant ? (
+                          <span className="badge badge-rose" style={{ background: '#881337' }}>Do not pursue — irrelevant</span>
+                        ) : isNotEligible ? (
+                          <span className="badge badge-rose" style={{ background: '#881337' }}>Do not pursue — not eligible</span>
+                        ) : (
+                          <>
+                            {relevance && (
+                              <span className={`badge ${relevance.relevanceStatus === 'RELEVANT' ? 'badge-blue' : 'badge-amber'}`}>
+                                Relevance: {relevance.relevanceStatus} ({relevance.relevanceScore}/100)
+                              </span>
+                            )}
+                            {analysis && (
+                              <span className={`badge ${analysis.eligibilityDecision === 'ELIGIBLE' ? 'badge-blue' : 'badge-amber'}`}>
+                                {analysis.eligibilityDecision === 'INVESTIGATE' ? 'Needs human eligibility review' : `Eligibility: ${analysis.eligibilityDecision}`}
+                              </span>
+                            )}
+                          </>
                         )}
 
                         {opp.isStale && (
@@ -395,23 +415,39 @@ export default function App() {
                         )}
                       </div>
 
-                      <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#f8fafc' }}>{opp.title}</h3>
+                      <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#f8fafc' }}>{cleanTitle}</h3>
                       <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                        <strong>Agency:</strong> {opp.fundingAgency} • <strong>Geography:</strong> {opp.geography}
+                        <strong>Agency:</strong> {cleanAgency} • <strong>Geography:</strong> {cleanGeography}
                       </p>
                     </div>
 
-                    {/* Scores Breakdown */}
-                    <div style={{ textAlign: 'right', minWidth: '140px' }}>
-                      <div style={{ fontSize: '1.6rem', fontWeight: 800, color: fitScore >= 80 ? '#60a5fa' : fitScore >= 50 ? '#fbbf24' : '#f87171' }}>
-                        {fitScore}<span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>/100</span>
-                      </div>
-                      <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase' }}>
-                        Bridge Fit Score
-                      </div>
-                      {analysis && (
-                        <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.2rem' }}>
-                          Evidence Coverage: {analysis.evidenceCoverage}%
+                    {/* Primary Score Column */}
+                    <div style={{ textAlign: 'right', minWidth: '160px' }}>
+                      {!hasAnalysis ? (
+                        <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#94a3b8', background: 'rgba(255,255,255,0.05)', padding: '0.4rem 0.75rem', borderRadius: '0.5rem' }}>
+                          Not analyzed
+                        </div>
+                      ) : isIrrelevant ? (
+                        <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#f87171', background: 'rgba(239,68,68,0.15)', padding: '0.4rem 0.75rem', borderRadius: '0.5rem' }}>
+                          Do not pursue — irrelevant
+                        </div>
+                      ) : isNotEligible ? (
+                        <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#f87171', background: 'rgba(239,68,68,0.15)', padding: '0.4rem 0.75rem', borderRadius: '0.5rem' }}>
+                          Do not pursue — not eligible
+                        </div>
+                      ) : (
+                        <div>
+                          <div style={{ fontSize: '1.6rem', fontWeight: 800, color: (analysis?.overallFitScore ?? 0) >= 80 ? '#60a5fa' : '#fbbf24' }}>
+                            {analysis?.overallFitScore ?? 0}<span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>/100</span>
+                          </div>
+                          <div style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-dim)', textTransform: 'uppercase' }}>
+                            Bridge Fit Score
+                          </div>
+                          {analysis && (
+                            <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.2rem' }}>
+                              Evidence Coverage: {analysis.evidenceCoverage}%
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -444,23 +480,39 @@ export default function App() {
                         ⚡ Analyze & Score
                       </button>
 
-                      {opp.pursuitStage !== 'QUALIFIED' && opp.pursuitStage !== 'LOCKED' && (
-                        <button
-                          onClick={(e) => handleTransitionPursuit(opp.id, 'QUALIFIED', e)}
-                          style={{ background: 'rgba(16, 185, 129, 0.2)', border: '1px solid #10b981', color: '#6ee7b7', padding: '0.35rem 0.75rem', borderRadius: '0.4rem', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600 }}
-                        >
-                          ✓ Mark Qualified
-                        </button>
-                      )}
+                      <button
+                        onClick={(e) => canMarkQualified && handleTransitionPursuit(opp.id, 'QUALIFIED', e)}
+                        disabled={!canMarkQualified}
+                        style={{
+                          background: canMarkQualified ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.05)',
+                          border: canMarkQualified ? '1px solid #10b981' : '1px solid rgba(255,255,255,0.1)',
+                          color: canMarkQualified ? '#6ee7b7' : '#64748b',
+                          padding: '0.35rem 0.75rem',
+                          borderRadius: '0.4rem',
+                          fontSize: '0.8rem',
+                          cursor: canMarkQualified ? 'pointer' : 'not-allowed',
+                          fontWeight: 600,
+                        }}
+                      >
+                        ✓ Mark Qualified
+                      </button>
 
-                      {opp.pursuitStage !== 'LOCKED' && (
-                        <button
-                          onClick={(e) => handleTransitionPursuit(opp.id, 'LOCKED', e)}
-                          style={{ background: 'rgba(139, 92, 246, 0.2)', border: '1px solid #8b5cf6', color: '#c084fc', padding: '0.35rem 0.75rem', borderRadius: '0.4rem', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600 }}
-                        >
-                          🔒 Lock Match
-                        </button>
-                      )}
+                      <button
+                        onClick={(e) => canLockMatch && handleTransitionPursuit(opp.id, 'LOCKED', e)}
+                        disabled={!canLockMatch}
+                        style={{
+                          background: canLockMatch ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)',
+                          border: canLockMatch ? '1px solid #8b5cf6' : '1px solid rgba(255,255,255,0.1)',
+                          color: canLockMatch ? '#c084fc' : '#64748b',
+                          padding: '0.35rem 0.75rem',
+                          borderRadius: '0.4rem',
+                          fontSize: '0.8rem',
+                          cursor: canLockMatch ? 'pointer' : 'not-allowed',
+                          fontWeight: 600,
+                        }}
+                      >
+                        🔒 Lock Match
+                      </button>
 
                       {opp.pursuitStage !== 'DISMISSED' && (
                         <button
@@ -494,7 +546,7 @@ export default function App() {
                 )}
                 <span className="badge badge-blue">Pursuit: {selectedOpp.pursuitStage}</span>
               </div>
-              <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#ffffff' }}>{selectedOpp.title}</h2>
+              <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#ffffff' }}>{sanitizeHtmlToText(selectedOpp.title)}</h2>
               <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: '0.25rem' }}>
                 Official Source Link:{' '}
                 <a href={selectedOpp.sourceUrl} target="_blank" rel="noreferrer" style={{ color: '#38bdf8', textDecoration: 'underline' }}>
@@ -509,6 +561,18 @@ export default function App() {
               ✕ Close Detail
             </button>
           </div>
+
+          {/* Raw Fit Score inside Review Details drawer */}
+          {selectedOpp.opportunityAnalyses?.[0] && (
+            <div style={{ background: 'rgba(51, 65, 85, 0.5)', border: '1px solid rgba(255,255,255,0.1)', padding: '0.75rem 1rem', borderRadius: '0.5rem', marginBottom: '1rem', fontSize: '0.85rem', color: '#cbd5e1' }}>
+              📊 <strong>Calculated Dimensional Score:</strong> {selectedOpp.opportunityAnalyses[0].overallFitScore}/100
+              {(selectedOpp.relevanceAnalyses?.[0]?.relevanceStatus === 'IRRELEVANT' || selectedOpp.opportunityAnalyses[0].eligibilityDecision === 'NOT_ELIGIBLE') && (
+                <span style={{ color: '#f87171', marginLeft: '0.5rem', fontWeight: 700 }}>
+                  (Non-actionable: Opportunity is contextually Irrelevant or Not Eligible)
+                </span>
+              )}
+            </div>
+          )}
 
           {/* Contextual Relevance Section */}
           {selectedOpp.relevanceAnalyses?.[0] && (
@@ -534,7 +598,8 @@ export default function App() {
                 {sanitizeHtmlToText(selectedOpp.description)}
               </p>
               <ul style={{ paddingLeft: '1.2rem', fontSize: '0.85rem', color: '#94a3b8' }}>
-                <li><strong>Agency:</strong> {selectedOpp.fundingAgency}</li>
+                <li><strong>Agency:</strong> {sanitizeHtmlToText(selectedOpp.fundingAgency)}</li>
+                <li><strong>Geography:</strong> {sanitizeHtmlToText(selectedOpp.geography)}</li>
                 <li><strong>Opportunity #:</strong> {selectedOpp.fundingOpportunityNumber || 'N/A'}</li>
                 <li><strong>Post Date:</strong> {selectedOpp.openingDate}</li>
                 <li><strong>Closing Date:</strong> {selectedOpp.deadline}</li>

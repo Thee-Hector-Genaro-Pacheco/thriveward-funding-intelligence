@@ -10,6 +10,7 @@ export function parseArgs(args: string[]) {
   let statuses = 'forecasted|posted';
   let limit = 3;
   let persist = false;
+  let verbose = false;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -42,12 +43,14 @@ export function parseArgs(args: string[]) {
       persist = true;
     } else if (arg === '--dry-run') {
       persist = false;
+    } else if (arg === '--verbose') {
+      verbose = true;
     } else {
-      throw new Error(`Unsupported option: '${arg}'. Supported options: --keyword, --profile, --statuses, --limit, --dry-run, --persist`);
+      throw new Error(`Unsupported option: '${arg}'. Supported options: --keyword, --profile, --statuses, --limit, --dry-run, --persist, --verbose`);
     }
   }
 
-  return { keyword, profile, statuses, limit, dryRun: !persist };
+  return { keyword, profile, statuses, limit, dryRun: !persist, verbose };
 }
 
 async function main() {
@@ -65,14 +68,24 @@ async function main() {
 
     console.log('\n📊 Ingestion Run Execution Summary:');
     console.log(`-----------------------------------`);
-    console.log(`  • Run ID:           ${summary.ingestionRunId}`);
-    console.log(`  • Mode:             ${summary.dryRun ? 'DRY RUN' : 'PERSISTED TO DB'}`);
-    console.log(`  • Status:           ${summary.status}`);
-    console.log(`  • Records Discovered: ${summary.recordsDiscovered}`);
-    console.log(`  • Records Created:    ${summary.recordsCreated}`);
-    console.log(`  • Records Updated:    ${summary.recordsUpdated}`);
-    console.log(`  • Records Unchanged:  ${summary.recordsUnchanged}`);
-    console.log(`  • Records Failed:     ${summary.recordsFailed}`);
+    console.log(`  • Run ID:                        ${summary.ingestionRunId}`);
+    console.log(`  • Mode:                          ${summary.dryRun ? 'DRY RUN (No DB changes)' : 'PERSISTED TO DB'}`);
+    console.log(`  • Status:                        ${summary.status}`);
+    console.log(`  • Raw Search Hits Discovered:    ${summary.rawSearchHitsCount}`);
+    console.log(`  • Detailed Records Inspected:    ${summary.recordsInspected}`);
+    console.log(`  • Records Excluded:              ${summary.recordsExcluded}`);
+    console.log(`    - EXCLUDED_FOREIGN_ONLY:         ${summary.exclusionReasonsCount.EXCLUDED_FOREIGN_ONLY || 0}`);
+    console.log(`    - EXCLUDED_CONTEXTUALLY_IRRELEVANT: ${summary.exclusionReasonsCount.EXCLUDED_CONTEXTUALLY_IRRELEVANT || 0}`);
+    console.log(`    - EXCLUDED_RFI:                  ${summary.exclusionReasonsCount.EXCLUDED_RFI || 0}`);
+    console.log(`    - EXCLUDED_INVITED_ONLY:         ${summary.exclusionReasonsCount.EXCLUDED_INVITED_ONLY || 0}`);
+    console.log(`    - EXCLUDED_REIMBURSEMENT_PROGRAM: ${summary.exclusionReasonsCount.EXCLUDED_REIMBURSEMENT_PROGRAM || 0}`);
+    console.log(`  • Records Deduplicated:          ${summary.recordsDeduplicated}`);
+    console.log(`  • Records Accepted:              ${summary.recordsAccepted}`);
+    console.log(`  • Records Created:               ${summary.recordsCreated}`);
+    console.log(`  • Records Updated:               ${summary.recordsUpdated}`);
+    console.log(`  • Records Unchanged:             ${summary.recordsUnchanged}`);
+    console.log(`  • Records Failed:                ${summary.recordsFailed}`);
+    console.log(`  • Persisted Opportunity Numbers: ${summary.persistedOpportunityNumbers.length > 0 ? summary.persistedOpportunityNumbers.join(', ') : 'None'}`);
 
     if (summary.errorSummary) {
       console.warn(`\n⚠️ Error Summary: ${summary.errorSummary}`);

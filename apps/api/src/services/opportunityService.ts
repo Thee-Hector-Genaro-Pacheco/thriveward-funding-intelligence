@@ -95,6 +95,18 @@ export class OpportunityService {
       }
     }
 
+    // Exclude IRRELEVANT opportunities from active candidates feed unless explicitly requested
+    if (options.pursuitStage !== 'DISMISSED' && options.relevanceStatus !== 'IRRELEVANT') {
+      where.NOT = {
+        relevanceAnalyses: {
+          some: {
+            isCurrent: true,
+            relevanceStatus: 'IRRELEVANT',
+          },
+        },
+      };
+    }
+
     // Filter by sourceSystem (e.g. GRANTS_GOV, DEMO_FIXTURE)
     if (options.sourceSystem) {
       where.sourceSystem = options.sourceSystem.toUpperCase();

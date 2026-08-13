@@ -3,6 +3,7 @@ import { prisma } from '../lib/prisma';
 import { GrantsGovClient } from '../integrations/grantsGov/grantsGovClient';
 import { GrantsGovMapper } from '../integrations/grantsGov/grantsGovMapper';
 import { GrantsGovSearchHit } from '../integrations/grantsGov/grantsGovTypes';
+import { ExclusionGateEngine, ExclusionReason } from './exclusionGateEngine';
 
 export interface IngestionOptions {
   keyword?: string;
@@ -16,11 +17,17 @@ export interface IngestionSummary {
   ingestionRunId: string;
   sourceSystem: string;
   dryRun: boolean;
-  recordsDiscovered: number;
+  rawSearchHitsCount: number;
+  recordsInspected: number;
+  recordsExcluded: number;
+  exclusionReasonsCount: Record<string, number>;
+  recordsDeduplicated: number;
+  recordsAccepted: number;
   recordsCreated: number;
   recordsUpdated: number;
   recordsUnchanged: number;
   recordsFailed: number;
+  persistedOpportunityNumbers: string[];
   status: 'COMPLETED' | 'PARTIAL_SUCCESS' | 'FAILED';
   errorSummary?: string;
 }
@@ -47,11 +54,11 @@ export class IngestionService {
   }
 
   /**
-   * Execute Grants.gov ingestion run with dry-run / persist options, identity invariants, idempotency, and field-ownership protection.
+   * Execute Grants.gov ingestion run with detail-level exclusion gates, deduplication, and limit enforcement after filtering.
    */
   async ingestFromGrantsGov(options: IngestionOptions): Promise<IngestionSummary> {
     const isDryRun = options.dryRun !== false;
-    const limit = Math.min(options.limit || 3, 10);
+    const targetLimit = Math.min(options.limit || 3, 20);
     const searchStatuses = options.statuses || 'forecasted|posted';
 
     let runId = `dry-run-${Date.now()}`;
@@ -63,7 +70,7 @@ export class IngestionService {
             keyword: options.keyword || '',
             profile: options.profile || null,
             statuses: searchStatuses,
-            limit,
+            limit: targetLimit,
           },
           status: 'IN_PROGRESS',
         },
@@ -71,15 +78,27 @@ export class IngestionService {
       runId = run.id;
     }
 
-    let recordsDiscovered = 0;
+    let rawSearchHitsCount = 0;
+    let recordsInspected = 0;
+    let recordsExcluded = 0;
+    let recordsDeduplicated = 0;
+    let recordsAccepted = 0;
     let recordsCreated = 0;
     let recordsUpdated = 0;
     let recordsUnchanged = 0;
     let recordsFailed = 0;
+    const persistedOpportunityNumbers: string[] = [];
     const errors: string[] = [];
 
+    const exclusionReasonsCount: Record<string, number> = {
+      EXCLUDED_FOREIGN_ONLY: 0,
+      EXCLUDED_CONTEXTUALLY_IRRELEVANT: 0,
+      EXCLUDED_RFI: 0,
+      EXCLUDED_INVITED_ONLY: 0,
+      EXCLUDED_REIMBURSEMENT_PROGRAM: 0,
+    };
+
     try {
-      // Collect hits (either single keyword or multi-term profile)
       const hitsMap = new Map<string, { hit: GrantsGovSearchHit; searchTerms: Set<string> }>();
 
       if (options.profile === 'bridge-forward') {
@@ -88,15 +107,18 @@ export class IngestionService {
             const searchRes = await this.client.searchOpportunities({
               keyword: term,
               oppStatuses: searchStatuses,
-              rows: limit,
+              rows: 25,
             });
             const hits = searchRes.opportunityHits || [];
+            rawSearchHitsCount += hits.length;
+
             for (const h of hits) {
               const extId = String(h.id);
               if (!hitsMap.has(extId)) {
                 hitsMap.set(extId, { hit: h, searchTerms: new Set([term]) });
               } else {
                 hitsMap.get(extId)?.searchTerms.add(term);
+                recordsDeduplicated++;
               }
             }
           } catch (err: any) {
@@ -108,9 +130,10 @@ export class IngestionService {
         const searchRes = await this.client.searchOpportunities({
           keyword,
           oppStatuses: searchStatuses,
-          rows: limit,
+          rows: 25,
         });
         const hits = searchRes.opportunityHits || [];
+        rawSearchHitsCount = hits.length;
         for (const h of hits) {
           const extId = String(h.id);
           hitsMap.set(extId, { hit: h, searchTerms: new Set([keyword]) });
@@ -118,31 +141,53 @@ export class IngestionService {
       }
 
       const uniqueHits = Array.from(hitsMap.values());
-      recordsDiscovered = uniqueHits.length;
 
-      for (const { hit, searchTerms } of uniqueHits.slice(0, limit)) {
+      for (const { hit, searchTerms } of uniqueHits) {
+        if (recordsAccepted >= targetLimit) {
+          break; // Stop after targetLimit accepted records have been processed
+        }
+
         try {
           const hitId = String(hit.id);
           const termsArray = Array.from(searchTerms);
 
-          // Dry run execution
-          if (isDryRun) {
-            try {
-              const detail = await this.client.fetchOpportunity(hitId);
-              GrantsGovMapper.mapDetailToOpportunity(detail);
-            } catch {
-              GrantsGovMapper.mapSearchHitToOpportunity(hit);
+          // Fetch full detail before deciding persistence
+          let detail: any;
+          try {
+            detail = await this.client.fetchOpportunity(hitId);
+          } catch (fetchErr: any) {
+            if (isDryRun) {
+              recordsInspected++;
+              recordsCreated++;
+              recordsAccepted++;
+              continue;
             }
+            throw fetchErr;
+          }
+
+          recordsInspected++;
+
+          const mapped = GrantsGovMapper.mapDetailToOpportunity(detail);
+
+          // Evaluate detail against exclusion gates
+          const exclusionCheck = ExclusionGateEngine.evaluate(mapped, detail);
+          if (exclusionCheck.isExcluded && exclusionCheck.exclusionReason) {
+            recordsExcluded++;
+            exclusionReasonsCount[exclusionCheck.exclusionReason] =
+              (exclusionReasonsCount[exclusionCheck.exclusionReason] || 0) + 1;
+            continue; // REJECT before persistence
+          }
+
+          recordsAccepted++;
+          persistedOpportunityNumbers.push(mapped.fundingOpportunityNumber);
+
+          if (isDryRun) {
             recordsCreated++;
             continue;
           }
 
-          // PERSISTED IMPORT REQUIRES VALIDATED fetchOpportunity DETAIL RESPONSE
-          const detail = await this.client.fetchOpportunity(hitId);
-          const mapped = GrantsGovMapper.mapDetailToOpportunity(detail);
-
           if (mapped.externalOpportunityId !== hitId) {
-            throw new Error(`Identity Mismatch: Requested opp ID '${hitId}' does not match response detail ID '${mapped.externalOpportunityId}'`);
+            throw new Error(`Identity Mismatch: Requested opp ID '${hitId}' does not match detail ID '${mapped.externalOpportunityId}'`);
           }
 
           const expectedUrl = `https://www.grants.gov/search-results-detail/${hitId}`;
@@ -150,11 +195,7 @@ export class IngestionService {
             throw new Error(`Identity Mismatch: Mapped source URL '${mapped.sourceUrl}' does not match expected '${expectedUrl}'`);
           }
 
-          const payloadHash = crypto
-            .createHash('sha256')
-            .update(JSON.stringify(detail))
-            .digest('hex');
-
+          const payloadHash = crypto.createHash('sha256').update(JSON.stringify(detail)).digest('hex');
           const now = new Date();
 
           const existing = await prisma.fundingOpportunity.findUnique({
@@ -163,9 +204,6 @@ export class IngestionService {
                 sourceSystem: 'GRANTS_GOV',
                 externalOpportunityId: mapped.externalOpportunityId,
               },
-            },
-            include: {
-              fundingSource: true,
             },
           });
 
@@ -214,6 +252,7 @@ export class IngestionService {
                 awardMin: mapped.awardMin,
                 awardMax: mapped.awardMax,
                 totalAvailableFunding: mapped.totalAvailableFunding,
+                geography: mapped.geography,
                 eligibleApplicantTypes: mapped.eligibleApplicantTypes,
                 eligiblePopulations: mapped.eligiblePopulations,
                 allowableCosts: mapped.allowableCosts,
@@ -316,7 +355,7 @@ export class IngestionService {
           data: {
             completionTime: new Date(),
             status: finalStatus,
-            recordsDiscovered,
+            recordsDiscovered: rawSearchHitsCount,
             recordsCreated,
             recordsUpdated,
             recordsUnchanged,
@@ -330,11 +369,17 @@ export class IngestionService {
         ingestionRunId: runId,
         sourceSystem: 'GRANTS_GOV',
         dryRun: isDryRun,
-        recordsDiscovered,
+        rawSearchHitsCount,
+        recordsInspected,
+        recordsExcluded,
+        exclusionReasonsCount,
+        recordsDeduplicated,
+        recordsAccepted,
         recordsCreated,
         recordsUpdated,
         recordsUnchanged,
         recordsFailed,
+        persistedOpportunityNumbers,
         status: finalStatus,
         errorSummary: errors.length > 0 ? errors.join('; ') : undefined,
       };

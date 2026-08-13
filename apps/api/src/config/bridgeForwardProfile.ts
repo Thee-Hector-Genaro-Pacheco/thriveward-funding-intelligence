@@ -30,7 +30,7 @@ export interface BridgeForwardProfile {
 
 export const BRIDGE_FORWARD_PROFILE: BridgeForwardProfile = {
   profileId: 'bridge-forward-org-profile',
-  profileVersion: '1.1.0-phase1d',
+  profileVersion: '1.1.1-phase1d',
   effectiveDate: '2026-08-12',
   organizationName: 'Bridge Forward Foundation',
   organizationStage: 'PRE_INCORPORATION',
@@ -57,30 +57,33 @@ export const BRIDGE_FORWARD_PROFILE: BridgeForwardProfile = {
   ],
   targetPopulations: [
     'Justice-involved adults',
-    'System-impacted young adults',
+    'System-impacted young people',
   ],
   primaryPopulations: [
     'Justice-involved adults',
-    'System-impacted young adults',
+    'System-impacted young people',
   ],
   primaryLaunchModel: 'Individualized reentry support',
   plannedProgram: 'Controls to Code',
   coreServices: [
+    'Housing and basic-needs stabilization (planned)',
+    'Individualized reentry support',
     'Career-connected education',
+    'Technology and skilled-trades training',
     'Mentorship',
-    'Workforce development',
-    'Employer partnerships',
-    'Continued follow-up',
+    'Employment pathways',
+    'Sustained community support',
   ],
   primaryOutcome: 'Successful reentry and long-term independence',
   missionStatement:
-    'Bridge Forward Foundation advances successful reentry and long-term independence for justice-involved adults and system-impacted young adults through individualized support, career-connected education, mentorship, workforce development, employer partnerships, and sustained follow-up.',
+    'Bridge Forward Foundation advances successful reentry and long-term independence for justice-involved adults and system-impacted young people through housing and basic-needs stabilization, individualized reentry support, career-connected education, technology and skilled-trades training, mentorship, employment pathways, and sustained community support.',
   programModels: [
     'Bridge Inside',
     'Bridge Reentry',
     'Bridge Career Pathways',
     'Controls to Code',
     'Bridge Work',
+    'Housing & Stabilization (Planned)',
   ],
   participantSupportPriorities: [
     'Training Stipends',
@@ -98,8 +101,9 @@ export const BRIDGE_FORWARD_PROFILE: BridgeForwardProfile = {
     'No Cohort Outcomes',
     'No Past Job Placement Metrics',
     'Employer Partnerships In Development',
-    'No Government Contracts',
+    'Government Contracts Not Obtained',
     'SAM.gov/UEI Registration UNKNOWN',
+    'Housing & Rental Assistance Planned (Not Currently Operational)',
   ],
 };
 

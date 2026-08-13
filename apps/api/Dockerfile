@@ -1,4 +1,6 @@
-FROM node:20-alpine AS builder
+FROM node:20-slim AS builder
+
+RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -11,7 +13,9 @@ RUN npx prisma generate --schema=apps/api/prisma/schema.prisma
 RUN npm run build --workspace=packages/shared
 RUN npm run build --workspace=apps/api
 
-FROM node:20-alpine AS runner
+FROM node:20-slim AS runner
+
+RUN apt-get update && apt-get install -y openssl ca-certificates && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

@@ -323,21 +323,21 @@ model AnalysisReview {
 }
 
 model OpportunityRelevance {
-  id                   String               @id @default(uuid())
+  id                   String             @id @default(uuid())
   fundingOpportunityId String
-  fundingOpportunity   FundingOpportunity   @relation(fields: [fundingOpportunityId], references: [id], onDelete: Cascade)
-  relevanceStatus      RelevanceStatus      @default(UNKNOWN)
-  relevanceScore       Int                  @default(0)
+  fundingOpportunity   FundingOpportunity @relation(fields: [fundingOpportunityId], references: [id], onDelete: Cascade)
+  relevanceStatus      RelevanceStatus    @default(UNKNOWN)
+  relevanceScore       Int                @default(0)
   positiveReasons      String[]
   exclusionReasons     String[]
   explanation          String
   evidenceFields       String[]
-  analysisVersion      String               @default("1.0")
-  profileVersion       String               @default("1.1.0-phase1d")
+  analysisVersion      String             @default("1.0")
+  profileVersion       String             @default("1.1.0-phase1d")
   profileHash          String
-  isCurrent            Boolean              @default(true)
-  createdAt            DateTime             @default(now())
-  updatedAt            DateTime             @updatedAt
+  isCurrent            Boolean            @default(true)
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
 
   citations RelevanceCitation[]
 }

@@ -135,7 +135,7 @@ export const BRIDGE_FORWARD_PROFILE: BridgeOrganizationProfile = {
   coreModel:
     'Individualized reentry support combined with career-connected education, mentorship, workforce development, employer partnerships, and continued follow-up.',
   missionStatement:
-    'Bridge Forward Foundation advances successful reentry and long-term independence for justice-involved adults and system-impacted young adults through individualized support, career-connected education, mentorship, workforce development, employer partnerships, and sustained follow-up.',
+    'Bridge Forward Foundation advances successful reentry and long-term independence for justice-involved adults and system-impacted young people through housing and basic-needs stabilization, individualized reentry support, career-connected education, technology and skilled-trades training, mentorship, employment pathways, and sustained community support.',
   programs: [
     { name: 'Bridge Inside', description: 'Pre-release preparation and reentry planning.', isOperational: true },
     { name: 'Bridge Reentry', description: 'Individualized Bridge Plans, mentorship, life skills.', isOperational: true },
@@ -175,20 +175,38 @@ export function sanitizeHtmlToText(rawInput: string | null | undefined): string 
   // 3. Strip all remaining HTML tags
   text = text.replace(/<[^>]+>/g, ' ');
 
-  // 4. Decode HTML entities
+  // 4. Decode HTML entities (named and numeric)
   text = text
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
+    .replace(/&ldquo;/gi, '"')
+    .replace(/&rdquo;/gi, '"')
+    .replace(/&lsquo;/gi, "'")
+    .replace(/&rsquo;/gi, "'")
+    .replace(/&quot;/gi, '"')
     .replace(/&#39;/g, "'")
-    .replace(/&apos;/g, "'")
-    .replace(/&nbsp;/g, ' ');
+    .replace(/&apos;/gi, "'")
+    .replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&mdash;/gi, '—')
+    .replace(/&ndash;/gi, '–');
 
-  // Numeric decimal entities (e.g. &#8217;)
-  text = text.replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(Number(dec)));
-  // Numeric hex entities (e.g. &#x2013;)
-  text = text.replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+  // Numeric decimal entities (e.g. &#8220;, &#8221;, &#8217;)
+  text = text.replace(/&#(\d+);/g, (_, dec) => {
+    const num = Number(dec);
+    if (num === 8220 || num === 8221) return '"';
+    if (num === 8216 || num === 8217) return "'";
+    if (num === 8211) return '–';
+    if (num === 8212) return '—';
+    return String.fromCharCode(num);
+  });
+  // Numeric hex entities (e.g. &#x201c;)
+  text = text.replace(/&#x([0-9a-f]+);/gi, (_, hex) => {
+    const num = parseInt(hex, 16);
+    if (num === 0x201c || num === 0x201d) return '"';
+    if (num === 0x2018 || num === 0x2019) return "'";
+    return String.fromCharCode(num);
+  });
 
   // 5. Normalize whitespace
   text = text.replace(/[ \t]+/g, ' ');

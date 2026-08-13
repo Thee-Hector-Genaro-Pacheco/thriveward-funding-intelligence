@@ -8,16 +8,24 @@ async function main() {
   // 1. Organization Profile (Bridge Forward Foundation)
   const orgProfile = await prisma.organizationProfile.upsert({
     where: { id: 'demo-org-profile-001' },
-    update: {},
+    update: {
+      name: 'Bridge Forward Foundation',
+      status: 'PRE_INCORPORATION',
+      taxStatus: 'NOT_OBTAINED',
+      primaryPopulations: ['Justice-involved adults', 'System-impacted young people'],
+      primaryOutcome: 'Successful reentry and long-term independence',
+      coreModel:
+        'Bridge Forward Foundation advances successful reentry and long-term independence for justice-involved adults and system-impacted young people through housing and basic-needs stabilization, individualized reentry support, career-connected education, technology and skilled-trades training, mentorship, employment pathways, and sustained community support.',
+    },
     create: {
       id: 'demo-org-profile-001',
       name: 'Bridge Forward Foundation',
       status: 'PRE_INCORPORATION',
       taxStatus: 'NOT_OBTAINED',
-      primaryPopulations: ['Justice-involved adults', 'System-impacted young adults'],
+      primaryPopulations: ['Justice-involved adults', 'System-impacted young people'],
       primaryOutcome: 'Successful reentry and long-term independence',
       coreModel:
-        'Individualized reentry support combined with career-connected education, mentorship, workforce development, employer partnerships, and continued follow-up.',
+        'Bridge Forward Foundation advances successful reentry and long-term independence for justice-involved adults and system-impacted young people through housing and basic-needs stabilization, individualized reentry support, career-connected education, technology and skilled-trades training, mentorship, employment pathways, and sustained community support.',
       limitations: [
         'Organization has not yet incorporated.',
         '501(c)(3) status has not yet been obtained.',
@@ -26,6 +34,7 @@ async function main() {
         'No employment outcomes should be claimed.',
         'Employer partnerships are currently being developed.',
         'Government contracts have not been obtained.',
+        'Housing and rental assistance planned (not currently operational).',
       ],
       programs: {
         create: [
