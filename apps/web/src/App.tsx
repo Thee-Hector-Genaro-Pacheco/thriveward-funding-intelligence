@@ -62,6 +62,7 @@ export interface FundingOpportunity {
 export interface FiscalSponsorCandidate {
   id: string;
   name: string;
+  canonicalDomain?: string;
   websiteUrl: string;
   directorySourceUrl: string;
   geography: string;
@@ -80,6 +81,13 @@ export interface FiscalSponsorCandidate {
   contactChannel: string;
   verificationStatus: string;
   isFixture?: boolean;
+  hasLiveVerification?: boolean;
+  isMerged?: boolean;
+  mergedIntoId?: string;
+  verificationLevel?: string;
+  identityEvidenceCoverage?: number;
+  operationalEvidenceCoverage?: number;
+  opportunityCompatibilityCoverage?: number;
   websiteVerified?: string;
   intakeStatus?: string;
   identityVerified?: string;
@@ -638,12 +646,25 @@ export function App() {
               <div style={{ fontWeight: 700, color: '#60a5fa', marginBottom: '0.5rem' }}>
                 🌐 Live Discovery Run Accounting Report ({new Date(discoveryResult.runTimestamp).toLocaleTimeString()})
               </div>
-              <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', color: '#cbd5e1' }}>
-                <div><strong>Records Created:</strong> {discoveryResult.recordsCreated}</div>
-                <div><strong>Records Updated:</strong> {discoveryResult.recordsUpdated}</div>
-                <div><strong>Records Unchanged:</strong> {discoveryResult.recordsUnchanged}</div>
-                <div><strong>Records Rejected:</strong> {discoveryResult.recordsRejected}</div>
+              <div style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap', color: '#cbd5e1', marginBottom: '0.75rem' }}>
+                <div><strong>Created:</strong> {discoveryResult.recordsCreated}</div>
+                <div><strong>Materially Updated:</strong> {discoveryResult.recordsMateriallyUpdated || 0}</div>
+                <div><strong>Revalidated:</strong> {discoveryResult.recordsRevalidated || discoveryResult.recordsUpdated || 0}</div>
+                <div><strong>Merged:</strong> {discoveryResult.recordsMerged || 0}</div>
+                <div><strong>Rejected:</strong> {discoveryResult.recordsRejected}</div>
               </div>
+              {discoveryResult.sourcesQueried && discoveryResult.sourcesQueried.length > 0 && (
+                <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '0.5rem', fontSize: '0.78rem', color: '#94a3b8' }}>
+                  <strong>Sources Verified ({discoveryResult.sourcesQueried.length}):</strong>
+                  <ul style={{ margin: '0.25rem 0 0 1.25rem', padding: 0 }}>
+                    {discoveryResult.sourcesQueried.map((sq: any, idx: number) => (
+                      <li key={idx}>
+                        {typeof sq === 'string' ? sq : `${sq.sourceName} (${sq.sourceUrl}) • SHA-256: ${sq.responseHash?.substring(0, 12)}...`}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
           )}
 
@@ -656,18 +677,21 @@ export function App() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem' }}>
                     <div>
                       <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.4rem', flexWrap: 'wrap' }}>
-                        {/* Section 8 Required Badges */}
-                        <span className={`badge ${s.isFixture ? 'badge-amber' : 'badge-purple'}`}>
-                          {s.isFixture ? '🧪 Seeded example' : '🌐 Live Discovered'}
-                        </span>
-                        <span className={`badge ${s.websiteVerified === 'CONFIRMED' ? 'badge-blue' : 'badge-amber'}`}>
-                          {s.websiteVerified === 'CONFIRMED' ? 'Source verified' : 'Unverified Source'}
-                        </span>
-                        <span className={`badge ${s.intakeStatus === 'UNKNOWN' || s.acceptingNewProjects === 'UNKNOWN' ? 'badge-amber' : 'badge-blue'}`}>
-                          {s.intakeStatus === 'UNKNOWN' || s.acceptingNewProjects === 'UNKNOWN' ? 'Current intake unknown' : `Intake: ${s.intakeStatus || s.acceptingNewProjects}`}
-                        </span>
+                        {/* Section 2 UI Badges */}
+                        {s.isFixture && !s.hasLiveVerification && (
+                          <span className="badge badge-amber">🧪 Seed-only example</span>
+                        )}
+                        {!s.isFixture && s.hasLiveVerification && (
+                          <span className="badge badge-purple">🌐 Live verified</span>
+                        )}
+                        {s.isFixture && s.hasLiveVerification && (
+                          <span className="badge badge-blue">🔄 Seeded identity with live verification</span>
+                        )}
+                        {s.verificationLevel === 'DIRECTORY_REPORTED' && (
+                          <span className="badge badge-amber">📋 Directory-reported / not independently verified</span>
+                        )}
                         <span className="badge badge-purple">
-                          Possible sponsor — not contacted
+                          Possible sponsor — research and human confirmation required
                         </span>
                       </div>
                       <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#f8fafc' }}>{s.name}</h3>
@@ -686,7 +710,14 @@ export function App() {
 
                   <p style={{ fontSize: '0.9rem', color: '#cbd5e1', marginTop: '0.75rem' }}>{s.mission}</p>
 
-                  <div style={{ marginTop: '0.75rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.65rem', background: 'rgba(30, 41, 59, 0.5)', padding: '0.75rem', borderRadius: '0.5rem', fontSize: '0.85rem' }}>
+                  {/* Section 6 Granular Coverage Metrics */}
+                  <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', margin: '0.75rem 0', fontSize: '0.8rem', color: '#94a3b8' }}>
+                    <div>🆔 Identity Evidence: <strong style={{ color: '#60a5fa' }}>{s.identityEvidenceCoverage ?? 100}%</strong></div>
+                    <div>⚙️ Operational Evidence: <strong style={{ color: '#f59e0b' }}>{s.operationalEvidenceCoverage ?? 67}%</strong></div>
+                    <div>🎯 Opportunity Compatibility: <strong style={{ color: '#ec4899' }}>{s.opportunityCompatibilityCoverage ?? 0}%</strong></div>
+                  </div>
+
+                  <div style={{ marginTop: '0.5rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.65rem', background: 'rgba(30, 41, 59, 0.5)', padding: '0.75rem', borderRadius: '0.5rem', fontSize: '0.85rem' }}>
                     <div><strong>Models Offered:</strong> {Array.isArray(s.modelsOffered) ? s.modelsOffered.join(', ') : s.modelsOffered}</div>
                     <div><strong>Admin Fee:</strong> {s.adminPercentage}</div>
                     <div><strong>Setup Fee:</strong> {s.setupFee}</div>

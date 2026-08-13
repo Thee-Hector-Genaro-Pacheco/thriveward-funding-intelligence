@@ -470,7 +470,19 @@ model FiscalSponsorCandidate {
   internalNotes          String?
 
   // Phase 1E Source Accuracy & Granular Verification
-  isFixture                             Boolean   @default(false)
+  isFixture           Boolean @default(false)
+  hasLiveVerification Boolean @default(false)
+  canonicalDomain     String  @default("")
+  ein                 String?
+  isMerged            Boolean @default(false)
+  mergedIntoId        String?
+  verificationLevel   String  @default("DIRECTORY_REPORTED")
+
+  // Granular Evidence Coverage Metrics (0–100%)
+  identityEvidenceCoverage         Int @default(0)
+  operationalEvidenceCoverage      Int @default(0)
+  opportunityCompatibilityCoverage Int @default(0)
+
   identityVerified                      String    @default("UNKNOWN")
   websiteVerified                       String    @default("UNKNOWN")
   intakeStatus                          String    @default("UNKNOWN")
@@ -486,6 +498,9 @@ model FiscalSponsorCandidate {
 
   citations          SponsorSourceCitation[]
   opportunityMatches OpportunitySponsorMatch[]
+
+  @@index([canonicalDomain])
+  @@index([isMerged])
 }
 
 model SponsorSourceCitation {
@@ -495,7 +510,25 @@ model SponsorSourceCitation {
   sourceUrl                String
   quotedSection            String?
   extractedClaim           String
+  verificationLevel        String                 @default("DIRECTORY_REPORTED")
+  fetchedAt                DateTime               @default(now())
+  responseHash             String?
   verificationDate         DateTime               @default(now())
+}
+
+model SponsorDiscoveryQueryLog {
+  id               String   @id @default(uuid())
+  sourceName       String
+  sourceUrl        String
+  sourceType       String   @default("DIRECTORY_INDEX")
+  requestAttempted Boolean  @default(true)
+  httpStatus       Int      @default(200)
+  fetchedAt        DateTime @default(now())
+  responseHash     String
+  candidatesParsed Int      @default(0)
+  recordsRejected  Int      @default(0)
+  rejectionReasons String[] @default([])
+  createdAt        DateTime @default(now())
 }
 
 model StrategicPartnerCandidate {

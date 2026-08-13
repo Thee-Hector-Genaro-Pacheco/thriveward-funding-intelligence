@@ -40,14 +40,18 @@ export interface CreateSponsorCandidateInput {
 
 export class FiscalSponsorService {
   /**
-   * List all fiscal sponsor candidates in the directory.
+   * List all active fiscal sponsor candidates in the directory (excluding merged aliases).
    */
   public static async listCandidates(filter?: {
     verificationStatus?: string;
     acceptingNewProjects?: string;
     isFixture?: boolean;
+    includeMerged?: boolean;
   }) {
     const where: any = {};
+    if (!filter?.includeMerged) {
+      where.isMerged = false;
+    }
     if (filter?.verificationStatus) {
       where.verificationStatus = filter.verificationStatus;
     }
@@ -146,58 +150,214 @@ export class FiscalSponsorService {
   }
 
   /**
-   * Match fiscal sponsors against a specific opportunity requiring a fiscal sponsor.
+   * Helper to normalize a website or source URL into a canonical domain identifier.
    */
-  public static async matchOpportunityToSponsors(fundingOpportunityId: string) {
+  public static extractCanonicalDomain(url: string): string {
+    if (!url) return '';
+    return url
+      .toLowerCase()
+      .replace(/^https?:\/\//, '')
+      .replace(/^portal\./, '')
+      .replace(/^www\./, '')
+      .replace(/\/.*$/, '')
+      .trim();
+  }
+
+  /**
+   * Reconciles duplicate fiscal sponsor candidates by canonical domain.
+   * Merges duplicate candidates into a single canonical record, re-links citations & matches,
+   * and marks merged candidates with `isMerged: true` and `mergedIntoId`.
+   */
+  public static async reconcileDuplicateSponsors(): Promise<{ mergedCount: number }> {
+    const allCandidates = await prisma.fiscalSponsorCandidate.findMany({
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const domainMap = new Map<string, typeof allCandidates>();
+    for (const candidate of allCandidates) {
+      const domain = candidate.canonicalDomain || this.extractCanonicalDomain(candidate.websiteUrl);
+      if (!domain) continue;
+      const list = domainMap.get(domain) || [];
+      list.push(candidate);
+      domainMap.set(domain, list);
+    }
+
+    let mergedCount = 0;
+
+    for (const [domain, candidates] of domainMap.entries()) {
+      if (candidates.length <= 1) {
+        if (candidates.length === 1 && !candidates[0].canonicalDomain) {
+          await prisma.fiscalSponsorCandidate.update({
+            where: { id: candidates[0].id },
+            data: { canonicalDomain: domain },
+          });
+        }
+        continue;
+      }
+
+      // Designate canonical candidate (prefer fixture or live-verified record or oldest)
+      const canonical = candidates.find((c) => c.isFixture || c.hasLiveVerification) || candidates[0];
+
+      if (!canonical.canonicalDomain) {
+        await prisma.fiscalSponsorCandidate.update({
+          where: { id: canonical.id },
+          data: { canonicalDomain: domain },
+        });
+      }
+
+      const duplicates = candidates.filter((c) => c.id !== canonical.id);
+
+      for (const dup of duplicates) {
+        if (dup.isMerged) continue;
+
+        // Re-link citations
+        await prisma.sponsorSourceCitation.updateMany({
+          where: { fiscalSponsorCandidateId: dup.id },
+          data: { fiscalSponsorCandidateId: canonical.id },
+        });
+
+        // Re-link opportunity matches
+        const dupMatches = await prisma.opportunitySponsorMatch.findMany({
+          where: { fiscalSponsorCandidateId: dup.id },
+        });
+
+        for (const match of dupMatches) {
+          const existingMatch = await prisma.opportunitySponsorMatch.findFirst({
+            where: {
+              fundingOpportunityId: match.fundingOpportunityId,
+              fiscalSponsorCandidateId: canonical.id,
+            },
+          });
+          if (existingMatch) {
+            await prisma.opportunitySponsorMatch.delete({ where: { id: match.id } });
+          } else {
+            await prisma.opportunitySponsorMatch.update({
+              where: { id: match.id },
+              data: { fiscalSponsorCandidateId: canonical.id },
+            });
+          }
+        }
+
+        // Mark duplicate as merged
+        await prisma.fiscalSponsorCandidate.update({
+          where: { id: dup.id },
+          data: {
+            isMerged: true,
+            mergedIntoId: canonical.id,
+            canonicalDomain: domain,
+          },
+        });
+        mergedCount++;
+      }
+    }
+
+    return { mergedCount };
+  }
+
+  /**
+   * Calculates granular evidence coverage metrics (0–100%) for a sponsor candidate.
+   */
+  public static calculateCoverageMetrics(candidate: {
+    websiteVerified?: string;
+    identityVerified?: string;
+    sponsorshipModelsVerified?: string;
+    intakeStatus?: string;
+    feeVerified?: string;
+    leadTimeVerified?: string;
+    governmentGrantAdministrationVerified?: string;
+    administersGovGrants?: string;
+    samUeiStatus?: string;
+    opportunitySpecificCompatibility?: string;
+  }) {
+    // 1. Identity Evidence Coverage (% of confirmed identity & website)
+    const identityFields = [
+      candidate.identityVerified === 'CONFIRMED',
+      candidate.websiteVerified === 'CONFIRMED',
+    ];
+    const identityEvidenceCoverage = Math.round(
+      (identityFields.filter(Boolean).length / identityFields.length) * 100
+    );
+
+    // 2. Operational Evidence Coverage (% of confirmed fees, lead times, intake, models, gov grant admin)
+    const operationalFields = [
+      candidate.sponsorshipModelsVerified === 'CONFIRMED',
+      candidate.intakeStatus !== 'UNKNOWN',
+      candidate.feeVerified === 'CONFIRMED',
+      candidate.leadTimeVerified === 'CONFIRMED',
+      candidate.governmentGrantAdministrationVerified === 'CONFIRMED' || candidate.administersGovGrants === 'YES',
+    ];
+    const operationalEvidenceCoverage = Math.round(
+      (operationalFields.filter(Boolean).length / operationalFields.length) * 100
+    );
+
+    // 3. Opportunity Compatibility Coverage (% of confirmed solicitation-specific eligibility, SAM/UEI, willingness)
+    const compatibilityFields = [
+      candidate.samUeiStatus !== 'UNKNOWN' && candidate.samUeiStatus?.toLowerCase().includes('verified'),
+      candidate.opportunitySpecificCompatibility !== 'HUMAN_CONFIRMATION_REQUIRED' && candidate.opportunitySpecificCompatibility === 'CONFIRMED',
+    ];
+    const opportunityCompatibilityCoverage = Math.round(
+      (compatibilityFields.filter(Boolean).length / compatibilityFields.length) * 100
+    );
+
+    return {
+      identityEvidenceCoverage,
+      operationalEvidenceCoverage,
+      opportunityCompatibilityCoverage,
+    };
+  }
+
+  /**
+   * Evaluates compatibility and generates opportunity-sponsor match records.
+   */
+  public static async matchOpportunityToSponsors(opportunityId: string) {
+    // Ensure duplicates are reconciled prior to matching
+    await this.reconcileDuplicateSponsors();
+
     const opp = await prisma.fundingOpportunity.findUnique({
-      where: { id: fundingOpportunityId },
+      where: { id: opportunityId },
     });
 
     if (!opp) {
-      throw new Error(`Opportunity #${fundingOpportunityId} not found`);
+      throw new Error(`Opportunity #${opportunityId} not found`);
     }
 
-    const candidates = await prisma.fiscalSponsorCandidate.findMany({
-      include: { citations: true },
-    });
-
+    const candidates = await this.listCandidates();
     const matches = [];
 
     for (const candidate of candidates) {
-      // Deterministic evidence-backed scoring
-      let score = 50; // Base score
-      const concerns: string[] = [];
-      const missingInfo: string[] = [];
+      let score = 50;
       const matchedLanes: string[] = [];
       const humanConfirmationRequired: string[] = [];
+      const concerns: string[] = [];
+      const missingInfo: string[] = [];
 
-      // 1. Geography evaluation
-      const candidateGeo = candidate.geography.toLowerCase();
-      if (candidateGeo.includes('california') || candidateGeo.includes('national') || candidateGeo.includes('southern california')) {
+      // 1. Mission and geographic alignment
+      if (candidate.geography.toLowerCase().includes('california')) {
         score += 15;
-        matchedLanes.push('California Geographic Coverage');
+        matchedLanes.push('California Regional Geography');
       } else {
         concerns.push(`Sponsor geography (${candidate.geography}) may not cover Bridge Forward service area.`);
       }
 
-      // 2. Government grant administration
+      // 2. Government grant administration capability
       if (candidate.administersGovGrants === 'YES') {
         score += 20;
-        matchedLanes.push('Government Grant Administration');
+        matchedLanes.push('Publishes government-grant administration services');
       } else if (candidate.administersGovGrants === 'UNKNOWN') {
         missingInfo.push('Confirm whether sponsor administers federal/state government grants');
-        humanConfirmationRequired.push('Verify federal grant administration policy');
+        humanConfirmationRequired.push('Verify government grant administration capability');
       } else {
         score -= 25;
-        concerns.push('Sponsor does not administer government grants');
+        concerns.push('Sponsor does not publish government grant administration capability');
       }
 
-      // 3. Federal grant capability (SAM/UEI)
+      // 3. Federal grant registration (SAM/UEI)
       if (candidate.federalGrantCapability.toLowerCase().includes('active') || candidate.samUeiStatus.toLowerCase().includes('verified')) {
         score += 15;
         matchedLanes.push('Active SAM.gov & UEI Federal Registration');
       } else if (candidate.samUeiStatus === 'UNKNOWN') {
         missingInfo.push('Verify sponsor active SAM.gov registration & UEI number');
+        humanConfirmationRequired.push('Federal registration status not independently verified');
       }
 
       // 4. Accepting new projects
@@ -222,22 +382,17 @@ export class FiscalSponsorService {
         }
       }
 
-      humanConfirmationRequired.push('Confirm willing to serve as legal applicant for this specific opportunity');
+      humanConfirmationRequired.push('Solicitation-specific legal-applicant willingness requires human confirmation');
 
       // 5. Fee & lead time implications
       const feeNotes = `Setup Fee: ${candidate.setupFee} • Admin Percentage: ${candidate.adminPercentage} • Est. Review Time: ${candidate.estimatedReviewTime}`;
 
-      // Calculate evidence coverage %
-      const knownFields = [
-        candidate.acceptingNewProjects !== 'UNKNOWN',
-        candidate.administersGovGrants !== 'UNKNOWN',
-        candidate.federalGrantCapability !== 'UNKNOWN',
-        candidate.samUeiStatus !== 'UNKNOWN',
-        candidate.setupFee !== 'UNKNOWN',
-        candidate.adminPercentage !== 'UNKNOWN',
-        candidate.estimatedReviewTime !== 'UNKNOWN',
-      ];
-      const evidenceCoverage = Math.round((knownFields.filter(Boolean).length / knownFields.length) * 100);
+      const { identityEvidenceCoverage, operationalEvidenceCoverage, opportunityCompatibilityCoverage } =
+        this.calculateCoverageMetrics(candidate);
+
+      const overallEvidenceCoverage = Math.round(
+        (identityEvidenceCoverage + operationalEvidenceCoverage + opportunityCompatibilityCoverage) / 3
+      );
 
       const finalScore = Math.max(0, Math.min(100, score));
 
@@ -251,17 +406,17 @@ export class FiscalSponsorService {
 
       const matchData = {
         matchScore: finalScore,
-        evidenceCoverage,
+        evidenceCoverage: overallEvidenceCoverage,
         matchedLanes,
         alignmentRationale: `Sponsor ${candidate.name} evaluated for ${opp.title}. Alignment score: ${finalScore}/100.`,
-        legalApplicantCapability: candidate.administersGovGrants === 'YES' ? 'Eligible Legal Applicant' : 'Requires Investigation',
-        govGrantAdminCapability: candidate.federalGrantCapability,
+        legalApplicantCapability: candidate.administersGovGrants === 'YES' ? 'Publishes government-grant administration services' : 'Requires Investigation',
+        govGrantAdminCapability: candidate.administersGovGrants === 'YES' ? 'Publishes government-grant administration services' : 'Federal registration status not independently verified',
         arrangementAllowed: 'Model A / Model F Fiscal Sponsorship',
         feeAndLeadTimeNotes: feeNotes,
         humanConfirmationRequired,
         concerns,
         missingInfo,
-        recommendedNextStep: finalScore >= 70 ? 'Schedule Discovery Call & Review Intake Form' : 'Conduct Preliminary Inquiry',
+        recommendedNextStep: 'Possible sponsor — research and human confirmation required',
       };
 
       let persisted;

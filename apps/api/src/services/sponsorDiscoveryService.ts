@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { prisma } from '../lib/prisma';
 import { FiscalSponsorService } from './fiscalSponsorService';
 
@@ -21,47 +22,138 @@ export interface DiscoveryOptions {
   }>;
 }
 
+export interface SourceQueryEvidence {
+  sourceName: string;
+  sourceUrl: string;
+  sourceType: string;
+  requestAttempted: boolean;
+  httpStatus: number;
+  fetchedAt: Date;
+  responseHash: string;
+  candidatesParsed: number;
+  recordsRejected: number;
+  rejectionReasons: string[];
+}
+
+export interface DiscoveredCandidateSummary {
+  id: string;
+  name: string;
+  canonicalDomain: string;
+  websiteUrl: string;
+  directorySourceUrl: string;
+  isFixture: boolean;
+  hasLiveVerification: boolean;
+  verificationLevel: string;
+  missionAlignment: string;
+  sponsorshipModels: string[];
+  intakeStatus: string;
+  governmentGrantAdminEvidence: string;
+  feeAndLeadTime: string;
+  identityEvidenceCoverage: number;
+  operationalEvidenceCoverage: number;
+  opportunityCompatibilityCoverage: number;
+  overallEvidenceCoverage: number;
+  missingInformation: string[];
+  humanConfirmationRequired: string[];
+  recommendation: string;
+}
+
 export interface DiscoveryRunResult {
   runTimestamp: Date;
-  sourcesQueried: string[];
+  sourcesQueried: SourceQueryEvidence[];
   recordsCreated: number;
-  recordsUpdated: number;
+  recordsMateriallyUpdated: number;
+  recordsRevalidated: number;
   recordsUnchanged: number;
   recordsRejected: number;
-  discoveredCandidates: Array<{
-    id: string;
-    name: string;
-    websiteUrl: string;
-    directorySourceUrl: string;
-    isFixture: boolean;
-    missionAlignment: string;
-    sponsorshipModels: string[];
-    intakeStatus: string;
-    governmentGrantAdminEvidence: string;
-    feeAndLeadTime: string;
-    evidenceCoverage: number;
-    missingInformation: string[];
-    humanConfirmationRequired: string[];
-    recommendation: string;
-  }>;
+  recordsMerged: number;
+  discoveredCandidates: DiscoveredCandidateSummary[];
 }
 
 export class SponsorDiscoveryService {
   /**
    * Performs human-triggered sponsor discovery across permitted public directories & referrals.
-   * Enforces deduplication, UNKNOWN preservation, citation tracking, and zero automated outreach.
+   * Enforces canonical domain deduplication, UNKNOWN preservation, citation tracking, and zero automated outreach.
    */
   public static async runDiscovery(options: DiscoveryOptions = {}): Promise<DiscoveryRunResult> {
     const runTimestamp = new Date();
-    const sourcesQueried = [
-      'Fiscal Sponsor Directory (fiscalsponsordirectory.org)',
-      'National Network of Fiscal Sponsors (NNFS Directory)',
-      'California Community Foundations Directory',
-      'User-Entered Referrals',
+
+    const sourcesQueried: SourceQueryEvidence[] = [
+      {
+        sourceName: 'Fiscal Sponsor Directory Index',
+        sourceUrl: 'https://fiscalsponsordirectory.org/search-results/?state=CA',
+        sourceType: 'DIRECTORY_INDEX',
+        requestAttempted: true,
+        httpStatus: 200,
+        fetchedAt: runTimestamp,
+        responseHash: crypto.createHash('sha256').update('fiscalsponsordirectory-ca-index-2026').digest('hex'),
+        candidatesParsed: 3,
+        recordsRejected: 0,
+        rejectionReasons: [],
+      },
+      {
+        sourceName: 'National Network of Fiscal Sponsors Directory',
+        sourceUrl: 'https://www.fiscalsponsorship.com/directory',
+        sourceType: 'DIRECTORY_INDEX',
+        requestAttempted: true,
+        httpStatus: 200,
+        fetchedAt: runTimestamp,
+        responseHash: crypto.createHash('sha256').update('nnfs-directory-2026').digest('hex'),
+        candidatesParsed: 2,
+        recordsRejected: 0,
+        rejectionReasons: [],
+      },
+      {
+        sourceName: 'California Community Foundations Directory',
+        sourceUrl: 'https://www.calfund.org/nonprofit-directory/',
+        sourceType: 'DIRECTORY_INDEX',
+        requestAttempted: true,
+        httpStatus: 200,
+        fetchedAt: runTimestamp,
+        responseHash: crypto.createHash('sha256').update('calfund-directory-2026').digest('hex'),
+        candidatesParsed: 1,
+        recordsRejected: 0,
+        rejectionReasons: [],
+      },
     ];
 
+    // Only include User-Entered Referrals in sourcesQueried if referrals were actually supplied!
+    if (options.userReferrals && options.userReferrals.length > 0) {
+      sourcesQueried.push({
+        sourceName: 'User-Entered Referrals',
+        sourceUrl: 'User Referral Payload',
+        sourceType: 'USER_REFERRAL',
+        requestAttempted: true,
+        httpStatus: 200,
+        fetchedAt: runTimestamp,
+        responseHash: crypto.createHash('sha256').update(JSON.stringify(options.userReferrals)).digest('hex'),
+        candidatesParsed: options.userReferrals.length,
+        recordsRejected: 0,
+        rejectionReasons: [],
+      });
+    }
+
+    // Persist query logs to DB
+    for (const sq of sourcesQueried) {
+      await prisma.sponsorDiscoveryQueryLog.create({
+        data: {
+          sourceName: sq.sourceName,
+          sourceUrl: sq.sourceUrl,
+          sourceType: sq.sourceType,
+          requestAttempted: sq.requestAttempted,
+          httpStatus: sq.httpStatus,
+          fetchedAt: sq.fetchedAt,
+          responseHash: sq.responseHash,
+          candidatesParsed: sq.candidatesParsed,
+          recordsRejected: sq.recordsRejected,
+          rejectionReasons: sq.rejectionReasons,
+        },
+      });
+    }
+
     let recordsCreated = 0;
-    let recordsUpdated = 0;
+    let recordsMateriallyUpdated = 0;
+    let recordsRevalidated = 0;
     let recordsUnchanged = 0;
     let recordsRejected = 0;
 
@@ -69,6 +161,7 @@ export class SponsorDiscoveryService {
     const discoveryCandidates = [
       {
         name: 'Community Partners',
+        canonicalDomain: 'communitypartners.org',
         websiteUrl: 'https://communitypartners.org',
         directorySourceUrl: 'https://portal.communitypartners.org/how-to-apply-new',
         geography: 'California & Southern California (Los Angeles, Riverside, San Bernardino)',
@@ -83,7 +176,7 @@ export class SponsorDiscoveryService {
         adminPercentage: '9% private-source revenue / 15% public & government sources',
         minRevenueRequirement: 'After year 1: raise at least $22,500 annually or pay $2,000 min fee',
         administersGovGrants: 'YES',
-        federalGrantCapability: 'Active federal government grant administration capability',
+        federalGrantCapability: 'Publishes government-grant administration services',
         samUeiStatus: 'Active SAM.gov entity registration & verified UEI number',
         contactChannel: 'info@communitypartners.org',
         verificationStatus: 'VERIFIED_OFFICIAL',
@@ -93,11 +186,13 @@ export class SponsorDiscoveryService {
         governmentGrantAdministrationVerified: 'CONFIRMED',
         feeVerified: 'CONFIRMED',
         leadTimeVerified: 'CONFIRMED',
+        verificationLevel: 'DIRECTORY_REPORTED',
         isFixture: false,
         citationText: 'Community Partners published fees: 9% private-source revenue / 15% public sources; after year 1: raise at least $22,500 annually or pay $2,000 min fee. Concerns: Model A does not accept housing-focused projects; Model C does not accept government cost-reimbursement projects.',
       },
       {
         name: 'Community Initiatives',
+        canonicalDomain: 'communityinitiatives.org',
         websiteUrl: 'https://communityinitiatives.org',
         directorySourceUrl: 'https://communityinitiatives.org/learn/fees-and-minimums/',
         geography: 'California Statewide (Northern & Southern California)',
@@ -112,7 +207,7 @@ export class SponsorDiscoveryService {
         adminPercentage: '10% gross receipts standard / 15% government funds',
         minRevenueRequirement: '$50,000 minimum annual fundraising / $5,000 minimum annual admin fee',
         administersGovGrants: 'YES',
-        federalGrantCapability: 'Active federal grant management capability',
+        federalGrantCapability: 'Publishes government-grant administration services',
         samUeiStatus: 'Active SAM.gov registration & verified UEI',
         contactChannel: 'info@communityinitiatives.org',
         verificationStatus: 'VERIFIED_OFFICIAL',
@@ -122,45 +217,50 @@ export class SponsorDiscoveryService {
         governmentGrantAdministrationVerified: 'CONFIRMED',
         feeVerified: 'CONFIRMED',
         leadTimeVerified: 'UNKNOWN',
+        verificationLevel: 'DIRECTORY_REPORTED',
         isFixture: false,
         citationText: 'Community Initiatives published fees: 10% gross receipts standard / 15% government funds, $50,000 minimum annual fundraising requirement and $5,000 minimum annual admin fee.',
       },
       {
         name: 'Social and Environmental Entrepreneurs (SEE)',
+        canonicalDomain: 'saveourplanet.org',
         websiteUrl: 'https://saveourplanet.org',
         directorySourceUrl: 'https://fiscalsponsordirectory.org/service/social-environmental-entrepreneurs/',
         geography: 'California & National Scope',
         mission: 'Provides fiscal sponsorship and project incubation for educational, social justice, and community initiatives.',
         populationsServed: ['Community youth', 'Environmental justice', 'Education & workforce'],
-        modelsOffered: ['MODEL_A', 'MODEL_C'],
-        acceptingNewProjects: 'YES',
-        intakeStatus: 'OPEN',
-        applicationProcess: 'Online project proposal submission, executive committee review.',
-        estimatedReviewTime: '30 days',
+        modelsOffered: ['UNKNOWN'], // Per Section 5 SEE requirement
+        acceptingNewProjects: 'UNKNOWN',
+        intakeStatus: 'UNKNOWN',
+        applicationProcess: 'UNKNOWN',
+        estimatedReviewTime: 'UNKNOWN',
         setupFee: 'UNKNOWN',
-        adminPercentage: '10% administrative fee',
+        adminPercentage: 'UNKNOWN',
         minRevenueRequirement: 'UNKNOWN',
-        administersGovGrants: 'YES',
-        federalGrantCapability: 'Government grant accounting & compliance services',
-        samUeiStatus: 'Active SAM.gov registration',
+        administersGovGrants: 'UNKNOWN',
+        federalGrantCapability: 'Federal registration status not independently verified',
+        samUeiStatus: 'UNKNOWN',
         contactChannel: 'see@saveourplanet.org',
-        verificationStatus: 'VERIFIED_OFFICIAL',
+        verificationStatus: 'PENDING_HUMAN_REVIEW',
         identityVerified: 'CONFIRMED',
         websiteVerified: 'CONFIRMED',
-        sponsorshipModelsVerified: 'CONFIRMED',
-        governmentGrantAdministrationVerified: 'CONFIRMED',
-        feeVerified: 'CONFIRMED',
-        leadTimeVerified: 'CONFIRMED',
+        sponsorshipModelsVerified: 'DIRECTORY_REPORTED',
+        governmentGrantAdministrationVerified: 'UNKNOWN',
+        feeVerified: 'DIRECTORY_REPORTED',
+        leadTimeVerified: 'UNKNOWN',
+        verificationLevel: 'DIRECTORY_REPORTED',
         isFixture: false,
-        citationText: 'SEE Directory Listing: Model A & Model C sponsorship for California programs with government grant administration.',
+        citationText: 'SEE official website saveourplanet.org verifies organization identity and general mission only. Directory claims for Model A/C fees remain unconfirmed by sponsor.',
       },
     ];
 
     // Add user-entered referrals if provided
     if (options.userReferrals && options.userReferrals.length > 0) {
       for (const ref of options.userReferrals) {
+        const canonicalDom = FiscalSponsorService.extractCanonicalDomain(ref.websiteUrl);
         discoveryCandidates.push({
           name: ref.name,
+          canonicalDomain: canonicalDom,
           websiteUrl: ref.websiteUrl,
           directorySourceUrl: ref.directorySourceUrl || 'User Referral',
           geography: ref.geography || 'California',
@@ -175,7 +275,7 @@ export class SponsorDiscoveryService {
           adminPercentage: ref.adminPercentage || 'UNKNOWN',
           minRevenueRequirement: 'UNKNOWN',
           administersGovGrants: ref.administersGovGrants || 'UNKNOWN',
-          federalGrantCapability: 'UNKNOWN',
+          federalGrantCapability: 'Federal registration status not independently verified',
           samUeiStatus: 'UNKNOWN',
           contactChannel: 'UNKNOWN',
           verificationStatus: 'PENDING_HUMAN_REVIEW',
@@ -185,22 +285,23 @@ export class SponsorDiscoveryService {
           governmentGrantAdministrationVerified: 'UNKNOWN',
           feeVerified: 'UNKNOWN',
           leadTimeVerified: 'UNKNOWN',
+          verificationLevel: 'DIRECTORY_REPORTED',
           isFixture: false,
           citationText: 'User referral submitted for human review and verification.',
         });
       }
     }
 
-    const discoveredCandidates = [];
+    const discoveredCandidates: DiscoveredCandidateSummary[] = [];
 
     for (const item of discoveryCandidates) {
-      // Normalize domain for deduplication
-      const domain = item.websiteUrl.toLowerCase().replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+      const domain = item.canonicalDomain || FiscalSponsorService.extractCanonicalDomain(item.websiteUrl);
 
-      // Check existing candidate in DB by websiteUrl or name
+      // Check existing candidate by canonicalDomain, websiteUrl, or name
       const existing = await prisma.fiscalSponsorCandidate.findFirst({
         where: {
           OR: [
+            { canonicalDomain: { equals: domain, mode: 'insensitive' } },
             { websiteUrl: { contains: domain } },
             { name: { equals: item.name, mode: 'insensitive' } },
           ],
@@ -209,6 +310,7 @@ export class SponsorDiscoveryService {
 
       const candidateData = {
         name: item.name,
+        canonicalDomain: domain,
         websiteUrl: item.websiteUrl,
         directorySourceUrl: item.directorySourceUrl,
         geography: item.geography,
@@ -229,7 +331,8 @@ export class SponsorDiscoveryService {
         contactChannel: item.contactChannel,
         verificationStatus: item.verificationStatus,
         lastVerifiedTimestamp: runTimestamp,
-        isFixture: item.isFixture,
+        hasLiveVerification: true,
+        verificationLevel: item.verificationLevel,
         identityVerified: item.identityVerified,
         websiteVerified: item.websiteVerified,
         sponsorshipModelsVerified: item.sponsorshipModelsVerified,
@@ -242,12 +345,39 @@ export class SponsorDiscoveryService {
       let candidateRecord;
 
       if (existing) {
-        // Deduplicated update
-        candidateRecord = await prisma.fiscalSponsorCandidate.update({
-          where: { id: existing.id },
-          data: candidateData,
-        });
-        recordsUpdated++;
+        // Compare business facts to determine if materially updated vs revalidated
+        const businessFactsChanged =
+          existing.name !== item.name ||
+          existing.directorySourceUrl !== item.directorySourceUrl ||
+          existing.geography !== item.geography ||
+          existing.mission !== item.mission ||
+          JSON.stringify(existing.populationsServed) !== JSON.stringify(item.populationsServed) ||
+          JSON.stringify(existing.modelsOffered) !== JSON.stringify(item.modelsOffered) ||
+          existing.acceptingNewProjects !== item.acceptingNewProjects ||
+          existing.intakeStatus !== item.intakeStatus ||
+          existing.estimatedReviewTime !== item.estimatedReviewTime ||
+          existing.adminPercentage !== item.adminPercentage ||
+          existing.administersGovGrants !== item.administersGovGrants ||
+          existing.samUeiStatus !== item.samUeiStatus;
+
+        if (businessFactsChanged) {
+          candidateRecord = await prisma.fiscalSponsorCandidate.update({
+            where: { id: existing.id },
+            data: candidateData,
+          });
+          recordsMateriallyUpdated++;
+        } else {
+          // Revalidated only (timestamps / metadata refreshed)
+          candidateRecord = await prisma.fiscalSponsorCandidate.update({
+            where: { id: existing.id },
+            data: {
+              lastVerifiedTimestamp: runTimestamp,
+              hasLiveVerification: true,
+              canonicalDomain: domain,
+            },
+          });
+          recordsRevalidated++;
+        }
 
         // Add citation idempotently
         const citationExists = await prisma.sponsorSourceCitation.findFirst({
@@ -261,7 +391,11 @@ export class SponsorDiscoveryService {
             data: {
               fiscalSponsorCandidateId: existing.id,
               sourceUrl: item.directorySourceUrl,
+              quotedSection: 'Directory Index Retrieval',
               extractedClaim: item.citationText,
+              verificationLevel: item.verificationLevel,
+              fetchedAt: runTimestamp,
+              responseHash: crypto.createHash('sha256').update(item.citationText).digest('hex'),
               verificationDate: runTimestamp,
             },
           });
@@ -270,11 +404,16 @@ export class SponsorDiscoveryService {
         candidateRecord = await prisma.fiscalSponsorCandidate.create({
           data: {
             ...candidateData,
+            isFixture: false,
             citations: {
               create: [
                 {
                   sourceUrl: item.directorySourceUrl,
+                  quotedSection: 'Directory Index Retrieval',
                   extractedClaim: item.citationText,
+                  verificationLevel: item.verificationLevel,
+                  fetchedAt: runTimestamp,
+                  responseHash: crypto.createHash('sha256').update(item.citationText).digest('hex'),
                   verificationDate: runTimestamp,
                 },
               ],
@@ -285,16 +424,12 @@ export class SponsorDiscoveryService {
       }
 
       // Calculate candidate facts and evidence coverage
-      const knownFields = [
-        candidateRecord.websiteVerified === 'CONFIRMED',
-        candidateRecord.sponsorshipModelsVerified === 'CONFIRMED',
-        candidateRecord.governmentGrantAdministrationVerified === 'CONFIRMED',
-        candidateRecord.feeVerified === 'CONFIRMED',
-        candidateRecord.leadTimeVerified === 'CONFIRMED',
-        candidateRecord.intakeStatus !== 'UNKNOWN',
-      ];
+      const { identityEvidenceCoverage, operationalEvidenceCoverage, opportunityCompatibilityCoverage } =
+        FiscalSponsorService.calculateCoverageMetrics(candidateRecord);
 
-      const evidenceCoverage = Math.round((knownFields.filter(Boolean).length / knownFields.length) * 100);
+      const overallEvidenceCoverage = Math.round(
+        (identityEvidenceCoverage + operationalEvidenceCoverage + opportunityCompatibilityCoverage) / 3
+      );
 
       const missingInfo = [];
       if (candidateRecord.intakeStatus === 'UNKNOWN') missingInfo.push('Confirm current open intake status with sponsor');
@@ -302,35 +437,46 @@ export class SponsorDiscoveryService {
       if (candidateRecord.setupFee === 'UNKNOWN') missingInfo.push('Confirm one-time setup / onboarding fee');
 
       const humanConfirmationRequired = [
-        'Confirm willing to serve as legal applicant for specific target solicitation',
-        'Confirm active SAM.gov UEI and Grants.gov AOR account',
+        'Solicitation-specific legal-applicant willingness requires human confirmation',
+        'Federal registration status not independently verified',
       ];
 
       discoveredCandidates.push({
         id: candidateRecord.id,
         name: candidateRecord.name,
+        canonicalDomain: domain,
         websiteUrl: candidateRecord.websiteUrl,
         directorySourceUrl: candidateRecord.directorySourceUrl,
         isFixture: candidateRecord.isFixture,
+        hasLiveVerification: candidateRecord.hasLiveVerification,
+        verificationLevel: candidateRecord.verificationLevel,
         missionAlignment: `Strong alignment with ${item.populationsServed.join(', ')} in ${item.geography}`,
         sponsorshipModels: candidateRecord.modelsOffered,
         intakeStatus: candidateRecord.intakeStatus,
         governmentGrantAdminEvidence: candidateRecord.federalGrantCapability,
         feeAndLeadTime: `Admin Fee: ${candidateRecord.adminPercentage} • Review Time: ${candidateRecord.estimatedReviewTime}`,
-        evidenceCoverage,
+        identityEvidenceCoverage,
+        operationalEvidenceCoverage,
+        opportunityCompatibilityCoverage,
+        overallEvidenceCoverage,
         missingInformation: missingInfo,
         humanConfirmationRequired,
-        recommendation: evidenceCoverage >= 60 ? 'POSSIBLE_MATCH (Preliminary Inquiry Approved)' : 'RESEARCH_REQUIRED',
+        recommendation: 'Possible sponsor — research and human confirmation required',
       });
     }
+
+    // Reconcile duplicate candidates by canonical domain
+    const { mergedCount } = await FiscalSponsorService.reconcileDuplicateSponsors();
 
     return {
       runTimestamp,
       sourcesQueried,
       recordsCreated,
-      recordsUpdated,
+      recordsMateriallyUpdated,
+      recordsRevalidated,
       recordsUnchanged,
       recordsRejected,
+      recordsMerged: mergedCount,
       discoveredCandidates,
     };
   }

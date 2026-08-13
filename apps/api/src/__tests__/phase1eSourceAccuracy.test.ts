@@ -146,7 +146,7 @@ describe('Phase 1E — Source Accuracy, Sponsor Facts & Live Discovery Correctio
     const res2 = await SponsorDiscoveryService.runDiscovery();
 
     expect(res2.recordsCreated).toBe(0);
-    expect(res2.recordsUpdated).toBeGreaterThan(0);
+    expect(res2.recordsRevalidated + res2.recordsMateriallyUpdated).toBeGreaterThan(0);
   });
 
   it('10. No external outreach occurs: Briefing packet generation is read-only', async () => {
