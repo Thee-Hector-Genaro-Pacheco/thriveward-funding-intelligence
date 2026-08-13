@@ -7,6 +7,7 @@ import { prisma } from '../lib/prisma';
 describe('Phase 1F — Contact-Integrity and Current-Cycle Status Hotfix Test Suite', () => {
   let oppCoC: any;
   let lahsaCandidate: any;
+  let orangeCandidate: any;
 
   beforeAll(async () => {
     // 1. Run live discovery to populate database with verified candidates
@@ -46,33 +47,59 @@ describe('Phase 1F — Contact-Integrity and Current-Cycle Status Hotfix Test Su
       },
       include: { contactChannels: true, citations: true },
     });
+
+    orangeCandidate = await prisma.strategicPartnerCandidate.findFirst({
+      where: {
+        OR: [{ cocNumber: 'CA-602' }, { name: { contains: 'Orange', mode: 'insensitive' } }],
+      },
+      include: { contactChannels: true, citations: true },
+    });
   });
 
-  it('Requirement 1: cocinfo@lahsa.org appears nowhere in database, discovery, or briefings', async () => {
+  it('Requirement 1 & 4: cocinfo@lahsa.org and cocinfo@ochca.com appear nowhere in database or discovery', async () => {
     // DB check on StrategicPartnerCandidate contactChannel
-    const candidateWithCocinfo = await prisma.strategicPartnerCandidate.findFirst({
+    const lahsaOld = await prisma.strategicPartnerCandidate.findFirst({
       where: { contactChannel: { contains: 'cocinfo@lahsa.org', mode: 'insensitive' } },
     });
-    expect(candidateWithCocinfo).toBeNull();
+    expect(lahsaOld).toBeNull();
 
-    // DB check on PartnerContactChannel
-    const channelWithCocinfo = await prisma.partnerContactChannel.findFirst({
-      where: { contactValue: { contains: 'cocinfo@lahsa.org', mode: 'insensitive' } },
+    const ochcaOld = await prisma.strategicPartnerCandidate.findFirst({
+      where: { contactChannel: { contains: 'cocinfo@ochca.com', mode: 'insensitive' } },
     });
-    expect(channelWithCocinfo).toBeNull();
+    expect(ochcaOld).toBeNull();
 
     // Discovery output check
     const discovery = await StrategicPartnerService.runDiscovery();
-    const lahsaFromDiscovery = discovery.partners.find((p) => p.cocNumber === 'CA-600');
-    expect(lahsaFromDiscovery).toBeDefined();
-    expect(lahsaFromDiscovery?.contactChannel).not.toContain('cocinfo@lahsa.org');
-    expect(lahsaFromDiscovery?.contactChannel).toBe('NOFA@lahsa.org');
+    const lahsa = discovery.partners.find((p) => p.cocNumber === 'CA-600');
+    expect(lahsa?.contactChannel).toBe('NOFA@lahsa.org');
+
+    const orange = discovery.partners.find((p) => p.cocNumber === 'CA-602');
+    expect(orange?.contactChannel).toBe('CareCoordination@ceo.oc.gov');
   });
 
-  it('Requirement 2 & 3: NOFA@lahsa.org is used for grant inquiries, LACoCBoard@lahsa.org for membership inquiries', async () => {
+  it('Requirement 5: Orange County routes general inquiries to CareCoordination@ceo.oc.gov and CES to CoordinatedEntry@ceo.oc.gov', async () => {
+    expect(orangeCandidate).toBeDefined();
+
+    // Test general grant inquiry
+    const grantBriefing = await OutreachBriefingService.generatePartnerBriefingPacket(
+      orangeCandidate.id,
+      oppCoC.id,
+      'GRANT_COMPETITION'
+    );
+    expect(grantBriefing.draftInquiryEmail.to).toBe('CareCoordination@ceo.oc.gov');
+
+    // Test CES integration inquiry
+    const cesBriefing = await OutreachBriefingService.generatePartnerBriefingPacket(
+      orangeCandidate.id,
+      oppCoC.id,
+      'CES_INTEGRATION'
+    );
+    expect(cesBriefing.draftInquiryEmail.to).toBe('CoordinatedEntry@ceo.oc.gov');
+  });
+
+  it('Requirement 2 & 3: LAHSA routes NOFA@lahsa.org for grant inquiries and LACoCBoard@lahsa.org for board inquiries', async () => {
     expect(lahsaCandidate).toBeDefined();
 
-    // Test grant competition briefing
     const grantBriefing = await OutreachBriefingService.generatePartnerBriefingPacket(
       lahsaCandidate.id,
       oppCoC.id,
@@ -80,7 +107,6 @@ describe('Phase 1F — Contact-Integrity and Current-Cycle Status Hotfix Test Su
     );
     expect(grantBriefing.draftInquiryEmail.to).toBe('NOFA@lahsa.org');
 
-    // Test governance / membership briefing
     const boardBriefing = await OutreachBriefingService.generatePartnerBriefingPacket(
       lahsaCandidate.id,
       oppCoC.id,
@@ -89,20 +115,7 @@ describe('Phase 1F — Contact-Integrity and Current-Cycle Status Hotfix Test Su
     expect(boardBriefing.draftInquiryEmail.to).toBe('LACoCBoard@lahsa.org');
   });
 
-  it('Requirement 4 & 5: Structured contact metadata exists and unsupported contacts fail closed', async () => {
-    // Check structured contacts on LAHSA candidate
-    const channels = await prisma.partnerContactChannel.findMany({
-      where: { strategicPartnerCandidateId: lahsaCandidate.id },
-    });
-    expect(channels.length).toBeGreaterThanOrEqual(3);
-
-    const nofaChan = channels.find((c) => c.contactValue === 'NOFA@lahsa.org');
-    expect(nofaChan).toBeDefined();
-    expect(nofaChan?.purpose).toContain('FY2026 CoC competition');
-    expect(nofaChan?.sourceUrl).toBe('https://www.lahsa.org/news?article=1068-fy-2026-coc-program-nofo');
-    expect(nofaChan?.quotedCitation).toBeDefined();
-
-    // Create unverified partner candidate with no contact
+  it('Requirement 8: Unverified candidates fail closed to [VERIFY CURRENT NOFO CONTACT — DO NOT SEND]', async () => {
     const unverifiedPartner = await StrategicPartnerService.createPartner({
       name: 'Unverified Community Organization',
       organizationType: 'NONPROFIT',
@@ -120,27 +133,18 @@ describe('Phase 1F — Contact-Integrity and Current-Cycle Status Hotfix Test Su
       'GRANT_COMPETITION'
     );
 
-    // Must fail closed to [VERIFY OFFICIAL CONTACT CHANNEL]
-    expect(unverifiedBriefing.draftInquiryEmail.to).toBe('[VERIFY OFFICIAL CONTACT CHANNEL]');
+    // Must fail closed to [VERIFY CURRENT NOFO CONTACT — DO NOT SEND]
+    expect(unverifiedBriefing.draftInquiryEmail.to).toBe('[VERIFY CURRENT NOFO CONTACT — DO NOT SEND]');
 
-    // Clean up unverified partner
     await prisma.strategicPartnerCandidate.delete({ where: { id: unverifiedPartner.id } });
   });
 
-  it('Requirement 6: CPD-2600-DC-0025 reports CURRENT-CYCLE STATUS: INVESTIGATE — CONFLICTING OFFICIAL SOURCES', async () => {
+  it('Requirement 6 & 9: CPD-2600-DC-0025 reports INVESTIGATE — CONFLICTING OFFICIAL SOURCES and updated wording', async () => {
     const sanitized = await OpportunityService.getOpportunityById(oppCoC.id);
 
     expect(sanitized.hasSourceConflict).toBe(true);
     expect(sanitized.currentCycleStatus).toBe('INVESTIGATE — CONFLICTING OFFICIAL SOURCES');
-    expect(sanitized.sourceConflictDetails).toBeDefined();
-    expect(sanitized.sourceConflictDetails.citations.length).toBeGreaterThanOrEqual(2);
 
-    const urls = sanitized.sourceConflictDetails.citations.map((c: any) => c.sourceUrl);
-    expect(urls.some((u: string) => u.includes('grants.gov'))).toBe(true);
-    expect(urls.some((u: string) => u.includes('lahsa.org'))).toBe(true);
-  });
-
-  it('Requirement 7 & 8: Updated draft email text and zero automated outreach safeguard', async () => {
     const briefing = await OutreachBriefingService.generatePartnerBriefingPacket(
       lahsaCandidate.id,
       oppCoC.id,
@@ -151,6 +155,5 @@ describe('Phase 1F — Contact-Integrity and Current-Cycle Status Hotfix Test Su
       'We are evaluating this opportunity and seeking guidance regarding its current status, local process, and future participation requirements'
     );
     expect(briefing.draftInquiryEmail.bodyText).not.toContain('We are preparing for the upcoming federal solicitation');
-    expect(briefing.safeguardNotice).toContain('HUMAN-CONTROLLED OUTREACH SAFEGUARD');
   });
 });

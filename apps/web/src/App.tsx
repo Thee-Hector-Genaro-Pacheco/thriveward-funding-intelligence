@@ -384,11 +384,14 @@ export function App() {
     }
   };
 
+  const [hasRunPartnerDiscovery, setHasRunPartnerDiscovery] = useState<boolean>(false);
+
   const handleTriggerPartnerDiscovery = async () => {
     setPartnerDiscoveryLoading(true);
     try {
       const res = await fetch('/api/strategic-partners/discovery', { method: 'POST' });
       if (res.ok) {
+        setHasRunPartnerDiscovery(true);
         setActionMessage('✓ CoC Collaborative Applicant Discovery completed. Verified CoC structures for Southern California.');
         fetchPartners(selectedOppForPartnerView?.id);
       }
@@ -1243,7 +1246,7 @@ export function App() {
             </div>
             <button
               onClick={handleTriggerPartnerDiscovery}
-              disabled={partnerDiscoveryLoading}
+              disabled={partnerDiscoveryLoading || Boolean(selectedOppForDrawer) || Boolean(partnerBriefingPacket) || Boolean(briefingPacket)}
               style={{
                 background: partnerDiscoveryLoading ? 'rgba(100, 116, 139, 0.5)' : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
                 border: 'none',
@@ -1252,11 +1255,11 @@ export function App() {
                 borderRadius: '0.5rem',
                 fontWeight: 600,
                 fontSize: '0.875rem',
-                cursor: partnerDiscoveryLoading ? 'not-allowed' : 'pointer',
+                cursor: (partnerDiscoveryLoading || Boolean(selectedOppForDrawer) || Boolean(partnerBriefingPacket) || Boolean(briefingPacket)) ? 'not-allowed' : 'pointer',
                 boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)',
               }}
             >
-              {partnerDiscoveryLoading ? '⏳ Discovering CoC Applicants...' : '🌐 Discover & Verify CoC Collaborative Applicants'}
+              {partnerDiscoveryLoading ? '⏳ Discovering CoC Applicants...' : hasRunPartnerDiscovery ? '🔄 Re-run CoC Verification' : '🌐 Discover & Verify CoC Collaborative Applicants'}
             </button>
           </div>
 

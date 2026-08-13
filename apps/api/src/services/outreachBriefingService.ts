@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { BRIDGE_FORWARD_PROFILE } from '@bridge-ai/shared';
 import { calculateSopMatchRequirement } from './sopMatchCalculator';
+import { StrategicPartnerService } from './strategicPartnerService';
 
 export interface SponsorBriefingPacket {
   candidateId: string;
@@ -265,7 +266,7 @@ Service Footprint: ${verifiedCountiesStr}`;
   public static async generatePartnerBriefingPacket(
     partnerId: string,
     fundingOpportunityId?: string,
-    inquiryPurpose: 'GRANT_COMPETITION' | 'GOVERNANCE_MEMBERSHIP' | 'GENERAL' = 'GRANT_COMPETITION'
+    inquiryPurpose: 'GRANT_COMPETITION' | 'GOVERNANCE_MEMBERSHIP' | 'CES_INTEGRATION' | 'GENERAL' = 'GRANT_COMPETITION'
   ) {
     const partner = await prisma.strategicPartnerCandidate.findUnique({
       where: { id: partnerId },
@@ -286,19 +287,11 @@ Service Footprint: ${verifiedCountiesStr}`;
     const counties = BRIDGE_FORWARD_PROFILE.initialServiceAreas;
     const countiesStr = `${counties.slice(0, -1).join(', ')}, and ${counties[counties.length - 1]}`;
 
-    // Select purpose-specific recipient contact email or fail closed to [VERIFY OFFICIAL CONTACT CHANNEL]
-    const recipientEmail =
-      inquiryPurpose === 'GOVERNANCE_MEMBERSHIP'
-        ? partner.cocNumber === 'CA-600' || partner.name.includes('LAHSA')
-          ? 'LACoCBoard@lahsa.org'
-          : partner.contactChannel && partner.contactChannel.includes('@')
-          ? partner.contactChannel
-          : '[VERIFY OFFICIAL CONTACT CHANNEL]'
-        : partner.cocNumber === 'CA-600' || partner.name.includes('LAHSA')
-        ? 'NOFA@lahsa.org'
-        : partner.contactChannel && partner.contactChannel.includes('@') && !partner.contactChannel.includes('cocinfo@lahsa.org')
-        ? partner.contactChannel
-        : '[VERIFY OFFICIAL CONTACT CHANNEL]';
+    // Select purpose-specific recipient contact email or fail closed to [VERIFY CURRENT NOFO CONTACT — DO NOT SEND]
+    const recipientEmail = StrategicPartnerService.selectContactForPurpose(
+      partner,
+      inquiryPurpose as any
+    );
 
     const oppTitle = opp?.title || 'FY2026 Continuum of Care Competition and Youth Homelessness Demonstration Program';
     const oppNumber = opp?.fundingOpportunityNumber || 'CPD-2600-DC-0025';

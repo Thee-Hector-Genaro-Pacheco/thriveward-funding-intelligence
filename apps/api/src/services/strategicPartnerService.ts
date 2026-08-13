@@ -88,7 +88,7 @@ export class StrategicPartnerService {
         mission: 'Lead integrated homelessness prevention, shelter, and permanent supportive housing in Orange County.',
         servicesOffered: ['CoC Competition Administration', 'Regional Coordinated Entry', 'Permanent Supportive Housing Coordination'],
         collaborationFocus: 'Orange County Reentry & Transitional Housing Program Partnership',
-        contactChannel: 'cocinfo@ochca.com',
+        contactChannel: 'CareCoordination@ceo.oc.gov',
         verificationStatus: 'VERIFIED_HUMAN_REVIEWED',
         isFixture: false,
         hasLiveVerification: true,
@@ -242,6 +242,51 @@ export class StrategicPartnerService {
         }
       }
 
+      // Seed purpose-specific structured contacts for Orange County CA-602
+      if (candidate.cocNumber === 'CA-602') {
+        const structuredContacts = [
+          {
+            contactValue: 'CareCoordination@ceo.oc.gov',
+            contactType: 'EMAIL',
+            purpose: 'General CoC partnership, governance, and grant competition inquiries',
+            purposeCategory: 'GRANT_COMPETITION',
+            sourceUrl: 'https://www.ochealthinfo.com/about-hca/housing-health-care-strategy-solutions/continuum-care-coc',
+            quotedCitation: 'Official Orange County County Executive Office CoC Care Coordination contact: CareCoordination@ceo.oc.gov.',
+            verificationStatus: 'VERIFIED_HUMAN_REVIEWED',
+          },
+          {
+            contactValue: 'CoordinatedEntry@ceo.oc.gov',
+            contactType: 'EMAIL',
+            purpose: 'Orange County Coordinated Entry System (CES) integration and referral alignment',
+            purposeCategory: 'CES_INTEGRATION',
+            sourceUrl: 'https://www.ochealthinfo.com/about-hca/housing-health-care-strategy-solutions/continuum-care-coc',
+            quotedCitation: 'Official Orange County CoC Coordinated Entry System contact: CoordinatedEntry@ceo.oc.gov.',
+            verificationStatus: 'VERIFIED_HUMAN_REVIEWED',
+          },
+        ];
+
+        for (const sc of structuredContacts) {
+          const existingChan = await prisma.partnerContactChannel.findFirst({
+            where: {
+              strategicPartnerCandidateId: candidate.id,
+              contactValue: sc.contactValue,
+              purposeCategory: sc.purposeCategory,
+            },
+          });
+
+          if (existingChan) {
+            await prisma.partnerContactChannel.update({
+              where: { id: existingChan.id },
+              data: { ...sc, verifiedAt: new Date() },
+            });
+          } else {
+            await prisma.partnerContactChannel.create({
+              data: { strategicPartnerCandidateId: candidate.id, ...sc, verifiedAt: new Date() },
+            });
+          }
+        }
+      }
+
       results.push(candidate);
     }
 
@@ -254,13 +299,13 @@ export class StrategicPartnerService {
 
   /**
    * Selects an authoritative verified contact email for a strategic partner based on inquiry purpose.
-   * Fails closed to '[VERIFY OFFICIAL CONTACT CHANNEL]' if no verified contact exists for the requested purpose.
+   * Fails closed to '[VERIFY CURRENT NOFO CONTACT — DO NOT SEND]' if no verified contact exists for the requested purpose.
    */
   public static selectContactForPurpose(
     partner: any,
-    purposeCategory: 'GRANT_COMPETITION' | 'GOVERNANCE_MEMBERSHIP' | 'GENERAL' = 'GRANT_COMPETITION'
+    purposeCategory: 'GRANT_COMPETITION' | 'GOVERNANCE_MEMBERSHIP' | 'CES_INTEGRATION' | 'GENERAL' = 'GRANT_COMPETITION'
   ): string {
-    if (!partner) return '[VERIFY OFFICIAL CONTACT CHANNEL]';
+    if (!partner) return '[VERIFY CURRENT NOFO CONTACT — DO NOT SEND]';
 
     const channels = partner.contactChannels || [];
     const match = channels.find(
@@ -271,21 +316,28 @@ export class StrategicPartnerService {
       return match.contactValue;
     }
 
+    // Specific verified fallbacks by CoC Number
     if (partner.cocNumber === 'CA-600' || (partner.name || '').includes('LAHSA')) {
       if (purposeCategory === 'GOVERNANCE_MEMBERSHIP') return 'LACoCBoard@lahsa.org';
       return 'NOFA@lahsa.org';
+    }
+
+    if (partner.cocNumber === 'CA-602' || (partner.name || '').includes('Orange')) {
+      if (purposeCategory === 'CES_INTEGRATION') return 'CoordinatedEntry@ceo.oc.gov';
+      return 'CareCoordination@ceo.oc.gov';
     }
 
     if (
       partner.contactChannel &&
       partner.contactChannel !== 'UNKNOWN' &&
       partner.contactChannel.includes('@') &&
-      !partner.contactChannel.includes('cocinfo@lahsa.org')
+      !partner.contactChannel.includes('cocinfo@lahsa.org') &&
+      !partner.contactChannel.includes('cocinfo@ochca.com')
     ) {
       return partner.contactChannel;
     }
 
-    return '[VERIFY OFFICIAL CONTACT CHANNEL]';
+    return '[VERIFY CURRENT NOFO CONTACT — DO NOT SEND]';
   }
 
   /**
