@@ -70,20 +70,20 @@ export class SponsorDiscoveryService {
       {
         name: 'Community Partners',
         websiteUrl: 'https://communitypartners.org',
-        directorySourceUrl: 'https://fiscalsponsordirectory.org/service/community-partners/',
+        directorySourceUrl: 'https://portal.communitypartners.org/how-to-apply-new',
         geography: 'California & Southern California (Los Angeles, Riverside, San Bernardino)',
-        mission: 'Fosters civic engagement and manages community-based initiatives advancing equity, housing, youth services, and workforce development.',
+        mission: 'Fosters civic engagement and manages community-based initiatives advancing equity, youth services, and workforce development.',
         populationsServed: ['Unhoused youth', 'Justice-impacted adults', 'Low-income families', 'System-impacted young people'],
         modelsOffered: ['MODEL_A', 'MODEL_C'],
-        acceptingNewProjects: 'UNKNOWN', // intake status must be UNKNOWN until human confirmation
+        acceptingNewProjects: 'UNKNOWN',
         intakeStatus: 'UNKNOWN',
-        applicationProcess: 'Online application form, proposal summary, board review cycle.',
-        estimatedReviewTime: '6–8 weeks (30–45 business days)',
-        setupFee: '$500 onboarding fee',
-        adminPercentage: '9% standard private awards / 12%–15% government grants',
-        minRevenueRequirement: '$50,000 annual budget commitment',
+        applicationProcess: 'Online application form at https://portal.communitypartners.org/how-to-apply-new',
+        estimatedReviewTime: 'Minimum 6 weeks (approx 6–8 weeks per FAQ)',
+        setupFee: 'UNKNOWN',
+        adminPercentage: '9% private-source revenue / 15% public & government sources',
+        minRevenueRequirement: 'After year 1: raise at least $22,500 annually or pay $2,000 min fee',
         administersGovGrants: 'YES',
-        federalGrantCapability: 'Active federal government grant administration capability (HHS, DOL, DOJ, HUD)',
+        federalGrantCapability: 'Active federal government grant administration capability',
         samUeiStatus: 'Active SAM.gov entity registration & verified UEI number',
         contactChannel: 'info@communitypartners.org',
         verificationStatus: 'VERIFIED_OFFICIAL',
@@ -94,25 +94,25 @@ export class SponsorDiscoveryService {
         feeVerified: 'CONFIRMED',
         leadTimeVerified: 'CONFIRMED',
         isFixture: false,
-        citationText: 'Community Partners official sponsorship page: Comprehensive Model A and limited Model C sponsorship available for California non-profits.',
+        citationText: 'Community Partners published fees: 9% private-source revenue / 15% public sources; after year 1: raise at least $22,500 annually or pay $2,000 min fee. Concerns: Model A does not accept housing-focused projects; Model C does not accept government cost-reimbursement projects.',
       },
       {
         name: 'Community Initiatives',
         websiteUrl: 'https://communityinitiatives.org',
-        directorySourceUrl: 'https://fiscalsponsordirectory.org/service/community-initiatives/',
+        directorySourceUrl: 'https://communityinitiatives.org/learn/fees-and-minimums/',
         geography: 'California Statewide (Northern & Southern California)',
         mission: 'Provides fiscal sponsorship and administrative infrastructure to community leaders and social impact initiatives.',
         populationsServed: ['Youth & young adults', 'Reentry communities', 'System-impacted populations'],
-        modelsOffered: ['MODEL_A', 'MODEL_C'],
+        modelsOffered: ['MODEL_A'],
         acceptingNewProjects: 'UNKNOWN',
         intakeStatus: 'UNKNOWN',
-        applicationProcess: 'Quarterly review cycle, preliminary inquiry form, formal interview.',
-        estimatedReviewTime: '45–60 days',
-        setupFee: '$750 initial project setup',
-        adminPercentage: '10% standard admin fee / 13% for government awards',
-        minRevenueRequirement: '$100,000 projected annual revenue',
+        applicationProcess: 'Inquiry form via https://communityinitiatives.org/get-started/',
+        estimatedReviewTime: 'UNKNOWN',
+        setupFee: 'UNKNOWN',
+        adminPercentage: '10% gross receipts standard / 15% government funds',
+        minRevenueRequirement: '$50,000 minimum annual fundraising / $5,000 minimum annual admin fee',
         administersGovGrants: 'YES',
-        federalGrantCapability: 'Active federal grant management, Single Audit compliance, Grants.gov AOR setup',
+        federalGrantCapability: 'Active federal grant management capability',
         samUeiStatus: 'Active SAM.gov registration & verified UEI',
         contactChannel: 'info@communityinitiatives.org',
         verificationStatus: 'VERIFIED_OFFICIAL',
@@ -121,9 +121,9 @@ export class SponsorDiscoveryService {
         sponsorshipModelsVerified: 'CONFIRMED',
         governmentGrantAdministrationVerified: 'CONFIRMED',
         feeVerified: 'CONFIRMED',
-        leadTimeVerified: 'CONFIRMED',
+        leadTimeVerified: 'UNKNOWN',
         isFixture: false,
-        citationText: 'Community Initiatives official website: Model A and Model C fiscal sponsorship with full government grant administration.',
+        citationText: 'Community Initiatives published fees: 10% gross receipts standard / 15% government funds, $50,000 minimum annual fundraising requirement and $5,000 minimum annual admin fee.',
       },
       {
         name: 'Social and Environmental Entrepreneurs (SEE)',
@@ -248,6 +248,24 @@ export class SponsorDiscoveryService {
           data: candidateData,
         });
         recordsUpdated++;
+
+        // Add citation idempotently
+        const citationExists = await prisma.sponsorSourceCitation.findFirst({
+          where: {
+            fiscalSponsorCandidateId: existing.id,
+            sourceUrl: item.directorySourceUrl,
+          },
+        });
+        if (!citationExists) {
+          await prisma.sponsorSourceCitation.create({
+            data: {
+              fiscalSponsorCandidateId: existing.id,
+              sourceUrl: item.directorySourceUrl,
+              extractedClaim: item.citationText,
+              verificationDate: runTimestamp,
+            },
+          });
+        }
       } else {
         candidateRecord = await prisma.fiscalSponsorCandidate.create({
           data: {

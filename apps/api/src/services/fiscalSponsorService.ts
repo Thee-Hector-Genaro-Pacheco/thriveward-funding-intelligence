@@ -209,6 +209,21 @@ export class FiscalSponsorService {
         humanConfirmationRequired.push('Contact sponsor to confirm open project intake');
       }
 
+      // 4b. Specific model & project type compatibility concerns
+      const oppText = (opp.title + ' ' + (opp.description || '')).toLowerCase();
+      if (oppText.includes('housing') || oppText.includes('homeless')) {
+        if (candidate.name.toLowerCase().includes('community partners')) {
+          concerns.push('Compatibility Concern: Community Partners Model A does not accept projects where housing is a key element.');
+        }
+      }
+      if (opp.fundingAgency?.toLowerCase().includes('hhs') || opp.fundingAgency?.toLowerCase().includes('acf') || oppText.includes('street outreach') || oppText.includes('cost-reimbursement')) {
+        if (candidate.name.toLowerCase().includes('community partners')) {
+          concerns.push('Compatibility Concern: Community Partners Model C does not accept government-funded cost-reimbursement projects.');
+        }
+      }
+
+      humanConfirmationRequired.push('Confirm willing to serve as legal applicant for this specific opportunity');
+
       // 5. Fee & lead time implications
       const feeNotes = `Setup Fee: ${candidate.setupFee} • Admin Percentage: ${candidate.adminPercentage} • Est. Review Time: ${candidate.estimatedReviewTime}`;
 

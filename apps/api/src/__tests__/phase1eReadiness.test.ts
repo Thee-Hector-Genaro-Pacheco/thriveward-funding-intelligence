@@ -208,7 +208,7 @@ describe('Phase 1E — Fiscal Sponsor, Strategic Partner & Funding Readiness Tes
       opportunityTitle: 'Verified Recurring Reentry Grant',
       agency: 'DOL ETA',
       recurrenceConfidence: RecurrenceConfidence.HISTORICALLY_RECURRING,
-      recurrenceEvidenceSource: 'https://www.grants.gov/search-results-detail/357658',
+      recurrenceEvidenceSource: 'https://www.grants.gov/search-results-detail/362088',
       priorCycleDates: ['2024-06-01', '2025-06-15'],
       expectedNextCyclePrepDate: new Date('2027-02-01T00:00:00Z'),
     });
@@ -227,7 +227,7 @@ describe('Phase 1E — Fiscal Sponsor, Strategic Partner & Funding Readiness Tes
         externalOpportunityId: 'test-phase1e-opp-sop-003',
         fundingOpportunityNumber: 'HHS-2026-ACF-ACYF-YO-0044',
         description: 'Grants to prevent youth homelessness and human trafficking.',
-        sourceUrl: 'https://grants.gov/search-detail/357658',
+        sourceUrl: 'https://www.grants.gov/search-results-detail/362088',
         candidateRoutingStatus: 'FISCAL_SPONSOR_REQUIRED',
         dismissedReason: 'FISCAL_SPONSOR_REQUIRED: PRE_INCORPORATION',
       },

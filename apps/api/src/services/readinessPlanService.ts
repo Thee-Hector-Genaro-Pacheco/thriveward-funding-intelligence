@@ -55,7 +55,7 @@ export class ReadinessPlanService {
         operatingHistoryAndCapacityGaps: [
           '0 years independent organizational operating history (PRE_INCORPORATION)',
           'Missing audited financial statements for prior 2 years',
-          `Unverified statutory non-federal match reserve ($${sopMinMatch.nonFederalMatchRequired.toLocaleString()}–$${sopMatch.nonFederalMatchRequired.toLocaleString()} required under NOFO Section III.2, Page 18)`,
+          `Unverified statutory non-federal match reserve ($${sopMinMatch.nonFederalMatchRequired.toLocaleString()}–$${sopMatch.nonFederalMatchRequired.toLocaleString()} required under RHY Act §383, 34 U.S.C. §11274, NOFO Pages 6–8)`,
         ],
         requiredDocuments: [
           'Executed Fiscal Sponsorship Agreement or Articles of Incorporation',
@@ -117,7 +117,7 @@ export class ReadinessPlanService {
             },
             {
               title: '6. 10% Non-Federal Match Strategy Execution',
-              description: `Identify and secure written match commitments ($${sopMinMatch.nonFederalMatchRequired.toLocaleString()}–$${sopMatch.nonFederalMatchRequired.toLocaleString()}) from community foundations and partner in-kind space/services per NOFO Section III.2 (Page 18).`,
+              description: `Identify and secure written match commitments ($${sopMinMatch.nonFederalMatchRequired.toLocaleString()}–$${sopMatch.nonFederalMatchRequired.toLocaleString()}) from community foundations and partner in-kind space/services per RHY Act §383 (NOFO Pages 6–8).`,
               category: 'FINANCIAL',
               responsibleOwner: 'Development Director',
               targetDate: new Date('2027-03-15T00:00:00Z'),

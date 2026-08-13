@@ -447,42 +447,42 @@ enum SponsorshipModel {
 
 // Phase 1E Models
 model FiscalSponsorCandidate {
-  id                                    String      @id @default(uuid())
-  name                                  String
-  websiteUrl                            String
-  directorySourceUrl                    String
-  geography                             String
-  mission                               String
-  populationsServed                     String[]
-  modelsOffered                         String[]
-  acceptingNewProjects                  String      @default("UNKNOWN")
-  applicationProcess                    String      @default("UNKNOWN")
-  estimatedReviewTime                   String      @default("UNKNOWN")
-  setupFee                              String      @default("UNKNOWN")
-  adminPercentage                       String      @default("UNKNOWN")
-  minRevenueRequirement                 String      @default("UNKNOWN")
-  administersGovGrants                  String      @default("UNKNOWN")
-  federalGrantCapability                String      @default("UNKNOWN")
-  samUeiStatus                          String      @default("UNKNOWN")
-  contactChannel                        String      @default("UNKNOWN")
-  verificationStatus                    String      @default("PENDING_HUMAN_REVIEW")
-  lastVerifiedTimestamp                 DateTime?
-  internalNotes                         String?
+  id                     String    @id @default(uuid())
+  name                   String
+  websiteUrl             String
+  directorySourceUrl     String
+  geography              String
+  mission                String
+  populationsServed      String[]
+  modelsOffered          String[]
+  acceptingNewProjects   String    @default("UNKNOWN")
+  applicationProcess     String    @default("UNKNOWN")
+  estimatedReviewTime    String    @default("UNKNOWN")
+  setupFee               String    @default("UNKNOWN")
+  adminPercentage        String    @default("UNKNOWN")
+  minRevenueRequirement  String    @default("UNKNOWN")
+  administersGovGrants   String    @default("UNKNOWN")
+  federalGrantCapability String    @default("UNKNOWN")
+  samUeiStatus           String    @default("UNKNOWN")
+  contactChannel         String    @default("UNKNOWN")
+  verificationStatus     String    @default("PENDING_HUMAN_REVIEW")
+  lastVerifiedTimestamp  DateTime?
+  internalNotes          String?
 
   // Phase 1E Source Accuracy & Granular Verification
-  isFixture                             Boolean     @default(false)
-  identityVerified                      String      @default("UNKNOWN")
-  websiteVerified                       String      @default("UNKNOWN")
-  intakeStatus                          String      @default("UNKNOWN")
+  isFixture                             Boolean   @default(false)
+  identityVerified                      String    @default("UNKNOWN")
+  websiteVerified                       String    @default("UNKNOWN")
+  intakeStatus                          String    @default("UNKNOWN")
   intakeStatusVerifiedAt                DateTime?
-  sponsorshipModelsVerified             String      @default("UNKNOWN")
-  governmentGrantAdministrationVerified String      @default("UNKNOWN")
-  feeVerified                           String      @default("UNKNOWN")
-  leadTimeVerified                      String      @default("UNKNOWN")
-  opportunitySpecificCompatibility      String      @default("HUMAN_CONFIRMATION_REQUIRED")
+  sponsorshipModelsVerified             String    @default("UNKNOWN")
+  governmentGrantAdministrationVerified String    @default("UNKNOWN")
+  feeVerified                           String    @default("UNKNOWN")
+  leadTimeVerified                      String    @default("UNKNOWN")
+  opportunitySpecificCompatibility      String    @default("HUMAN_CONFIRMATION_REQUIRED")
 
-  createdAt                             DateTime    @default(now())
-  updatedAt                             DateTime    @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   citations          SponsorSourceCitation[]
   opportunityMatches OpportunitySponsorMatch[]
@@ -528,7 +528,7 @@ model OpportunitySponsorMatch {
   humanApproved             Boolean                @default(false)
   alignmentRationale        String
   legalApplicantCapability  String
-  govGrantAdminCapability  String
+  govGrantAdminCapability   String
   arrangementAllowed        String
   feeAndLeadTimeNotes       String
   humanConfirmationRequired String[]
