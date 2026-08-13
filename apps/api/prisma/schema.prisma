@@ -517,18 +517,31 @@ model SponsorSourceCitation {
 }
 
 model SponsorDiscoveryQueryLog {
-  id               String   @id @default(uuid())
-  sourceName       String
-  sourceUrl        String
-  sourceType       String   @default("DIRECTORY_INDEX")
-  requestAttempted Boolean  @default(true)
-  httpStatus       Int      @default(200)
-  fetchedAt        DateTime @default(now())
-  responseHash     String
-  candidatesParsed Int      @default(0)
-  recordsRejected  Int      @default(0)
-  rejectionReasons String[] @default([])
-  createdAt        DateTime @default(now())
+  id                     String   @id @default(uuid())
+  sourceName             String
+  sourceUrl              String
+  requestedUrl           String   @default("")
+  finalUrl               String   @default("")
+  sourceType             String   @default("DIRECTORY_INDEX")
+  requestAttempted       Boolean  @default(true)
+  httpStatus             Int      @default(200)
+  contentType            String?
+  responseByteCount      Int      @default(0)
+  pageTitle              String?
+  fetchedAt              DateTime @default(now())
+  responseHash           String
+  fetchMode              String   @default("LIVE_HTTP")
+  redirectsFollowed      Int      @default(0)
+  fixtureFallbackUsed    Boolean  @default(false)
+  sourceStatus           String   @default("SUCCESS")
+  rejectionReason        String?
+  transportError         String?
+  candidatesParsed       Int      @default(0)
+  candidatesAccepted     Int      @default(0)
+  candidatesDeduplicated Int      @default(0)
+  recordsRejected        Int      @default(0)
+  rejectionReasons       String[] @default([])
+  createdAt              DateTime @default(now())
 }
 
 model StrategicPartnerCandidate {

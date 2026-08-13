@@ -655,14 +655,28 @@ export function App() {
               </div>
               {discoveryResult.sourcesQueried && discoveryResult.sourcesQueried.length > 0 && (
                 <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '0.5rem', fontSize: '0.78rem', color: '#94a3b8' }}>
-                  <strong>Sources Verified ({discoveryResult.sourcesQueried.length}):</strong>
+                  <strong>HTTP Transport Evidence ({discoveryResult.sourcesQueried.length} sources):</strong>
                   <ul style={{ margin: '0.25rem 0 0 1.25rem', padding: 0 }}>
                     {discoveryResult.sourcesQueried.map((sq: any, idx: number) => (
-                      <li key={idx}>
-                        {typeof sq === 'string' ? sq : `${sq.sourceName} (${sq.sourceUrl}) • SHA-256: ${sq.responseHash?.substring(0, 12)}...`}
+                      <li key={idx} style={{ marginBottom: '0.25rem' }}>
+                        {typeof sq === 'string'
+                          ? sq
+                          : `${sq.sourceName} • HTTP ${sq.httpStatus} • ${sq.responseByteCount?.toLocaleString()} bytes • Mode: ${sq.fetchMode || 'LIVE_HTTP'} • SHA-256: ${sq.responseHash?.substring(0, 16)}...`}
                       </li>
                     ))}
                   </ul>
+                </div>
+              )}
+              {discoveryResult.parsedCandidateAccounting && discoveryResult.parsedCandidateAccounting.length > 0 && (
+                <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: '0.5rem', marginTop: '0.5rem', fontSize: '0.78rem', color: '#94a3b8' }}>
+                  <strong>Parsed Candidate Accounting ({discoveryResult.parsedCandidateAccounting.length} entries):</strong>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.2rem', marginTop: '0.25rem' }}>
+                    {discoveryResult.parsedCandidateAccounting.map((pca: any, idx: number) => (
+                      <div key={idx} style={{ color: '#cbd5e1' }}>
+                        • <strong>{pca.parsedName}</strong> ({pca.parsedDomain}) → <span style={{ color: pca.disposition === 'ACCEPTED_CANONICAL' ? '#4ade80' : '#f59e0b' }}>{pca.disposition}</span> ({pca.reason})
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>

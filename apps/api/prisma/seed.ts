@@ -566,6 +566,60 @@ async function main() {
     },
   });
 
+  const sponsor3Data = {
+    name: 'Social and Environmental Entrepreneurs (SEE)',
+    canonicalDomain: 'saveourplanet.org',
+    websiteUrl: 'https://saveourplanet.org',
+    directorySourceUrl: 'https://fiscalsponsordirectory.org/service/social-environmental-entrepreneurs/',
+    geography: 'California & National Scope',
+    mission: 'Provides fiscal sponsorship and project incubation for educational, social justice, and community initiatives.',
+    populationsServed: ['Community youth', 'Environmental justice', 'Education & workforce'],
+    modelsOffered: ['UNKNOWN'],
+    acceptingNewProjects: 'UNKNOWN',
+    intakeStatus: 'UNKNOWN',
+    intakeStatusVerifiedAt: null,
+    applicationProcess: 'UNKNOWN',
+    estimatedReviewTime: 'UNKNOWN',
+    setupFee: 'UNKNOWN',
+    adminPercentage: 'UNKNOWN',
+    minRevenueRequirement: 'UNKNOWN',
+    administersGovGrants: 'UNKNOWN',
+    federalGrantCapability: 'Federal registration status not independently verified',
+    samUeiStatus: 'UNKNOWN',
+    contactChannel: 'see@saveourplanet.org',
+    verificationStatus: 'PENDING_HUMAN_REVIEW',
+    identityVerified: 'CONFIRMED',
+    websiteVerified: 'CONFIRMED',
+    sponsorshipModelsVerified: 'DIRECTORY_REPORTED',
+    governmentGrantAdministrationVerified: 'UNKNOWN',
+    feeVerified: 'DIRECTORY_REPORTED',
+    leadTimeVerified: 'UNKNOWN',
+    opportunitySpecificCompatibility: 'HUMAN_CONFIRMATION_REQUIRED',
+    verificationLevel: 'DIRECTORY_REPORTED',
+    isFixture: true,
+    lastVerifiedTimestamp: new Date(),
+    internalNotes: 'SEE official website saveourplanet.org verifies organization identity and general mission only.',
+  };
+
+  const sponsor3 = await prisma.fiscalSponsorCandidate.upsert({
+    where: { id: '3264d2c7-9803-456f-a907-61205e9f6d0c' },
+    update: sponsor3Data,
+    create: {
+      id: '3264d2c7-9803-456f-a907-61205e9f6d0c',
+      ...sponsor3Data,
+      citations: {
+        create: [
+          {
+            sourceUrl: 'https://fiscalsponsordirectory.org/service/social-environmental-entrepreneurs/',
+            quotedSection: 'Directory Listing for SEE',
+            extractedClaim: 'SEE Directory Listing for California programs (Directory-reported claim — official site verifies identity & mission only).',
+            verificationLevel: 'DIRECTORY_REPORTED',
+          },
+        ],
+      },
+    },
+  });
+
   // 5. Phase 1E — Strategic Partners Seed
   const partner1 = await prisma.strategicPartnerCandidate.upsert({
     where: { id: 'partner-riverside-coc' },

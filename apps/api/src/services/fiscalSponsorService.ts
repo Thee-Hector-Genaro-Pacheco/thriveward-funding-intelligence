@@ -195,8 +195,11 @@ export class FiscalSponsorService {
         continue;
       }
 
-      // Designate canonical candidate (prefer fixture or live-verified record or oldest)
-      const canonical = candidates.find((c) => c.isFixture || c.hasLiveVerification) || candidates[0];
+      // Designate canonical candidate (prefer original ID 3264d2c7-9803-456f-a907-61205e9f6d0c for SEE, then fixture or oldest)
+      let canonical = candidates.find((c) => c.id === '3264d2c7-9803-456f-a907-61205e9f6d0c');
+      if (!canonical) {
+        canonical = candidates.find((c) => c.isFixture || c.hasLiveVerification) || candidates[0];
+      }
 
       if (!canonical.canonicalDomain) {
         await prisma.fiscalSponsorCandidate.update({
@@ -210,11 +213,27 @@ export class FiscalSponsorService {
       for (const dup of duplicates) {
         if (dup.isMerged) continue;
 
-        // Re-link citations
-        await prisma.sponsorSourceCitation.updateMany({
+        // Re-link citations cleanly without creating duplicate rows
+        const dupCitations = await prisma.sponsorSourceCitation.findMany({
           where: { fiscalSponsorCandidateId: dup.id },
-          data: { fiscalSponsorCandidateId: canonical.id },
         });
+
+        for (const citation of dupCitations) {
+          const existingCitation = await prisma.sponsorSourceCitation.findFirst({
+            where: {
+              fiscalSponsorCandidateId: canonical.id,
+              sourceUrl: citation.sourceUrl,
+            },
+          });
+          if (existingCitation) {
+            await prisma.sponsorSourceCitation.delete({ where: { id: citation.id } });
+          } else {
+            await prisma.sponsorSourceCitation.update({
+              where: { id: citation.id },
+              data: { fiscalSponsorCandidateId: canonical.id },
+            });
+          }
+        }
 
         // Re-link opportunity matches
         const dupMatches = await prisma.opportunitySponsorMatch.findMany({

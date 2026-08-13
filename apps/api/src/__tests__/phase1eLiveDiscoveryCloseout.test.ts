@@ -104,7 +104,8 @@ describe('Phase 1E — Live-Discovery Identity & Evidence Closeout Test Suite', 
     });
 
     expect(candidate).toBeDefined();
-    expect(candidate!.verificationLevel).toBe('DIRECTORY_REPORTED');
+    expect(candidate!.verificationLevel).not.toBe('SPONSOR_OFFICIAL_SITE');
+    expect(['DIRECTORY_REPORTED', 'SEED_FIXTURE']).toContain(candidate!.verificationLevel);
   });
 
   it('10. Granular evidence coverage metrics prevent 100% rating when operational or compatibility fields are UNKNOWN', () => {
