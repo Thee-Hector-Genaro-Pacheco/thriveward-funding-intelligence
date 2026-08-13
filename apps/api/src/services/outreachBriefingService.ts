@@ -264,11 +264,12 @@ Service Footprint: ${verifiedCountiesStr}`;
    */
   public static async generatePartnerBriefingPacket(
     partnerId: string,
-    fundingOpportunityId?: string
+    fundingOpportunityId?: string,
+    inquiryPurpose: 'GRANT_COMPETITION' | 'GOVERNANCE_MEMBERSHIP' | 'GENERAL' = 'GRANT_COMPETITION'
   ) {
     const partner = await prisma.strategicPartnerCandidate.findUnique({
       where: { id: partnerId },
-      include: { citations: true },
+      include: { citations: true, contactChannels: true },
     });
 
     if (!partner) {
@@ -285,7 +286,19 @@ Service Footprint: ${verifiedCountiesStr}`;
     const counties = BRIDGE_FORWARD_PROFILE.initialServiceAreas;
     const countiesStr = `${counties.slice(0, -1).join(', ')}, and ${counties[counties.length - 1]}`;
 
-    const recipientEmail = partner.contactChannel && partner.contactChannel !== 'UNKNOWN' ? partner.contactChannel : `[ADD PARTNER RECIPIENT EMAIL]`;
+    // Select purpose-specific recipient contact email or fail closed to [VERIFY OFFICIAL CONTACT CHANNEL]
+    const recipientEmail =
+      inquiryPurpose === 'GOVERNANCE_MEMBERSHIP'
+        ? partner.cocNumber === 'CA-600' || partner.name.includes('LAHSA')
+          ? 'LACoCBoard@lahsa.org'
+          : partner.contactChannel && partner.contactChannel.includes('@')
+          ? partner.contactChannel
+          : '[VERIFY OFFICIAL CONTACT CHANNEL]'
+        : partner.cocNumber === 'CA-600' || partner.name.includes('LAHSA')
+        ? 'NOFA@lahsa.org'
+        : partner.contactChannel && partner.contactChannel.includes('@') && !partner.contactChannel.includes('cocinfo@lahsa.org')
+        ? partner.contactChannel
+        : '[VERIFY OFFICIAL CONTACT CHANNEL]';
 
     const oppTitle = opp?.title || 'FY2026 Continuum of Care Competition and Youth Homelessness Demonstration Program';
     const oppNumber = opp?.fundingOpportunityNumber || 'CPD-2600-DC-0025';
@@ -298,7 +311,7 @@ Service Footprint: ${verifiedCountiesStr}`;
 
 I am writing on behalf of Bridge Forward Foundation, an emerging Southern California organization dedicated to stabilizing housing, career pathways, and technology education for justice-involved adults and system-impacted young people in ${countiesStr}.
 
-We are preparing for the upcoming federal solicitation "${oppTitle}" (Notice #${oppNumber}, Agency: ${agency}), which appears potentially aligned based on preliminary, human-review-required analysis.
+We are evaluating this opportunity and seeking guidance regarding its current status, local process, and future participation requirements for "${oppTitle}" (Notice #${oppNumber}, Agency: ${agency}), which appears potentially aligned based on preliminary, human-review-required analysis.
 
 As direct application for this competition requires submission through an official Continuum of Care (CoC) Collaborative Applicant via e-snaps, we are reaching out to discuss potential partnership and local CoC project submission alignment with ${partner.name} (${partner.cocNumber || 'CoC Lead'}).
 

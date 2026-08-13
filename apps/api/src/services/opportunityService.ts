@@ -239,6 +239,31 @@ export class OpportunityService {
       sanitized.directApplicantEligibility = sanitized.candidateRoutingStatus === 'DIRECT_FEDERAL_ELIGIBLE' ? 'ELIGIBLE' : 'INVESTIGATE';
     }
 
+    if (isCoCCompetition) {
+      sanitized.hasSourceConflict = true;
+      sanitized.currentCycleStatus = 'INVESTIGATE — CONFLICTING OFFICIAL SOURCES';
+      sanitized.sourceConflictDetails = {
+        status: 'INVESTIGATE — CONFLICTING OFFICIAL SOURCES',
+        conflictReason: 'Grants.gov lists notice CPD-2600-DC-0025 OPEN with deadline August 26, 2026, while LAHSA official notice (article 1068) reports the court set aside the FY2026 NOFO in its entirety. Local competition status requires independent confirmation.',
+        citations: [
+          {
+            sourceTitle: 'Grants.gov Solicitation CPD-2600-DC-0025',
+            sourceUrl: 'https://www.grants.gov/search-results-detail/350000',
+            quotedSection: 'Official Grants.gov solicitation notice CPD-2600-DC-0025 listed as OPEN with deadline August 26, 2026.',
+            extractedClaim: 'Federal Grants.gov listing reflects active solicitation with August 26, 2026 deadline.',
+            verificationDate: '2026-08-13T00:00:00Z',
+          },
+          {
+            sourceTitle: 'LAHSA Official FY2026 NOFO Announcement',
+            sourceUrl: 'https://www.lahsa.org/news?article=1068-fy-2026-coc-program-nofo',
+            quotedSection: 'Official LAHSA Announcement: The court set aside the FY 2026 CoC Program NOFO in its entirety.',
+            extractedClaim: 'LAHSA official notice states court set aside FY2026 NOFO in its entirety; local application process suspended pending further court/HUD orders.',
+            verificationDate: '2026-08-13T00:00:00Z',
+          },
+        ],
+      };
+    }
+
     return sanitized;
   }
 

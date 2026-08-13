@@ -197,10 +197,11 @@ phase1eRouter.post('/strategic-partners/matches/:matchId/status', async (req: Re
 // GET /api/strategic-partners/:id/briefing
 phase1eRouter.get('/strategic-partners/:id/briefing', async (req: Request, res: Response) => {
   try {
-    const { opportunityId } = req.query;
+    const { opportunityId, inquiryPurpose } = req.query;
     const briefing = await OutreachBriefingService.generatePartnerBriefingPacket(
       req.params.id,
-      opportunityId as string | undefined
+      opportunityId as string | undefined,
+      (inquiryPurpose as any) || 'GRANT_COMPETITION'
     );
     res.json({ success: true, data: briefing });
   } catch (err: any) {

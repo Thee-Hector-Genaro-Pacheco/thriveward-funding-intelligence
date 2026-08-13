@@ -148,6 +148,8 @@ model FundingOpportunity {
   candidateRoutingStatus CandidateRoutingStatus?
   dismissedReason        String?
   discoverySearchTerms   String[]                @default([])
+  currentCycleStatus     String?                 @default("ACTIVE")
+  hasSourceConflict      Boolean                 @default(false)
 
   // Relations
   eligibilityRequirements EligibilityRequirement[]
@@ -588,6 +590,25 @@ model StrategicPartnerCandidate {
 
   citations          PartnerSourceCitation[]
   opportunityMatches OpportunityPartnerMatch[]
+  contactChannels    PartnerContactChannel[]
+}
+
+model PartnerContactChannel {
+  id                          String                    @id @default(uuid())
+  strategicPartnerCandidateId String
+  strategicPartnerCandidate   StrategicPartnerCandidate @relation(fields: [strategicPartnerCandidateId], references: [id], onDelete: Cascade)
+  contactValue                String
+  contactType                 String                    @default("EMAIL")
+  purpose                     String
+  purposeCategory             String                    @default("GRANT_COMPETITION")
+  sourceUrl                   String
+  quotedCitation              String
+  verifiedAt                  DateTime                  @default(now())
+  verificationStatus          String                    @default("VERIFIED_HUMAN_REVIEWED")
+  createdAt                   DateTime                  @default(now())
+  updatedAt                   DateTime                  @updatedAt
+
+  @@index([strategicPartnerCandidateId])
 }
 
 model PartnerSourceCitation {

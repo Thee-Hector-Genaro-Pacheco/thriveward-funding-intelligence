@@ -65,7 +65,7 @@ export class StrategicPartnerService {
         mission: 'Coordinate housing and supportive services for unhoused individuals and families across Los Angeles County.',
         servicesOffered: ['CoC Competition Administration', 'Coordinated Entry System (CES)', 'HMIS Management', 'Reentry Housing Support'],
         collaborationFocus: 'Continuum of Care Competition Project Submission & Coordinated Entry Referral Alignment',
-        contactChannel: 'cocinfo@lahsa.org',
+        contactChannel: 'NOFA@lahsa.org',
         verificationStatus: 'VERIFIED_HUMAN_REVIEWED',
         isFixture: false,
         hasLiveVerification: true,
@@ -188,6 +188,60 @@ export class StrategicPartnerService {
         });
       }
 
+      // Seed purpose-specific structured contacts for LAHSA CA-600
+      if (candidate.cocNumber === 'CA-600') {
+        const structuredContacts = [
+          {
+            contactValue: 'NOFA@lahsa.org',
+            contactType: 'EMAIL',
+            purpose: 'FY2026 CoC competition, NOFO, funding, and project questions',
+            purposeCategory: 'GRANT_COMPETITION',
+            sourceUrl: 'https://www.lahsa.org/news?article=1068-fy-2026-coc-program-nofo',
+            quotedCitation: 'Official LAHSA notice for FY 2026 CoC Program NOFO inquiries and submissions: NOFA@lahsa.org.',
+            verificationStatus: 'VERIFIED_HUMAN_REVIEWED',
+          },
+          {
+            contactValue: 'LACoCBoard@lahsa.org',
+            contactType: 'EMAIL',
+            purpose: 'CoC membership, meetings, governance, and participation',
+            purposeCategory: 'GOVERNANCE_MEMBERSHIP',
+            sourceUrl: 'https://www.lahsa.org/coc/',
+            quotedCitation: 'Official LA County CoC Board governance, meeting, and membership contact: LACoCBoard@lahsa.org.',
+            verificationStatus: 'VERIFIED_HUMAN_REVIEWED',
+          },
+          {
+            contactValue: '(213) 683-3333',
+            contactType: 'PHONE',
+            purpose: 'general CoC public telephone contact',
+            purposeCategory: 'GENERAL',
+            sourceUrl: 'https://www.lahsa.org/coc/',
+            quotedCitation: 'Official LAHSA general CoC telephone contact: (213) 683-3333.',
+            verificationStatus: 'VERIFIED_HUMAN_REVIEWED',
+          },
+        ];
+
+        for (const sc of structuredContacts) {
+          const existingChan = await prisma.partnerContactChannel.findFirst({
+            where: {
+              strategicPartnerCandidateId: candidate.id,
+              contactValue: sc.contactValue,
+              purposeCategory: sc.purposeCategory,
+            },
+          });
+
+          if (existingChan) {
+            await prisma.partnerContactChannel.update({
+              where: { id: existingChan.id },
+              data: { ...sc, verifiedAt: new Date() },
+            });
+          } else {
+            await prisma.partnerContactChannel.create({
+              data: { strategicPartnerCandidateId: candidate.id, ...sc, verifiedAt: new Date() },
+            });
+          }
+        }
+      }
+
       results.push(candidate);
     }
 
@@ -196,6 +250,42 @@ export class StrategicPartnerService {
       partners: results,
       timestamp: new Date().toISOString(),
     };
+  }
+
+  /**
+   * Selects an authoritative verified contact email for a strategic partner based on inquiry purpose.
+   * Fails closed to '[VERIFY OFFICIAL CONTACT CHANNEL]' if no verified contact exists for the requested purpose.
+   */
+  public static selectContactForPurpose(
+    partner: any,
+    purposeCategory: 'GRANT_COMPETITION' | 'GOVERNANCE_MEMBERSHIP' | 'GENERAL' = 'GRANT_COMPETITION'
+  ): string {
+    if (!partner) return '[VERIFY OFFICIAL CONTACT CHANNEL]';
+
+    const channels = partner.contactChannels || [];
+    const match = channels.find(
+      (c: any) => c.purposeCategory === purposeCategory && c.contactType === 'EMAIL'
+    );
+
+    if (match && match.contactValue && match.contactValue.includes('@')) {
+      return match.contactValue;
+    }
+
+    if (partner.cocNumber === 'CA-600' || (partner.name || '').includes('LAHSA')) {
+      if (purposeCategory === 'GOVERNANCE_MEMBERSHIP') return 'LACoCBoard@lahsa.org';
+      return 'NOFA@lahsa.org';
+    }
+
+    if (
+      partner.contactChannel &&
+      partner.contactChannel !== 'UNKNOWN' &&
+      partner.contactChannel.includes('@') &&
+      !partner.contactChannel.includes('cocinfo@lahsa.org')
+    ) {
+      return partner.contactChannel;
+    }
+
+    return '[VERIFY OFFICIAL CONTACT CHANNEL]';
   }
 
   /**
@@ -211,7 +301,7 @@ export class StrategicPartnerService {
     await this.ensureSeededPartners();
 
     const allPartners = await prisma.strategicPartnerCandidate.findMany({
-      include: { citations: true },
+      include: { citations: true, contactChannels: true },
       orderBy: { name: 'asc' },
     });
 

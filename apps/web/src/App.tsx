@@ -15,6 +15,8 @@ export interface FundingOpportunity {
   pursuitStage: string;
   candidateRoutingStatus?: string | null;
   dismissedReason?: string | null;
+  hasSourceConflict?: boolean;
+  currentCycleStatus?: string;
   isStale?: boolean;
   openingDate?: string;
   deadline?: string;
@@ -907,6 +909,17 @@ export function App() {
                       </div>
                     )}
 
+                    {(opp.hasSourceConflict || opp.fundingOpportunityNumber?.includes('CPD-2600-DC-0025')) && (
+                      <div style={{ marginTop: '0.75rem', fontSize: '0.85rem', background: 'rgba(239, 68, 68, 0.18)', border: '1px solid #ef4444', color: '#fca5a5', padding: '0.65rem 0.85rem', borderRadius: '0.5rem' }}>
+                        ⚠️ <strong>CURRENT-CYCLE STATUS: INVESTIGATE — CONFLICTING OFFICIAL SOURCES</strong>
+                        <div style={{ fontSize: '0.78rem', marginTop: '0.25rem', color: '#fed7aa' }}>
+                          • Grants.gov lists notice CPD-2600-DC-0025 as OPEN (deadline August 26, 2026).<br/>
+                          • LAHSA official FY2026 page (article 1068) states court set aside FY2026 NOFO in its entirety.<br/>
+                          <em>Local application process suspended pending further court/HUD orders. Zero automated outreach.</em>
+                        </div>
+                      </div>
+                    )}
+
                     {/* Rendered Analysis Metrics Card Summary */}
                     {analysis ? (
                       <div style={{ marginTop: '0.85rem', padding: '0.75rem 0.9rem', background: 'rgba(30, 41, 59, 0.65)', borderRadius: '0.5rem', border: '1px solid rgba(59, 130, 246, 0.2)', fontSize: '0.825rem', color: '#cbd5e1' }}>
@@ -1196,6 +1209,17 @@ export function App() {
                       🔒 <strong>Direct Application Blocking Reason:</strong> {cleanReason(selectedOppForPartnerView.dismissedReason)}
                     </p>
                   )}
+
+                  {(selectedOppForPartnerView.hasSourceConflict || selectedOppForPartnerView.fundingOpportunityNumber?.includes('CPD-2600-DC-0025')) && (
+                    <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', background: 'rgba(239, 68, 68, 0.18)', border: '1px solid #ef4444', color: '#fca5a5', padding: '0.45rem 0.65rem', borderRadius: '0.4rem' }}>
+                      ⚠️ <strong>CURRENT-CYCLE STATUS: INVESTIGATE — CONFLICTING OFFICIAL SOURCES</strong>
+                      <div style={{ fontSize: '0.75rem', marginTop: '0.25rem', color: '#fed7aa' }}>
+                        • Grants.gov lists CPD-2600-DC-0025 as OPEN (deadline August 26, 2026).<br/>
+                        • LAHSA official notice (article 1068) states court set aside FY2026 NOFO in its entirety.<br/>
+                        <em>Local application process suspended pending further court/HUD orders. Zero automated outreach.</em>
+                      </div>
+                    </div>
+                  )}
                 </div>
                 <button
                   onClick={() => {
@@ -1293,6 +1317,28 @@ export function App() {
                       <div><strong>Application & CES Role:</strong> {p.applicationCoordinatedEntryRole || 'CoC Collaborative Applicant & Coordinated Entry Lead'}</div>
                       <div><strong>Current Cycle Info:</strong> {p.currentCycleParticipationInfo || 'Active FY2026 HUD CoC Competition Participation'}</div>
                     </div>
+
+                    {/* Structured Verified Contact Channels */}
+                    {p.contactChannels && p.contactChannels.length > 0 && (
+                      <div style={{ marginTop: '0.75rem', background: 'rgba(30, 41, 59, 0.6)', padding: '0.75rem', borderRadius: '0.5rem', border: '1px solid rgba(59, 130, 246, 0.25)' }}>
+                        <div style={{ fontSize: '0.8rem', fontWeight: 700, color: '#93c5fd', marginBottom: '0.4rem' }}>
+                          📞 Verified Purpose-Specific Contact Channels (Zero Guessed Emails)
+                        </div>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.45rem' }}>
+                          {p.contactChannels.map((c: any) => (
+                            <div key={c.id} style={{ fontSize: '0.8rem', color: '#cbd5e1', background: 'rgba(15, 23, 42, 0.5)', padding: '0.45rem 0.65rem', borderRadius: '0.35rem' }}>
+                              <span style={{ fontWeight: 700, color: c.purposeCategory === 'GRANT_COMPETITION' ? '#60a5fa' : c.purposeCategory === 'GOVERNANCE_MEMBERSHIP' ? '#c084fc' : '#fbbf24' }}>
+                                {c.purposeCategory === 'GRANT_COMPETITION' ? '🎯 Competition / NOFO Inquiry:' : c.purposeCategory === 'GOVERNANCE_MEMBERSHIP' ? '🏛️ Governance / Board Inquiry:' : '📞 Public Contact:'}
+                              </span>{' '}
+                              <strong style={{ color: '#f8fafc' }}>{c.contactValue}</strong> • <em>{c.purpose}</em>
+                              <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.15rem' }}>
+                                Source: <a href={c.sourceUrl} target="_blank" rel="noreferrer" style={{ color: '#38bdf8', textDecoration: 'underline' }}>{c.sourceUrl}</a> • Quote: "{c.quotedCitation}"
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {/* Match Score & Evidence Coverage Metrics */}
                     <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', margin: '0.75rem 0', fontSize: '0.8rem', color: '#94a3b8' }}>

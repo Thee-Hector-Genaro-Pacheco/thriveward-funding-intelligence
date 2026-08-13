@@ -27,6 +27,26 @@ export type PursuitStage =
   | 'LOCKED'
   | 'DISMISSED';
 
+export interface FundingOpportunity {
+  id: string;
+  title: string;
+  fundingOpportunityNumber: string;
+  fundingAgency: string;
+  description: string;
+  deadline?: string;
+  awardMin?: string;
+  awardMax?: string;
+  candidateRoutingStatus?: string;
+  dismissedReason?: string;
+  isDemo?: boolean;
+  hasSourceConflict?: boolean;
+  currentCycleStatus?: string;
+  sourceConflictDetails?: any;
+  opportunityMatches?: any[];
+  opportunityAnalyses?: any[];
+  relevanceAnalyses?: any[];
+}
+
 // 5. Organization Operational Status
 export type OrgStatus = 'PRE_INCORPORATION' | 'INCORPORATED' | 'ACTIVE';
 
