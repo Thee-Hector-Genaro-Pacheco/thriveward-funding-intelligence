@@ -159,6 +159,9 @@ model FundingOpportunity {
   snapshots               SourceSnapshot[]
   relevanceAnalyses       OpportunityRelevance[]
   pursuitHistory          PursuitHistory[]
+  sponsorMatches          OpportunitySponsorMatch[]
+  readinessPlans          OpportunityReadinessPlan[]
+  grantCalendarItems      GrantCalendarItem[]
 
   @@unique([sourceSystem, externalOpportunityId])
   @@index([candidateRoutingStatus])
@@ -402,4 +405,177 @@ model SourceSnapshot {
   payloadHash           String
   schemaVersion         String              @default("1.0")
   rawPayload            Json
+}
+
+// Phase 1E Enums
+enum SponsorMatchStatus {
+  RESEARCH_REQUIRED
+  POSSIBLE_MATCH
+  CONTACT_APPROVED
+  CONTACTED
+  DISCOVERY_CALL
+  APPLICATION_SUBMITTED
+  ACCEPTED
+  DECLINED
+  INACTIVE
+}
+
+enum RecurrenceConfidence {
+  CONFIRMED_FORECAST
+  HISTORICALLY_RECURRING
+  POSSIBLY_RECURRING
+  ONE_TIME_OR_UNKNOWN
+}
+
+enum PlanTaskStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  COMPLETED
+  BLOCKED
+}
+
+// Phase 1E Models
+model FiscalSponsorCandidate {
+  id                     String      @id @default(uuid())
+  name                   String
+  websiteUrl             String
+  directorySourceUrl     String
+  geography              String
+  mission                String
+  populationsServed      String[]
+  modelsOffered          String[]
+  acceptingNewProjects   String      @default("UNKNOWN")
+  applicationProcess     String      @default("UNKNOWN")
+  estimatedReviewTime    String      @default("UNKNOWN")
+  setupFee               String      @default("UNKNOWN")
+  adminPercentage        String      @default("UNKNOWN")
+  minRevenueRequirement  String      @default("UNKNOWN")
+  administersGovGrants   String      @default("UNKNOWN")
+  federalGrantCapability String      @default("UNKNOWN")
+  samUeiStatus           String      @default("UNKNOWN")
+  contactChannel         String      @default("UNKNOWN")
+  verificationStatus     String      @default("PENDING_HUMAN_REVIEW")
+  lastVerifiedTimestamp  DateTime?
+  internalNotes          String?
+  createdAt              DateTime    @default(now())
+  updatedAt              DateTime    @updatedAt
+
+  citations          SponsorSourceCitation[]
+  opportunityMatches OpportunitySponsorMatch[]
+}
+
+model SponsorSourceCitation {
+  id                       String                 @id @default(uuid())
+  fiscalSponsorCandidateId String
+  fiscalSponsorCandidate   FiscalSponsorCandidate @relation(fields: [fiscalSponsorCandidateId], references: [id], onDelete: Cascade)
+  sourceUrl                String
+  quotedSection            String?
+  extractedClaim           String
+  verificationDate         DateTime               @default(now())
+}
+
+model StrategicPartnerCandidate {
+  id                 String    @id @default(uuid())
+  name               String
+  organizationType   String
+  websiteUrl         String
+  geography          String
+  mission            String
+  servicesOffered    String[]
+  collaborationFocus String
+  contactChannel     String    @default("UNKNOWN")
+  verificationStatus String    @default("PENDING_HUMAN_REVIEW")
+  lastVerified       DateTime?
+  internalNotes      String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+}
+
+model OpportunitySponsorMatch {
+  id                        String                 @id @default(uuid())
+  fundingOpportunityId      String
+  fundingOpportunity        FundingOpportunity     @relation(fields: [fundingOpportunityId], references: [id], onDelete: Cascade)
+  fiscalSponsorCandidateId  String
+  fiscalSponsorCandidate    FiscalSponsorCandidate @relation(fields: [fiscalSponsorCandidateId], references: [id], onDelete: Cascade)
+  matchScore                Int                    @default(0)
+  evidenceCoverage          Int                    @default(0)
+  matchedLanes              String[]
+  status                    SponsorMatchStatus     @default(POSSIBLE_MATCH)
+  humanApproved             Boolean                @default(false)
+  alignmentRationale        String
+  legalApplicantCapability  String
+  govGrantAdminCapability  String
+  arrangementAllowed        String
+  feeAndLeadTimeNotes       String
+  humanConfirmationRequired String[]
+  concerns                  String[]
+  missingInfo               String[]
+  recommendedNextStep       String
+  createdAt                 DateTime               @default(now())
+  updatedAt                 DateTime               @updatedAt
+}
+
+model OpportunityReadinessPlan {
+  id                                 String             @id @default(uuid())
+  fundingOpportunityId               String
+  fundingOpportunity                 FundingOpportunity @relation(fields: [fundingOpportunityId], references: [id], onDelete: Cascade)
+  targetNextCycle                    String
+  currentBlocker                     String
+  requiredRegistrations              String[]
+  fiscalSponsorOrPartnerRequirements String[]
+  operatingHistoryAndCapacityGaps    String[]
+  requiredDocuments                  String[]
+  matchFundStrategy                  String
+  responsibleOwner                   String             @default("Unassigned")
+  targetCompletionDate               DateTime?
+  isComplete                         Boolean            @default(false)
+  createdAt                          DateTime           @default(now())
+  updatedAt                          DateTime           @updatedAt
+
+  tasks   ReadinessPlanTask[]
+  history ReadinessPlanHistory[]
+}
+
+model ReadinessPlanTask {
+  id               String                   @id @default(uuid())
+  planId           String
+  plan             OpportunityReadinessPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  title            String
+  description      String
+  category         String
+  responsibleOwner String                   @default("Unassigned")
+  targetDate       DateTime?
+  status           PlanTaskStatus           @default(NOT_STARTED)
+  sourceEvidence   String?
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+}
+
+model ReadinessPlanHistory {
+  id         String                   @id @default(uuid())
+  planId     String
+  plan       OpportunityReadinessPlan @relation(fields: [planId], references: [id], onDelete: Cascade)
+  fromStatus String
+  toStatus   String
+  actorId    String
+  notes      String?
+  createdAt  DateTime                 @default(now())
+}
+
+model GrantCalendarItem {
+  id                        String               @id @default(uuid())
+  fundingOpportunityId      String?
+  fundingOpportunity        FundingOpportunity?  @relation(fields: [fundingOpportunityId], references: [id])
+  opportunityTitle          String
+  agency                    String
+  forecastedPostDate        DateTime?
+  postedDate                DateTime?
+  deadline                  DateTime?
+  priorCycleDates           String[]
+  recurrenceConfidence      RecurrenceConfidence @default(POSSIBLY_RECURRING)
+  expectedNextCyclePrepDate DateTime?
+  recurrenceEvidenceSource  String
+  notes                     String?
+  createdAt                 DateTime             @default(now())
+  updatedAt                 DateTime             @updatedAt
 }

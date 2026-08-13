@@ -7,6 +7,9 @@ describe('Bridge AI API — Opportunity & Health Read Endpoints', () => {
     process.env.DATABASE_URL =
       process.env.DATABASE_URL ||
       'postgresql://bridge_admin:bridge_secure_pass_2026@localhost:5432/bridge_ai_db?schema=public';
+    process.env.BRIDGE_REVIEW_TOKEN =
+      process.env.BRIDGE_REVIEW_TOKEN ||
+      'bridge_secret_review_token_change_in_production_2026';
   });
 
   describe('GET /health', () => {

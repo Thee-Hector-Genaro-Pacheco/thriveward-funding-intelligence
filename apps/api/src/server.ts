@@ -5,6 +5,7 @@ import { execSync } from 'child_process';
 import path from 'path';
 import { healthRouter } from './routes/health';
 import { opportunitiesRouter } from './routes/opportunities';
+import { phase1eRouter } from './routes/phase1eRoutes';
 import { BRIDGE_FORWARD_PROFILE } from '@bridge-ai/shared';
 
 dotenv.config();
@@ -19,6 +20,7 @@ app.use(express.json());
 app.use('/health', healthRouter);
 app.use('/api/health', healthRouter);
 app.use('/api/opportunities', opportunitiesRouter);
+app.use('/api', phase1eRouter);
 
 // Organization profile route
 app.get('/api/profile', (req: Request, res: Response) => {

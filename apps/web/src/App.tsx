@@ -59,6 +59,115 @@ export interface FundingOpportunity {
   }>;
 }
 
+export interface FiscalSponsorCandidate {
+  id: string;
+  name: string;
+  websiteUrl: string;
+  directorySourceUrl: string;
+  geography: string;
+  mission: string;
+  populationsServed: string[];
+  modelsOffered: string[];
+  acceptingNewProjects: string;
+  applicationProcess: string;
+  estimatedReviewTime: string;
+  setupFee: string;
+  adminPercentage: string;
+  minRevenueRequirement: string;
+  administersGovGrants: string;
+  federalGrantCapability: string;
+  samUeiStatus: string;
+  contactChannel: string;
+  verificationStatus: string;
+  lastVerifiedTimestamp?: string;
+  internalNotes?: string;
+  citations?: Array<{
+    sourceUrl: string;
+    quotedSection?: string;
+    extractedClaim: string;
+  }>;
+  opportunityMatches?: Array<{
+    id: string;
+    matchScore: number;
+    evidenceCoverage: number;
+    status: string;
+    alignmentRationale: string;
+  }>;
+}
+
+export interface StrategicPartnerCandidate {
+  id: string;
+  name: string;
+  organizationType: string;
+  websiteUrl: string;
+  geography: string;
+  mission: string;
+  servicesOffered: string[];
+  collaborationFocus: string;
+  contactChannel: string;
+  verificationStatus: string;
+  lastVerified?: string;
+}
+
+export interface ReadinessPlanTask {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  responsibleOwner: string;
+  targetDate?: string;
+  status: string;
+  sourceEvidence?: string;
+}
+
+export interface OpportunityReadinessPlan {
+  id: string;
+  fundingOpportunityId: string;
+  fundingOpportunity?: FundingOpportunity;
+  targetNextCycle: string;
+  currentBlocker: string;
+  requiredRegistrations: string[];
+  fiscalSponsorOrPartnerRequirements: string[];
+  operatingHistoryAndCapacityGaps: string[];
+  requiredDocuments: string[];
+  matchFundStrategy: string;
+  responsibleOwner: string;
+  targetCompletionDate?: string;
+  isComplete: boolean;
+  tasks: ReadinessPlanTask[];
+}
+
+export interface GrantCalendarItem {
+  id: string;
+  opportunityTitle: string;
+  agency: string;
+  forecastedPostDate?: string;
+  postedDate?: string;
+  deadline?: string;
+  priorCycleDates: string[];
+  recurrenceConfidence: string;
+  expectedNextCyclePrepDate?: string;
+  recurrenceEvidenceSource: string;
+  notes?: string;
+}
+
+export interface SponsorBriefingPacket {
+  candidateId: string;
+  candidateName: string;
+  websiteUrl: string;
+  geography: string;
+  opportunityTitle?: string;
+  opportunityNumber?: string;
+  draftInquiryEmail: {
+    to: string;
+    subject: string;
+    bodyText: string;
+  };
+  discoveryCallQuestions: string[];
+  recommendedFollowUpDate: string;
+  safeguardNotice: string;
+}
+
 export interface SystemHealth {
   apiStatus: string;
   pythonAgentStatus: string;
@@ -83,12 +192,21 @@ function cleanReason(reason?: string | null): string {
 }
 
 export function App() {
+  const [activePrimaryTab, setActivePrimaryTab] = useState<'OPPORTUNITIES' | 'SPONSORS' | 'PARTNERS' | 'READINESS' | 'CALENDAR'>('OPPORTUNITIES');
+
   const [opportunities, setOpportunities] = useState<FundingOpportunity[]>([]);
+  const [sponsors, setSponsors] = useState<FiscalSponsorCandidate[]>([]);
+  const [partners, setPartners] = useState<StrategicPartnerCandidate[]>([]);
+  const [readinessPlans, setReadinessPlans] = useState<OpportunityReadinessPlan[]>([]);
+  const [calendarItems, setCalendarItems] = useState<GrantCalendarItem[]>([]);
+
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
   const [activeFilter, setActiveFilter] = useState<string>('POTENTIAL_PATHWAYS');
   const [pathwaysSubFilter, setPathwaysSubFilter] = useState<'all' | 'fiscal' | 'partnership' | 'future'>('all');
   const [selectedOpp, setSelectedOpp] = useState<FundingOpportunity | null>(null);
+  const [briefingPacket, setBriefingPacket] = useState<SponsorBriefingPacket | null>(null);
   const [actionMessage, setActionMessage] = useState<string | null>(null);
 
   const [health, setHealth] = useState<SystemHealth>({
@@ -141,9 +259,7 @@ export function App() {
       }
 
       const res = await fetch(`/api/opportunities${queryParams}`);
-      if (!res.ok) {
-        throw new Error(`API response error: HTTP ${res.status}`);
-      }
+      if (!res.ok) throw new Error(`API response error: HTTP ${res.status}`);
       const json = await res.json();
       setOpportunities(json.data || []);
     } catch (err: any) {
@@ -153,82 +269,119 @@ export function App() {
     }
   };
 
+  const fetchSponsors = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/fiscal-sponsors');
+      if (res.ok) {
+        const json = await res.json();
+        setSponsors(json.data || []);
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchPartners = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/strategic-partners');
+      if (res.ok) {
+        const json = await res.json();
+        setPartners(json.data || []);
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchReadinessPlans = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/readiness-plans');
+      if (res.ok) {
+        const json = await res.json();
+        setReadinessPlans(json.data || []);
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchCalendarItems = async () => {
+    setLoading(true);
+    try {
+      const res = await fetch('/api/grant-calendar');
+      if (res.ok) {
+        const json = await res.json();
+        setCalendarItems(json.data || []);
+      }
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
     fetchHealth();
-    fetchOpportunities();
-  }, [activeFilter, pathwaysSubFilter]);
+    if (activePrimaryTab === 'OPPORTUNITIES') {
+      fetchOpportunities();
+    } else if (activePrimaryTab === 'SPONSORS') {
+      fetchSponsors();
+    } else if (activePrimaryTab === 'PARTNERS') {
+      fetchPartners();
+    } else if (activePrimaryTab === 'READINESS') {
+      fetchReadinessPlans();
+    } else if (activePrimaryTab === 'CALENDAR') {
+      fetchCalendarItems();
+    }
+  }, [activePrimaryTab, activeFilter, pathwaysSubFilter]);
 
   const handleAnalyze = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
     try {
       setActionMessage('Running opportunity analysis & scoring...');
-      const res = await fetch(`/api/opportunities/${id}/analyze`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!res.ok) {
-        const errBody = await res.json();
-        throw new Error(errBody.message || `HTTP ${res.status}`);
-      }
-
+      const res = await fetch(`/api/opportunities/${id}/analyze`, { method: 'POST' });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       await res.json();
       setActionMessage('Analysis & scoring completed successfully.');
-
-      // Refresh list to update analysis graphs
-      const freshRes = await fetch(`/api/opportunities?candidateRoutingStatus=POTENTIAL_PATHWAYS`);
-      if (freshRes.ok) {
-        const json = await freshRes.json();
-        const updatedList: FundingOpportunity[] = json.data || [];
-        setOpportunities(updatedList);
-        const target = updatedList.find((o) => o.id === id);
-        if (target) {
-          setSelectedOpp(target);
-        }
-      }
+      await fetchOpportunities();
     } catch (err: any) {
       alert(`Analysis failed: ${err.message}`);
     }
   };
 
-  const handleTransitionPursuit = async (id: string, stage: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleFetchBriefing = async (candidateId: string, oppId?: string) => {
     try {
-      let reason = '';
-      if (stage === 'DISMISSED') {
-        const inputReason = prompt('Please state the explicit reason for dismissing this opportunity:');
-        if (!inputReason || inputReason.trim() === '') {
-          alert('Dismissal requires an explanatory reason.');
-          return;
-        }
-        reason = inputReason.trim();
-      }
-
-      const res = await fetch(`/api/opportunities/${id}/pursuit`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: 'Bearer bridge_secret_review_token_change_in_production_2026',
-        },
-        body: JSON.stringify({
-          targetStage: stage,
-          reviewerId: 'human-reviewer-admin-01',
-          reason,
-          notes: `Stage transitioned to ${stage} via web portal interface`,
-        }),
-      });
-
-      if (!res.ok) {
-        const errBody = await res.json();
-        throw new Error(errBody.error || `HTTP ${res.status}`);
-      }
-
-      setActionMessage(`Successfully updated pursuit stage to ${stage}.`);
-      await fetchOpportunities();
+      const url = oppId ? `/api/fiscal-sponsors/${candidateId}/briefing?opportunityId=${oppId}` : `/api/fiscal-sponsors/${candidateId}/briefing`;
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const json = await res.json();
+      setBriefingPacket(json.data);
     } catch (err: any) {
-      alert(`Failed to update pursuit stage: ${err.message}`);
+      alert(`Failed to fetch briefing packet: ${err.message}`);
+    }
+  };
+
+  const handleToggleTask = async (taskId: string, currentStatus: string) => {
+    try {
+      const targetStatus = currentStatus === 'COMPLETED' ? 'NOT_STARTED' : 'COMPLETED';
+      const res = await fetch(`/api/readiness-plans/tasks/${taskId}/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetStatus, actorId: 'human-user-admin' }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      await fetchReadinessPlans();
+    } catch (err: any) {
+      alert(`Task status update failed: ${err.message}`);
     }
   };
 
@@ -236,10 +389,10 @@ export function App() {
     <div className="container">
       {/* Header */}
       <header>
-        <div className="header-badge">Phase 1D • Real Discovery, Triage & Direct Applicant Readiness Active</div>
+        <div className="header-badge">Phase 1E • Fiscal Sponsor, Strategic Partner Discovery & Funding Readiness Active</div>
         <h1 className="brand-title">Bridge AI</h1>
         <p className="brand-subtitle">
-          Funding Intelligence & Grants.gov Provenance for Bridge Forward Foundation
+          Funding Intelligence & Grant Readiness Platform for Bridge Forward Foundation
         </p>
       </header>
 
@@ -249,7 +402,7 @@ export function App() {
           <span>🛡️</span> PRODUCT PRINCIPLE: Human-Led, AI-Enabled Decision Support
         </div>
         <p className="principle-text">
-          AI assists authorized humans with research, extraction, relevance scoring, and readiness analysis. Analysis is read-only decision support and <strong>never</strong> mutates pursuit stage, candidate routing, human reviews, or source provenance. Qualification and match locking require explicit human authorization.
+          Bridge AI assists authorized humans with research, readiness analysis, and briefing preparation. Bridge AI performs <strong>zero</strong> automated external actions. All outreach inquiries, sponsor applications, legal certifications, and status advances require explicit human authorization.
         </p>
       </div>
 
@@ -261,6 +414,33 @@ export function App() {
         </div>
       )}
 
+      {/* Error Banner */}
+      {error && (
+        <div style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid #ef4444', color: '#fca5a5', padding: '0.75rem 1rem', borderRadius: '0.5rem', marginBottom: '1.5rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span>⚠️ {error}</span>
+          <button onClick={() => setError(null)} style={{ background: 'transparent', border: 'none', color: '#fca5a5', cursor: 'pointer', fontWeight: 700 }}>✕</button>
+        </div>
+      )}
+
+      {/* Primary Navigation Tabs */}
+      <div className="tab-navigation" style={{ marginBottom: '1.5rem', background: 'rgba(30, 41, 59, 0.9)', padding: '0.65rem 1rem', borderRadius: '0.75rem', border: '1px solid rgba(255,255,255,0.1)' }}>
+        <button className={`tab ${activePrimaryTab === 'OPPORTUNITIES' ? 'active' : ''}`} onClick={() => setActivePrimaryTab('OPPORTUNITIES')}>
+          📋 Opportunities Feed
+        </button>
+        <button className={`tab ${activePrimaryTab === 'SPONSORS' ? 'active' : ''}`} onClick={() => setActivePrimaryTab('SPONSORS')}>
+          🤝 Fiscal Sponsor Directory
+        </button>
+        <button className={`tab ${activePrimaryTab === 'PARTNERS' ? 'active' : ''}`} onClick={() => setActivePrimaryTab('PARTNERS')}>
+          🏛️ Strategic Partners
+        </button>
+        <button className={`tab ${activePrimaryTab === 'READINESS' ? 'active' : ''}`} onClick={() => setActivePrimaryTab('READINESS')}>
+          📋 Readiness Plans
+        </button>
+        <button className={`tab ${activePrimaryTab === 'CALENDAR' ? 'active' : ''}`} onClick={() => setActivePrimaryTab('CALENDAR')}>
+          📅 Funding Calendar
+        </button>
+      </div>
+
       {/* System Health Grid */}
       <div className="grid-3">
         <div className="card">
@@ -268,7 +448,7 @@ export function App() {
             <span className={`status-indicator ${health.apiStatus === 'UP' ? 'status-active' : 'status-warning'}`}></span>
             Node.js REST API
           </div>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Port 4000 • Express + TypeScript</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Port 4000 • Express + Prisma</p>
           <div style={{ marginTop: '0.75rem' }}>
             <span className="badge badge-blue">{health.apiStatus}</span>
           </div>
@@ -290,459 +470,343 @@ export function App() {
             <span className="status-indicator status-active"></span>
             PostgreSQL DB & Ingestion
           </div>
-          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Port 5432 • Grants.gov Verified Ingestion</p>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Port 5432 • Phase 1E Persistence</p>
           <div style={{ marginTop: '0.75rem' }}>
             <span className="badge badge-blue">{health.databaseStatus}</span>
           </div>
         </div>
       </div>
 
-      {/* Funding Opportunities Section */}
-      <div className="card" style={{ marginTop: '1.5rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
-          <h2 className="section-title" style={{ margin: 0 }}>
-            📋 Funding Opportunities ({opportunities.length})
-          </h2>
+      {/* TAB 1: OPPORTUNITIES FEED */}
+      {activePrimaryTab === 'OPPORTUNITIES' && (
+        <div className="card" style={{ marginTop: '1.5rem' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+            <h2 className="section-title" style={{ margin: 0 }}>
+              📋 Funding Opportunities ({opportunities.length})
+            </h2>
 
-          {/* Primary View Filters */}
-          <div className="tab-navigation">
-            <button className={`tab ${activeFilter === 'POTENTIAL_PATHWAYS' ? 'active' : ''}`} onClick={() => setActiveFilter('POTENTIAL_PATHWAYS')}>
-              🛤️ Potential Pathways
-            </button>
-            <button className={`tab ${activeFilter === 'OFFICIAL' ? 'active' : ''}`} onClick={() => setActiveFilter('OFFICIAL')}>
-              🏛️ Official Grants.gov
-            </button>
-            <button className={`tab ${activeFilter === 'NEW' ? 'active' : ''}`} onClick={() => setActiveFilter('NEW')}>
-              Direct Actionable Feed
-            </button>
-            <button className={`tab ${activeFilter === 'QUALIFIED' ? 'active' : ''}`} onClick={() => setActiveFilter('QUALIFIED')}>
-              Qualified Matches
-            </button>
-            <button className={`tab ${activeFilter === 'LOCKED' ? 'active' : ''}`} onClick={() => setActiveFilter('LOCKED')}>
-              🔒 Locked Matches
-            </button>
+            <div className="tab-navigation">
+              <button className={`tab ${activeFilter === 'POTENTIAL_PATHWAYS' ? 'active' : ''}`} onClick={() => setActiveFilter('POTENTIAL_PATHWAYS')}>
+                🛤️ Potential Pathways
+              </button>
+              <button className={`tab ${activeFilter === 'OFFICIAL' ? 'active' : ''}`} onClick={() => setActiveFilter('OFFICIAL')}>
+                🏛️ Official Grants.gov
+              </button>
+              <button className={`tab ${activeFilter === 'NEW' ? 'active' : ''}`} onClick={() => setActiveFilter('NEW')}>
+                Direct Actionable Feed
+              </button>
+              <button className={`tab ${activeFilter === 'QUALIFIED' ? 'active' : ''}`} onClick={() => setActiveFilter('QUALIFIED')}>
+                Qualified Matches
+              </button>
+              <button className={`tab ${activeFilter === 'LOCKED' ? 'active' : ''}`} onClick={() => setActiveFilter('LOCKED')}>
+                🔒 Locked Matches
+              </button>
+            </div>
           </div>
-        </div>
 
-        {/* Potential Pathways Sub-Filter Toolbar */}
-        {activeFilter === 'POTENTIAL_PATHWAYS' && (
-          <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', padding: '0.5rem 0.75rem', background: 'rgba(30, 41, 59, 0.6)', borderRadius: '0.5rem', border: '1px solid rgba(255,255,255,0.08)', flexWrap: 'wrap' }}>
-            <span style={{ fontSize: '0.8rem', color: '#94a3b8', display: 'flex', alignItems: 'center', fontWeight: 600, marginRight: '0.25rem' }}>Filter Pathway:</span>
-            <button
-              className={`tab ${pathwaysSubFilter === 'all' ? 'active' : ''}`}
-              onClick={() => setPathwaysSubFilter('all')}
-              style={{ fontSize: '0.8rem', padding: '0.3rem 0.65rem' }}
-            >
-              All Pathways
-            </button>
-            <button
-              className={`tab ${pathwaysSubFilter === 'fiscal' ? 'active' : ''}`}
-              onClick={() => setPathwaysSubFilter('fiscal')}
-              style={{ fontSize: '0.8rem', padding: '0.3rem 0.65rem' }}
-            >
-              Fiscal Sponsor Required
-            </button>
-            <button
-              className={`tab ${pathwaysSubFilter === 'partnership' ? 'active' : ''}`}
-              onClick={() => setPathwaysSubFilter('partnership')}
-              style={{ fontSize: '0.8rem', padding: '0.3rem 0.65rem' }}
-            >
-              Partnership Required
-            </button>
-            <button
-              className={`tab ${pathwaysSubFilter === 'future' ? 'active' : ''}`}
-              onClick={() => setPathwaysSubFilter('future')}
-              style={{ fontSize: '0.8rem', padding: '0.3rem 0.65rem' }}
-            >
-              Future Opportunity
-            </button>
-          </div>
-        )}
+          {activeFilter === 'POTENTIAL_PATHWAYS' && (
+            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '1rem', padding: '0.5rem 0.75rem', background: 'rgba(30, 41, 59, 0.6)', borderRadius: '0.5rem', border: '1px solid rgba(255,255,255,0.08)', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.8rem', color: '#94a3b8', display: 'flex', alignItems: 'center', fontWeight: 600, marginRight: '0.25rem' }}>Filter Pathway:</span>
+              <button className={`tab ${pathwaysSubFilter === 'all' ? 'active' : ''}`} onClick={() => setPathwaysSubFilter('all')} style={{ fontSize: '0.8rem', padding: '0.3rem 0.65rem' }}>All Pathways</button>
+              <button className={`tab ${pathwaysSubFilter === 'fiscal' ? 'active' : ''}`} onClick={() => setPathwaysSubFilter('fiscal')} style={{ fontSize: '0.8rem', padding: '0.3rem 0.65rem' }}>Fiscal Sponsor Required</button>
+              <button className={`tab ${pathwaysSubFilter === 'partnership' ? 'active' : ''}`} onClick={() => setPathwaysSubFilter('partnership')} style={{ fontSize: '0.8rem', padding: '0.3rem 0.65rem' }}>Partnership Required</button>
+              <button className={`tab ${pathwaysSubFilter === 'future' ? 'active' : ''}`} onClick={() => setPathwaysSubFilter('future')} style={{ fontSize: '0.8rem', padding: '0.3rem 0.65rem' }}>Future Opportunity</button>
+            </div>
+          )}
 
-        {/* Loading State */}
-        {loading && (
-          <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>
-            <div className="spinner"></div>
-            <p style={{ marginTop: '1rem', fontWeight: 600 }}>Loading funding opportunities...</p>
-          </div>
-        )}
+          {loading && <div style={{ textAlign: 'center', padding: '3rem', color: 'var(--text-muted)' }}>Loading...</div>}
 
-        {/* Error State */}
-        {!loading && error && (
-          <div className="error-banner">
-            <strong>⚠️ Error Fetching Opportunities:</strong> {error}
-          </div>
-        )}
+          {!loading && opportunities.length === 0 && (
+            <div className="empty-state" style={{ marginTop: '1.25rem' }}>
+              <h3>No opportunities matching filter</h3>
+            </div>
+          )}
 
-        {/* Empty State */}
-        {!loading && !error && opportunities.length === 0 && (
-          <div className="empty-state" style={{ marginTop: '1.25rem' }}>
-            <div style={{ fontSize: '2.5rem', marginBottom: '0.75rem' }}>🔍</div>
-            <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#f1f5f9', marginBottom: '0.5rem' }}>
-              No opportunities matching this filter
-            </h3>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.925rem', maxWidth: '640px', margin: '0 auto' }}>
-              There are currently no funding opportunities in the <strong>{activeFilter}</strong> view. Bridge Forward is currently <strong>PRE_INCORPORATION</strong>. Direct federal solicitations requiring active SAM.gov/UEI registration are safely routed to <em>Potential Pathways</em>.
-            </p>
-          </div>
-        )}
+          {!loading && opportunities.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginTop: '1.25rem' }}>
+              {opportunities.map((opp) => {
+                const isRouted = Boolean(opp.candidateRoutingStatus && opp.candidateRoutingStatus !== 'DIRECT_FEDERAL_ELIGIBLE');
+                const cleanedReason = cleanReason(opp.dismissedReason);
 
-        {/* Opportunity Cards List */}
-        {!loading && !error && opportunities.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem', marginTop: '1.25rem' }}>
-            {opportunities.map((opp) => {
-              const analysis = opp.opportunityAnalyses?.[0];
-              const relevance = opp.relevanceAnalyses?.[0];
-
-              const isIrrelevant = relevance?.relevanceStatus === 'IRRELEVANT';
-              const isNotEligible = analysis?.eligibilityDecision === 'NOT_ELIGIBLE' || analysis?.eligibilityStatus === 'NOT_ELIGIBLE';
-              const isRouted = Boolean(
-                opp.candidateRoutingStatus && opp.candidateRoutingStatus !== 'DIRECT_FEDERAL_ELIGIBLE'
-              );
-              const isBlockedReason = isRouted || Boolean(
-                opp.dismissedReason &&
-                  (opp.dismissedReason.includes('PRE_INCORPORATION') ||
-                    opp.dismissedReason.includes('FISCAL_SPONSOR') ||
-                    opp.dismissedReason.includes('PARTNERSHIP') ||
-                    opp.dismissedReason.includes('FUTURE') ||
-                    opp.dismissedReason.includes('EXCLUDED'))
-              );
-
-              const cleanTitle = sanitizeHtmlToText(opp.title);
-              const cleanAgency = sanitizeHtmlToText(opp.fundingAgency);
-              const cleanDescription = sanitizeHtmlToText(opp.description);
-              const cleanGeography = sanitizeHtmlToText(opp.geography);
-              const cleanedReason = cleanReason(opp.dismissedReason);
-
-              // Action Gate UI flags — Qualification and Locking blocked if PRE_INCORPORATION / Non-actionable routing
-              const canMarkQualified = !isRouted && !isIrrelevant && !isNotEligible && !isBlockedReason && opp.pursuitStage !== 'QUALIFIED' && opp.pursuitStage !== 'LOCKED';
-              const canLockMatch = !isRouted && !isIrrelevant && !isNotEligible && !isBlockedReason && opp.pursuitStage === 'QUALIFIED';
-
-              const pipelineLabel = isRouted || opp.pursuitStage === 'DISMISSED' ? 'Pipeline: POTENTIAL PATHWAY' : `Pipeline: ${opp.pursuitStage}`;
-
-              const pathwayText = opp.candidateRoutingStatus === 'FISCAL_SPONSOR_REQUIRED' || opp.dismissedReason?.includes('FISCAL_SPONSOR')
-                ? 'Fiscal Sponsor Required'
-                : opp.candidateRoutingStatus === 'PARTNERSHIP_REQUIRED' || opp.dismissedReason?.includes('PARTNERSHIP')
-                ? 'Partnership Required'
-                : opp.candidateRoutingStatus === 'FUTURE_OPPORTUNITY' || opp.dismissedReason?.includes('FUTURE')
-                ? 'Future Capacity (501c3)'
-                : 'Incorporation / Registrations';
-
-              return (
-                <div
-                  key={opp.id}
-                  className="opp-card"
-                  onClick={() => setSelectedOpp(opp)}
-                  style={{
-                    background: 'rgba(15, 23, 42, 0.65)',
-                    border: selectedOpp?.id === opp.id ? '2px solid #3b82f6' : '1px solid var(--border-color)',
-                    borderRadius: '0.85rem',
-                    padding: '1.35rem',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                  }}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem' }}>
-                    <div style={{ flex: 1 }}>
-                      {/* Separate Evaluation Badges for 6 Analysis Types */}
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.55rem', flexWrap: 'wrap' }}>
-                        {opp.isDemo ? (
-                          <span className="badge badge-amber">DEMO FIXTURE</span>
-                        ) : (
+                return (
+                  <div key={opp.id} className="opp-card" onClick={() => setSelectedOpp(opp)} style={{ background: 'rgba(15, 23, 42, 0.65)', border: selectedOpp?.id === opp.id ? '2px solid #3b82f6' : '1px solid var(--border-color)', borderRadius: '0.85rem', padding: '1.35rem', cursor: 'pointer' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem' }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.55rem', flexWrap: 'wrap' }}>
                           <span className="badge badge-purple">OFFICIAL SOURCE</span>
-                        )}
+                          <span className="badge badge-blue">{isRouted ? 'Pipeline: POTENTIAL PATHWAY' : `Pipeline: ${opp.pursuitStage}`}</span>
+                          <span className="badge badge-amber" style={{ background: '#78350f' }}>Readiness: PRE-INCORPORATION</span>
+                        </div>
+                        <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#f8fafc' }}>{sanitizeHtmlToText(opp.title)}</h3>
+                        <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
+                          <strong>Agency:</strong> {sanitizeHtmlToText(opp.fundingAgency)} • <strong>Official ID:</strong> {opp.fundingOpportunityNumber}
+                        </p>
+                      </div>
+                    </div>
 
-                        <span className="badge badge-blue">{pipelineLabel}</span>
+                    <p style={{ fontSize: '0.9rem', color: '#cbd5e1', marginTop: '0.75rem' }}>{sanitizeHtmlToText(opp.description)}</p>
 
-                        {relevance && (
-                          <span className={`badge ${relevance.relevanceStatus === 'RELEVANT' ? 'badge-blue' : 'badge-amber'}`}>
-                            Relevance: {relevance.relevanceStatus} ({relevance.relevanceScore || 85}/100)
-                          </span>
-                        )}
+                    {cleanedReason && (
+                      <div style={{ marginTop: '0.75rem', fontSize: '0.85rem', background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#fca5a5', padding: '0.6rem 0.85rem', borderRadius: '0.5rem' }}>
+                        🔒 <strong>Direct Application Blocking Reason:</strong> {cleanedReason}
+                      </div>
+                    )}
 
-                        {analysis && (
-                          <span className="badge badge-purple" style={{ background: '#4c1d95' }}>
-                            Org Fit: {analysis.overallFitScore}/100
-                          </span>
-                        )}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                      <button onClick={(e) => handleAnalyze(opp.id, e)} style={{ background: 'rgba(59, 130, 246, 0.25)', border: '1px solid #3b82f6', color: '#93c5fd', padding: '0.35rem 0.75rem', borderRadius: '0.4rem', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600 }}>
+                        ⚡ Analyze & Score
+                      </button>
+                      <span style={{ color: '#60a5fa', fontWeight: 600, fontSize: '0.85rem' }}>Review Details →</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
 
-                        {analysis && (
-                          <span className="badge badge-blue" style={{ background: '#1e3a8a' }}>
-                            Evidence: {analysis.evidenceCoverage}%
-                          </span>
-                        )}
+      {/* TAB 2: FISCAL SPONSOR DIRECTORY */}
+      {activePrimaryTab === 'SPONSORS' && (
+        <div className="card" style={{ marginTop: '1.5rem' }}>
+          <h2 className="section-title">🤝 Fiscal Sponsor Directory & Evidence-Backed Match Finder</h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.925rem', marginBottom: '1.25rem' }}>
+            Human-reviewed directory of verified California fiscal sponsors. Unverified facts are explicitly preserved as <strong>UNKNOWN</strong>. Only an authorized human can advance a candidate or confirm an agreement.
+          </p>
 
-                        <span className="badge badge-rose" style={{ background: '#701a75' }}>
-                          Direct Eligibility: Not Currently Eligible
+          {loading && <div style={{ textAlign: 'center', padding: '2rem' }}>Loading directory...</div>}
+
+          {!loading && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+              {sponsors.map((s) => (
+                <div key={s.id} style={{ background: 'rgba(15, 23, 42, 0.7)', border: '1px solid var(--border-color)', borderRadius: '0.75rem', padding: '1.25rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem' }}>
+                    <div>
+                      <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.4rem' }}>
+                        <span className={`badge ${s.verificationStatus === 'VERIFIED_OFFICIAL' ? 'badge-blue' : 'badge-amber'}`}>
+                          {s.verificationStatus}
                         </span>
-
-                        <span className="badge badge-amber" style={{ background: '#78350f' }}>
-                          Readiness: PRE-INCORPORATION
+                        <span className={`badge ${s.acceptingNewProjects === 'YES' ? 'badge-purple' : 'badge-amber'}`}>
+                          Accepting Projects: {s.acceptingNewProjects}
                         </span>
-
-                        <span className="badge badge-amber" style={{ background: '#854d0e' }}>
-                          Feasibility: Future-Cycle Recommended
+                        <span className="badge badge-blue">
+                          Gov Grants: {s.administersGovGrants}
                         </span>
                       </div>
-
-                      <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#f8fafc' }}>{cleanTitle}</h3>
-                      <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>
-                        <strong>Agency:</strong> {cleanAgency} • <strong>Geography:</strong> {cleanGeography} • <strong>Official ID:</strong> {opp.fundingOpportunityNumber}
+                      <h3 style={{ fontSize: '1.2rem', fontWeight: 700, color: '#f8fafc' }}>{s.name}</h3>
+                      <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: '0.2rem' }}>
+                        <strong>Geography:</strong> {s.geography} • <strong>Website:</strong>{' '}
+                        <a href={s.websiteUrl} target="_blank" rel="noreferrer" style={{ color: '#38bdf8', textDecoration: 'underline' }}>
+                          {s.websiteUrl}
+                        </a>
                       </p>
                     </div>
 
-                    {/* Primary Score / Status Column */}
-                    <div style={{ textAlign: 'right', minWidth: '190px' }}>
-                      <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fca5a5', background: 'rgba(239,68,68,0.15)', padding: '0.4rem 0.75rem', borderRadius: '0.5rem', border: '1px solid rgba(239,68,68,0.3)' }}>
-                        Not currently eligible to apply directly
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.35rem' }}>
-                        Recommended Pathway: <strong style={{ color: '#60a5fa' }}>{pathwayText}</strong>
-                      </div>
-                    </div>
+                    <button onClick={() => handleFetchBriefing(s.id)} style={{ background: 'rgba(59, 130, 246, 0.2)', border: '1px solid #3b82f6', color: '#93c5fd', padding: '0.4rem 0.85rem', borderRadius: '0.4rem', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600 }}>
+                      📄 Draft Inquiry Briefing
+                    </button>
                   </div>
 
-                  {/* Sanitized Description */}
-                  <p style={{ fontSize: '0.9rem', color: '#cbd5e1', marginTop: '0.75rem', lineClamp: 2, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                    {cleanDescription}
+                  <p style={{ fontSize: '0.9rem', color: '#cbd5e1', marginTop: '0.75rem' }}>{s.mission}</p>
+
+                  <div style={{ marginTop: '0.75rem', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.65rem', background: 'rgba(30, 41, 59, 0.5)', padding: '0.75rem', borderRadius: '0.5rem', fontSize: '0.85rem' }}>
+                    <div><strong>Models Offered:</strong> {s.modelsOffered.join(', ')}</div>
+                    <div><strong>Admin Fee:</strong> {s.adminPercentage}</div>
+                    <div><strong>Setup Fee:</strong> {s.setupFee}</div>
+                    <div><strong>Est. Review Lead Time:</strong> {s.estimatedReviewTime}</div>
+                    <div><strong>Federal Capability:</strong> {s.federalGrantCapability}</div>
+                    <div><strong>SAM/UEI Status:</strong> {s.samUeiStatus}</div>
+                  </div>
+
+                  {s.citations && s.citations.length > 0 && (
+                    <div style={{ marginTop: '0.75rem', fontSize: '0.8rem', color: '#94a3b8', background: 'rgba(139, 92, 246, 0.1)', padding: '0.5rem 0.75rem', borderRadius: '0.4rem', border: '1px solid rgba(139, 92, 246, 0.2)' }}>
+                      ℹ️ <strong>Source Citation:</strong> {s.citations[0].extractedClaim} (<em>{s.citations[0].sourceUrl}</em>)
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* TAB 3: STRATEGIC PARTNERS */}
+      {activePrimaryTab === 'PARTNERS' && (
+        <div className="card" style={{ marginTop: '1.5rem' }}>
+          <h2 className="section-title">🏛️ Strategic Program Partners Directory</h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.925rem', marginBottom: '1.25rem' }}>
+            Programmatic partners (Continuums of Care, Community Colleges, Workforce Boards, Youth Housing Providers) distinct from legal fiscal sponsors.
+          </p>
+
+          {loading && <div style={{ textAlign: 'center', padding: '2rem' }}>Loading partners...</div>}
+
+          {!loading && (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '1.25rem' }}>
+              {partners.map((p) => (
+                <div key={p.id} style={{ background: 'rgba(15, 23, 42, 0.7)', border: '1px solid var(--border-color)', borderRadius: '0.75rem', padding: '1.25rem' }}>
+                  <span className="badge badge-purple" style={{ marginBottom: '0.5rem' }}>{p.organizationType}</span>
+                  <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#f8fafc', marginTop: '0.35rem' }}>{p.name}</h3>
+                  <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: '0.2rem' }}>
+                    <strong>Geography:</strong> {p.geography}
                   </p>
-
-                  {/* Prominent Blocking Reason Warning Box */}
-                  {cleanedReason && (
-                    <div style={{ marginTop: '0.75rem', fontSize: '0.85rem', background: 'rgba(239, 68, 68, 0.12)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#fca5a5', padding: '0.6rem 0.85rem', borderRadius: '0.5rem' }}>
-                      🔒 <strong>Direct Application Blocking Reason:</strong> {cleanedReason}
-                    </div>
-                  )}
-
-                  {!opp.isDemo && (
-                    <div className="provenance-warning" style={{ marginTop: '0.75rem', fontSize: '0.8rem', background: 'rgba(139, 92, 246, 0.1)', border: '1px solid rgba(139, 92, 246, 0.25)', color: '#d8b4fe', padding: '0.5rem 0.75rem', borderRadius: '0.4rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <span>ℹ️ Official Grants.gov provenance confirmed. Opportunity relevance does not constitute direct organizational eligibility until Bridge Forward completes incorporation and federal registrations.</span>
-                      <a href={opp.sourceUrl} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()} style={{ color: '#38bdf8', textDecoration: 'underline', fontWeight: 600, marginLeft: '0.5rem', whiteSpace: 'nowrap' }}>
-                        🔗 View Official Notice
-                      </a>
-                    </div>
-                  )}
-
-                  {/* Action Buttons Toolbar */}
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1rem', paddingTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)', flexWrap: 'wrap', gap: '0.5rem' }}>
-                    <div style={{ display: 'flex', gap: '0.4rem', flexWrap: 'wrap' }}>
-                      {/* Analyze & Score — Always enabled for all opportunities (read-only decision support) */}
-                      <button
-                        onClick={(e) => handleAnalyze(opp.id, e)}
-                        style={{ background: 'rgba(59, 130, 246, 0.25)', border: '1px solid #3b82f6', color: '#93c5fd', padding: '0.35rem 0.75rem', borderRadius: '0.4rem', fontSize: '0.8rem', cursor: 'pointer', fontWeight: 600 }}
-                      >
-                        ⚡ Analyze & Score
-                      </button>
-
-                      <button
-                        onClick={(e) => canMarkQualified && handleTransitionPursuit(opp.id, 'QUALIFIED', e)}
-                        disabled={!canMarkQualified}
-                        title={!canMarkQualified ? 'Disabled: Direct application blocked due to PRE_INCORPORATION / non-actionable routing' : ''}
-                        style={{
-                          background: canMarkQualified ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255,255,255,0.05)',
-                          border: canMarkQualified ? '1px solid #10b981' : '1px solid rgba(255,255,255,0.1)',
-                          color: canMarkQualified ? '#6ee7b7' : '#64748b',
-                          padding: '0.35rem 0.75rem',
-                          borderRadius: '0.4rem',
-                          fontSize: '0.8rem',
-                          cursor: canMarkQualified ? 'pointer' : 'not-allowed',
-                          fontWeight: 600,
-                        }}
-                      >
-                        ✓ Mark Qualified
-                      </button>
-
-                      <button
-                        onClick={(e) => canLockMatch && handleTransitionPursuit(opp.id, 'LOCKED', e)}
-                        disabled={!canLockMatch}
-                        title={!canLockMatch ? 'Disabled: Direct application blocked due to PRE_INCORPORATION / non-actionable routing' : ''}
-                        style={{
-                          background: canLockMatch ? 'rgba(139, 92, 246, 0.2)' : 'rgba(255,255,255,0.05)',
-                          border: canLockMatch ? '1px solid #8b5cf6' : '1px solid rgba(255,255,255,0.1)',
-                          color: canLockMatch ? '#c084fc' : '#64748b',
-                          padding: '0.35rem 0.75rem',
-                          borderRadius: '0.4rem',
-                          fontSize: '0.8rem',
-                          cursor: canLockMatch ? 'pointer' : 'not-allowed',
-                          fontWeight: 600,
-                        }}
-                      >
-                        🔒 Lock Match
-                      </button>
-                    </div>
-
-                    <span style={{ color: '#60a5fa', fontWeight: 600, fontSize: '0.85rem' }}>Review Details →</span>
+                  <p style={{ fontSize: '0.875rem', color: '#cbd5e1', marginTop: '0.5rem' }}>{p.mission}</p>
+                  <div style={{ marginTop: '0.75rem', fontSize: '0.825rem', background: 'rgba(59, 130, 246, 0.1)', padding: '0.5rem 0.75rem', borderRadius: '0.4rem', border: '1px solid rgba(59, 130, 246, 0.2)' }}>
+                    <strong>Collaboration Focus:</strong> {p.collaborationFocus}
                   </div>
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Expandable Detail View Drawer */}
-      {selectedOpp && (
-        <div className="card" style={{ border: '2px solid #3b82f6', background: 'rgba(15, 23, 42, 0.95)', marginBottom: '2.5rem' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '1rem', marginBottom: '1.25rem' }}>
-            <div>
-              <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.35rem', flexWrap: 'wrap' }}>
-                {selectedOpp.isDemo ? (
-                  <span className="badge badge-amber">DEMO FIXTURE</span>
-                ) : (
-                  <span className="badge badge-purple">OFFICIAL GRANTS.GOV RECORD</span>
-                )}
-                <span className="badge badge-blue">
-                  {selectedOpp.candidateRoutingStatus && selectedOpp.candidateRoutingStatus !== 'DIRECT_FEDERAL_ELIGIBLE'
-                    ? 'Pipeline: POTENTIAL PATHWAY'
-                    : `Pipeline: ${selectedOpp.pursuitStage}`}
-                </span>
-              </div>
-              <h2 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#ffffff' }}>{sanitizeHtmlToText(selectedOpp.title)}</h2>
-              <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: '0.25rem' }}>
-                Verified Official Source:{' '}
-                <a href={selectedOpp.sourceUrl} target="_blank" rel="noreferrer" style={{ color: '#38bdf8', textDecoration: 'underline', fontWeight: 600 }}>
-                  🔗 View Official Notice ({selectedOpp.sourceUrl})
-                </a>
-              </p>
+              ))}
             </div>
-            <button
-              onClick={() => setSelectedOpp(null)}
-              style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', padding: '0.5rem 1rem', borderRadius: '0.5rem', cursor: 'pointer', fontWeight: 700 }}
-            >
-              ✕ Close Detail
-            </button>
-          </div>
+          )}
+        </div>
+      )}
 
-          {/* 6 Separated Analysis Types Display Panel */}
-          <div style={{ background: 'rgba(30, 41, 59, 0.85)', border: '1px solid rgba(59, 130, 246, 0.3)', padding: '1.25rem', borderRadius: '0.65rem', marginBottom: '1.5rem' }}>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#93c5fd', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <span>📊</span> Decision Support Analysis & Readiness Breakdown
-            </h3>
+      {/* TAB 4: READINESS PLANS */}
+      {activePrimaryTab === 'READINESS' && (
+        <div className="card" style={{ marginTop: '1.5rem' }}>
+          <h2 className="section-title">📋 Opportunity Readiness Plans</h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.925rem', marginBottom: '1.25rem' }}>
+            Actionable readiness plans transforming Potential Pathways into 90-day future-cycle preparation schedules.
+          </p>
 
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem', marginBottom: '1rem' }}>
-              <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '0.65rem 0.85rem', borderRadius: '0.5rem', border: '1px solid rgba(255,255,255,0.08)' }}>
-                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>1. Mission Relevance Score</div>
-                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#60a5fa' }}>
-                  {selectedOpp.relevanceAnalyses?.[0]?.relevanceScore || 85} / 100 ({selectedOpp.relevanceAnalyses?.[0]?.relevanceStatus || 'RELEVANT'})
-                </div>
-              </div>
+          {loading && <div style={{ textAlign: 'center', padding: '2rem' }}>Loading plans...</div>}
 
-              <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '0.65rem 0.85rem', borderRadius: '0.5rem', border: '1px solid rgba(255,255,255,0.08)' }}>
-                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>2. Organizational Fit Score</div>
-                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#c084fc' }}>
-                  {selectedOpp.opportunityAnalyses?.[0]?.overallFitScore ? `${selectedOpp.opportunityAnalyses[0].overallFitScore} / 100` : 'Click "Analyze & Score"'}
-                </div>
-              </div>
-
-              <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '0.65rem 0.85rem', borderRadius: '0.5rem', border: '1px solid rgba(255,255,255,0.08)' }}>
-                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>3. Evidence Coverage</div>
-                <div style={{ fontSize: '1.1rem', fontWeight: 700, color: '#34d399' }}>
-                  {selectedOpp.opportunityAnalyses?.[0]?.evidenceCoverage ? `${selectedOpp.opportunityAnalyses[0].evidenceCoverage}%` : 'N/A'}
-                </div>
-              </div>
-
-              <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '0.65rem 0.85rem', borderRadius: '0.5rem', border: '1px solid rgba(255,255,255,0.08)' }}>
-                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>4. Direct Eligibility</div>
-                <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#fca5a5' }}>
-                  Not Currently Eligible
-                </div>
-              </div>
-
-              <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '0.65rem 0.85rem', borderRadius: '0.5rem', border: '1px solid rgba(255,255,255,0.08)' }}>
-                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>5. Organizational Readiness</div>
-                <div style={{ fontSize: '0.95rem', fontWeight: 700, color: '#fde047' }}>
-                  PRE-INCORPORATION (Not Ready)
-                </div>
-              </div>
-
-              <div style={{ background: 'rgba(15, 23, 42, 0.6)', padding: '0.65rem 0.85rem', borderRadius: '0.5rem', border: '1px solid rgba(255,255,255,0.08)' }}>
-                <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>6. Current-Cycle Feasibility</div>
-                <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fbbf24' }}>
-                  Future-Cycle Preparation Recommended
-                </div>
-              </div>
+          {!loading && readinessPlans.length === 0 && (
+            <div style={{ padding: '2rem', textAlign: 'center', color: '#94a3b8' }}>
+              No readiness plans generated yet. Click "Analyze & Score" on any Potential Pathway to generate its preparation plan.
             </div>
+          )}
 
-            {/* Street Outreach Program Representation Banner */}
-            {(selectedOpp.fundingOpportunityNumber?.includes('HHS-2026-ACF-ACYF-YO-0044') || selectedOpp.title.toLowerCase().includes('street outreach')) && (
-              <div style={{ background: 'rgba(59, 130, 246, 0.12)', border: '1px solid rgba(59, 130, 246, 0.3)', padding: '0.75rem 1rem', borderRadius: '0.5rem', marginBottom: '1rem', color: '#93c5fd', fontSize: '0.85rem' }}>
-                ℹ️ <strong>Street Outreach Program Eligibility Representation:</strong> Official solicitation eligibility includes nonprofits with and without 501(c)(3) status. Direct federal application remains blocked because Bridge Forward is <strong>PRE_INCORPORATION</strong> and lacks verified legal-entity status, EIN, SAM.gov/UEI registration, Grants.gov AOR, an executed fiscal sponsor agreement, 25% matching funds, and programmatic operating history.
-              </div>
-            )}
+          {!loading && readinessPlans.length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+              {readinessPlans.map((plan) => (
+                <div key={plan.id} style={{ background: 'rgba(15, 23, 42, 0.8)', border: '1px solid #3b82f6', borderRadius: '0.75rem', padding: '1.35rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap' }}>
+                    <div>
+                      <span className="badge badge-amber" style={{ marginBottom: '0.4rem' }}>{plan.targetNextCycle}</span>
+                      <h3 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#f8fafc' }}>
+                        {plan.fundingOpportunity ? sanitizeHtmlToText(plan.fundingOpportunity.title) : 'Street Outreach Program (HHS-2026-ACF-ACYF-YO-0044)'}
+                      </h3>
+                      <p style={{ fontSize: '0.85rem', color: '#fca5a5', marginTop: '0.25rem' }}>
+                        <strong>Current Blocker:</strong> {plan.currentBlocker}
+                      </p>
+                    </div>
+                  </div>
 
-            {/* Current-Cycle Deadline Feasibility & Guidance */}
-            <div style={{ background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.3)', padding: '0.85rem 1rem', borderRadius: '0.5rem', color: '#fef08a', fontSize: '0.85rem' }}>
-              <div style={{ fontWeight: 700, fontSize: '0.95rem', marginBottom: '0.4rem', color: '#fde047' }}>
-                ⏳ Deadline Feasibility Guidance
-              </div>
-              <p style={{ margin: 0, lineHeight: '1.4' }}>
-                <strong>Closing Date:</strong> {selectedOpp.deadline || '2026-08-17'} (<strong>4 days remaining</strong>) • <strong>Required Lead Time:</strong> 60–90 days for fiscal sponsor execution & SAM.gov/UEI setup.<br />
-                <strong>Recommendation:</strong> <em>Strong mission match — future-cycle preparation recommended.</em> Securing a fiscal sponsorship agreement, UEI credentials, and completing a federal submission within 4 days is not realistically achievable.
-              </p>
-              <div style={{ marginTop: '0.65rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
-                <div>
-                  <strong style={{ color: '#fca5a5' }}>Identified Capacity Gaps:</strong>
-                  <ul style={{ margin: '0.25rem 0 0 1.1rem', padding: 0 }}>
-                    <li>Legal entity status & EIN pending</li>
-                    <li>Active SAM.gov & UEI registration missing</li>
-                    <li>Grants.gov AOR account unverified</li>
-                    <li>Executed fiscal sponsor agreement missing</li>
-                  </ul>
+                  <div style={{ marginTop: '1rem', background: 'rgba(30, 41, 59, 0.6)', padding: '0.85rem', borderRadius: '0.5rem', fontSize: '0.85rem', color: '#cbd5e1' }}>
+                    <strong>25% Match Fund Strategy:</strong> {plan.matchFundStrategy}
+                  </div>
+
+                  <h4 style={{ fontSize: '1rem', fontWeight: 700, color: '#93c5fd', marginTop: '1.25rem', marginBottom: '0.65rem' }}>
+                    Task Preparation Checklist ({plan.tasks.filter((t) => t.status === 'COMPLETED').length} / {plan.tasks.length} Completed)
+                  </h4>
+
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+                    {plan.tasks.map((task) => (
+                      <div key={task.id} style={{ display: 'flex', alignItems: 'flex-start', gap: '0.75rem', background: 'rgba(15, 23, 42, 0.5)', padding: '0.65rem 0.85rem', borderRadius: '0.4rem', border: '1px solid rgba(255,255,255,0.05)' }}>
+                        <input
+                          type="checkbox"
+                          checked={task.status === 'COMPLETED'}
+                          onChange={() => handleToggleTask(task.id, task.status)}
+                          style={{ marginTop: '0.2rem', cursor: 'pointer' }}
+                        />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: '0.9rem', fontWeight: 600, color: task.status === 'COMPLETED' ? '#6ee7b7' : '#f8fafc', textDecoration: task.status === 'COMPLETED' ? 'line-through' : 'none' }}>
+                            {task.title}
+                          </div>
+                          <div style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '0.15rem' }}>
+                            {task.description} • <strong>Owner:</strong> {task.responsibleOwner} • <strong>Category:</strong> {task.category}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-                <div>
-                  <strong style={{ color: '#93c5fd' }}>Recommended Preparation Tasks:</strong>
-                  <ol style={{ margin: '0.25rem 0 0 1.1rem', padding: 0 }}>
-                    <li>Establish formal fiscal sponsorship agreement</li>
-                    <li>Complete incorporation & SAM.gov UEI setup</li>
-                    <li>Build 25% non-federal matching fund reserves</li>
-                    <li>Prepare application for next annual cycle</li>
-                  </ol>
-                </div>
-              </div>
+              ))}
             </div>
-          </div>
+          )}
+        </div>
+      )}
 
-          <div className="grid-2" style={{ marginBottom: '1.5rem' }}>
-            <div>
-              <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#f1f5f9', marginBottom: '0.75rem' }}>
-                📄 Verified Official Notice Details (Grants.gov Payload)
-              </h3>
-              <p style={{ fontSize: '0.9rem', color: '#cbd5e1', marginBottom: '0.75rem', whiteSpace: 'pre-line' }}>
-                {sanitizeHtmlToText(selectedOpp.description)}
-              </p>
-              <ul style={{ paddingLeft: '1.2rem', fontSize: '0.85rem', color: '#94a3b8' }}>
-                <li><strong>Official Title:</strong> {sanitizeHtmlToText(selectedOpp.title)}</li>
-                <li><strong>Agency:</strong> {sanitizeHtmlToText(selectedOpp.fundingAgency)}</li>
-                <li><strong>Geography:</strong> {sanitizeHtmlToText(selectedOpp.geography)}</li>
-                <li><strong>Opportunity Number:</strong> {selectedOpp.fundingOpportunityNumber || 'N/A'}</li>
-                <li><strong>Post Date:</strong> {selectedOpp.openingDate}</li>
-                <li><strong>Closing Date:</strong> {selectedOpp.deadline}</li>
-                <li><strong>Award Range:</strong> {selectedOpp.awardMin} – {selectedOpp.awardMax}</li>
-                <li><strong>Total Program Budget:</strong> {selectedOpp.totalAvailableFunding}</li>
-              </ul>
+      {/* TAB 5: FUNDING CALENDAR */}
+      {activePrimaryTab === 'CALENDAR' && (
+        <div className="card" style={{ marginTop: '1.5rem' }}>
+          <h2 className="section-title">📅 Recurring Grant Calendar & Cycle Tracker</h2>
+          <p style={{ color: 'var(--text-muted)', fontSize: '0.925rem', marginBottom: '1.25rem' }}>
+            Tracks annual recurring funding cycles without fabricating future deadlines. Recurrence confidence is evaluated from historical notice evidence.
+          </p>
+
+          {loading && <div style={{ textAlign: 'center', padding: '2rem' }}>Loading calendar...</div>}
+
+          {!loading && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              {calendarItems.map((item) => (
+                <div key={item.id} style={{ background: 'rgba(15, 23, 42, 0.7)', border: '1px solid var(--border-color)', borderRadius: '0.65rem', padding: '1rem' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap' }}>
+                    <div>
+                      <span className="badge badge-purple" style={{ marginRight: '0.5rem' }}>{item.recurrenceConfidence}</span>
+                      <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#f8fafc', display: 'inline' }}>{item.opportunityTitle}</h3>
+                      <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: '0.25rem' }}>
+                        <strong>Agency:</strong> {item.agency} • <strong>Prior Cycle Dates:</strong> {item.priorCycleDates.join(', ')}
+                      </p>
+                    </div>
+
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '0.85rem', color: '#60a5fa', fontWeight: 700 }}>
+                        Expected Next Prep Date: {item.expectedNextCyclePrepDate ? new Date(item.expectedNextCyclePrepDate).toISOString().split('T')[0] : 'TBD'}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: '0.5rem', fontSize: '0.8rem', color: '#cbd5e1' }}>
+                    {item.notes} • <em>Evidence Source: {item.recurrenceEvidenceSource}</em>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Briefing Packet Modal */}
+      {briefingPacket && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1000, padding: '1.5rem' }}>
+          <div style={{ background: '#0f172a', border: '2px solid #3b82f6', borderRadius: '0.85rem', maxWidth: '780px', width: '100%', maxHeight: '90vh', overflowY: 'auto', padding: '1.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid var(--border-color)', paddingBottom: '0.75rem', marginBottom: '1rem' }}>
+              <h2 style={{ fontSize: '1.25rem', fontWeight: 700, color: '#fff' }}>
+                📄 Fiscal Sponsor Inquiry Briefing Packet — {briefingPacket.candidateName}
+              </h2>
+              <button onClick={() => setBriefingPacket(null)} style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
             </div>
 
-            <div>
-              <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#f1f5f9', marginBottom: '0.75rem' }}>
-                🛠️ Participant Support Allowability Matrix
-              </h3>
-              <div className="pill-list" style={{ gap: '0.5rem' }}>
-                <span className="pill">Stipends: <strong>{selectedOpp.supportTrainingStipends || 'UNKNOWN'}</strong></span>
-                <span className="pill">Transportation: <strong>{selectedOpp.supportTransportation || 'UNKNOWN'}</strong></span>
-                <span className="pill">Tools: <strong>{selectedOpp.supportTools || 'UNKNOWN'}</strong></span>
-                <span className="pill">PPE: <strong>{selectedOpp.supportPPE || 'UNKNOWN'}</strong></span>
-                <span className="pill">Laptops: <strong>{selectedOpp.supportLaptops || 'UNKNOWN'}</strong></span>
-                <span className="pill">Training Equipment: <strong>{selectedOpp.supportTrainingEquipment || 'UNKNOWN'}</strong></span>
-                <span className="pill">Certifications: <strong>{selectedOpp.supportCertifications || 'UNKNOWN'}</strong></span>
-                <span className="pill">Paid Work Experience: <strong>{selectedOpp.supportPaidWorkExperience || 'UNKNOWN'}</strong></span>
-              </div>
+            <div style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid #ef4444', color: '#fca5a5', padding: '0.75rem', borderRadius: '0.5rem', fontSize: '0.85rem', marginBottom: '1rem' }}>
+              {briefingPacket.safeguardNotice}
+            </div>
+
+            <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#93c5fd', marginBottom: '0.5rem' }}>✉️ Draft Inquiry Email (Human Review & Dispatch Only)</h3>
+            <div style={{ background: 'rgba(30, 41, 59, 0.9)', padding: '1rem', borderRadius: '0.5rem', fontSize: '0.85rem', whiteSpace: 'pre-wrap', color: '#cbd5e1', marginBottom: '1.25rem' }}>
+              <strong>To:</strong> {briefingPacket.draftInquiryEmail.to}<br />
+              <strong>Subject:</strong> {briefingPacket.draftInquiryEmail.subject}<br /><br />
+              {briefingPacket.draftInquiryEmail.bodyText}
+            </div>
+
+            <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#93c5fd', marginBottom: '0.5rem' }}>📞 Discovery Call Questions</h3>
+            <ul style={{ paddingLeft: '1.2rem', fontSize: '0.85rem', color: '#cbd5e1', marginBottom: '1.25rem' }}>
+              {briefingPacket.discoveryCallQuestions.map((q, idx) => (
+                <li key={idx} style={{ marginBottom: '0.35rem' }}>{q}</li>
+              ))}
+            </ul>
+
+            <div style={{ textAlign: 'right', borderTop: '1px solid var(--border-color)', paddingTop: '0.75rem' }}>
+              <button onClick={() => setBriefingPacket(null)} style={{ background: '#3b82f6', border: 'none', color: '#fff', padding: '0.5rem 1.25rem', borderRadius: '0.4rem', fontWeight: 700, cursor: 'pointer' }}>
+                Close Briefing
+              </button>
             </div>
           </div>
         </div>
       )}
 
       {/* Ground Truth Profile Card */}
-      <div className="card" style={{ marginBottom: '2.5rem' }}>
+      <div className="card" style={{ marginTop: '2.5rem', marginBottom: '2.5rem' }}>
         <h2 className="section-title">🏢 Ground-Truth Organization Profile (Southern California Service Area)</h2>
         <p style={{ color: '#e2e8f0', fontWeight: 600, fontSize: '1.05rem' }}>
           {BRIDGE_FORWARD_PROFILE.name} • {BRIDGE_FORWARD_PROFILE.statewideGeography}
@@ -750,18 +814,10 @@ export function App() {
         <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: '0.35rem' }}>
           <strong>Initial Service Areas:</strong> {BRIDGE_FORWARD_PROFILE.initialServiceAreas.join(', ')}
         </p>
-        <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem', marginBottom: '1rem' }}>
-          <span className="badge badge-rose">{BRIDGE_FORWARD_PROFILE.status}</span>
-          <span className="badge badge-amber">501(c)(3) {BRIDGE_FORWARD_PROFILE.taxStatus}</span>
-        </div>
-        <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>
-          <strong>Mission:</strong> {BRIDGE_FORWARD_PROFILE.missionStatement}
-        </p>
       </div>
 
-      {/* Footer */}
       <footer>
-        <p>Bridge AI Platform • Phase 1D Applicant Readiness & Source Identity • Bridge Forward Foundation</p>
+        <p>Bridge AI Platform • Phase 1E Fiscal Sponsor & Funding Readiness Foundation • Bridge Forward Foundation</p>
       </footer>
     </div>
   );
