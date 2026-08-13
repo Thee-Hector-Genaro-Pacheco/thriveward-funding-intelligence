@@ -87,6 +87,7 @@ describe('Phase 1F — Contact-Integrity and Current-Cycle Status Hotfix Test Su
       'GRANT_COMPETITION'
     );
     expect(grantBriefing.draftInquiryEmail.to).toBe('CareCoordination@ceo.oc.gov');
+    expect(grantBriefing.draftInquiryEmail.subject).toContain('CoC NOFO Question — Bridge Forward Foundation');
 
     // Test CES integration inquiry
     const cesBriefing = await OutreachBriefingService.generatePartnerBriefingPacket(
@@ -100,15 +101,23 @@ describe('Phase 1F — Contact-Integrity and Current-Cycle Status Hotfix Test Su
     const channels = await prisma.partnerContactChannel.findMany({
       where: { strategicPartnerCandidateId: orangeCandidate.id },
     });
-    expect(channels.length).toBeGreaterThanOrEqual(2);
+    expect(channels.length).toBeGreaterThanOrEqual(3);
 
-    const careChan = channels.find((c) => c.contactValue === 'CareCoordination@ceo.oc.gov');
-    expect(careChan).toBeDefined();
-    expect(careChan?.sourceUrl).toBe('https://ceo.oc.gov/office-care-coordination');
-    expect(careChan?.quotedCitation).toBe('For further information, contact CareCoordination@ceo.oc.gov');
+    const nofaChan = channels.find((c) => c.purposeCategory === 'GRANT_COMPETITION');
+    expect(nofaChan).toBeDefined();
+    expect(nofaChan?.contactValue).toBe('CareCoordination@ceo.oc.gov');
+    expect(nofaChan?.sourceUrl).toBe('https://ceo.oc.gov/fy2026cocnofo');
+    expect(nofaChan?.quotedCitation).toBe('For questions related to the CoC NOFO, please email the Office of Care Coordination at CareCoordination@ceo.oc.gov with the email subject line "CoC NOFO Question".');
 
-    const cesChan = channels.find((c) => c.contactValue === 'CoordinatedEntry@ceo.oc.gov');
+    const generalChan = channels.find((c) => c.purposeCategory === 'GENERAL');
+    expect(generalChan).toBeDefined();
+    expect(generalChan?.contactValue).toBe('CareCoordination@ceo.oc.gov');
+    expect(generalChan?.sourceUrl).toBe('https://ceo.oc.gov/office-care-coordination');
+    expect(generalChan?.quotedCitation).toBe('For further information, contact CareCoordination@ceo.oc.gov');
+
+    const cesChan = channels.find((c) => c.purposeCategory === 'CES_INTEGRATION');
     expect(cesChan).toBeDefined();
+    expect(cesChan?.contactValue).toBe('CoordinatedEntry@ceo.oc.gov');
     expect(cesChan?.sourceUrl).toBe('https://ceo.ocgov.com/care-coordination/homeless-services/coordinated-entry-system');
     expect(cesChan?.quotedCitation).toBe('For additional information about the Coordinated Entry System, email CoordinatedEntry@ceo.oc.gov.');
   });

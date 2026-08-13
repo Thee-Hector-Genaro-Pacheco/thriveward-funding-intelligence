@@ -298,7 +298,11 @@ Service Footprint: ${verifiedCountiesStr}`;
     const agency = opp?.fundingAgency || 'Department of Housing and Urban Development';
     const deadline = opp?.deadline || '2026-08-26';
 
-    const subject = `Preliminary CoC Partnership Inquiry — Bridge Forward Foundation (${oppTitle})`;
+    const subjectPrefix = (partner.cocNumber === 'CA-602' || (partner.name || '').includes('Orange')) && inquiryPurpose === 'GRANT_COMPETITION'
+      ? 'CoC NOFO Question — Bridge Forward Foundation'
+      : 'Preliminary CoC Partnership Inquiry — Bridge Forward Foundation';
+
+    const subject = `${subjectPrefix}: ${oppTitle} (${oppNumber})`;
 
     const bodyText = `Dear Leadership & CoC Planning Team at ${partner.name},
 

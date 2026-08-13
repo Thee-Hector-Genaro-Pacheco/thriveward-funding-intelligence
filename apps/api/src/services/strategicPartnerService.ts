@@ -248,8 +248,17 @@ export class StrategicPartnerService {
           {
             contactValue: 'CareCoordination@ceo.oc.gov',
             contactType: 'EMAIL',
-            purpose: 'General CoC partnership, governance, and grant competition inquiries',
+            purpose: 'CoC NOFO competition questions, application inquiries, and project submissions',
             purposeCategory: 'GRANT_COMPETITION',
+            sourceUrl: 'https://ceo.oc.gov/fy2026cocnofo',
+            quotedCitation: 'For questions related to the CoC NOFO, please email the Office of Care Coordination at CareCoordination@ceo.oc.gov with the email subject line "CoC NOFO Question".',
+            verificationStatus: 'VERIFIED_HUMAN_REVIEWED',
+          },
+          {
+            contactValue: 'CareCoordination@ceo.oc.gov',
+            contactType: 'EMAIL',
+            purpose: 'General CoC partnership and Office of Care Coordination inquiries',
+            purposeCategory: 'GENERAL',
             sourceUrl: 'https://ceo.oc.gov/office-care-coordination',
             quotedCitation: 'For further information, contact CareCoordination@ceo.oc.gov',
             verificationStatus: 'VERIFIED_HUMAN_REVIEWED',
