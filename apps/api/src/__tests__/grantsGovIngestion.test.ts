@@ -175,7 +175,9 @@ describe('Phase 1B — Grants.gov Verified Ingestion & Provenance Complete Audit
       const service = new IngestionService(mockClient);
       await expect(service.ingestFromGrantsGov({ keyword: 'reentry', dryRun: false })).rejects.toThrow(/Malformed search response payload/);
 
-      const dbOpps = await prisma.fundingOpportunity.findMany({ where: { isDemo: false } });
+      const dbOpps = await prisma.fundingOpportunity.findMany({
+        where: { externalOpportunityId: { in: ['test-unit-mock-888888', 'test-malformed-detail-999'] } },
+      });
       expect(dbOpps.length).toBe(0);
     });
 
@@ -460,14 +462,17 @@ describe('Phase 1B — Grants.gov Verified Ingestion & Provenance Complete Audit
           supportTrainingStipends: 'YES',
           supportLaptops: 'YES',
           opportunityAnalyses: {
-            updateMany: {
-              where: {},
-              data: {
+            create: [
+              {
+                sourceFingerprint: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+                profileVersion: '1.1.0-phase1d',
+                profileHash: '0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef',
+                profileSnapshot: { profileId: 'bridge-forward-org-profile' },
                 overallFitScore: 85,
                 eligibilityStatus: 'HIGH_PRIORITY',
                 reasoningSummary: 'Human reviewer confirmed fit for Bridge Forward Controls to Code.',
               },
-            },
+            ],
           },
         },
       });

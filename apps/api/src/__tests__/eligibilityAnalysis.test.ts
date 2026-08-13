@@ -79,7 +79,7 @@ describe('Phase 1C — Eligibility and Fit Analysis Foundation Complete Test Sui
   describe('1. Profile and Hashing', () => {
     it('Case 1: Structured profile contains a version and only documented facts', () => {
       expect(BRIDGE_FORWARD_PROFILE.profileId).toBe('bridge-forward-org-profile');
-      expect(BRIDGE_FORWARD_PROFILE.profileVersion).toBe('1.0.0-phase0');
+      expect(BRIDGE_FORWARD_PROFILE.profileVersion).toBe('1.1.0-phase1d');
       expect(BRIDGE_FORWARD_PROFILE.organizationStage).toBe('PRE_INCORPORATION');
       expect(BRIDGE_FORWARD_PROFILE.taxStatus).toBe('NOT_OBTAINED');
       expect(BRIDGE_FORWARD_PROFILE.operatingHistoryYears).toBe(0);

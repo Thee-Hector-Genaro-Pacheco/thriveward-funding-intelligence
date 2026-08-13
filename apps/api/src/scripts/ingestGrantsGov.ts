@@ -6,6 +6,7 @@ dotenv.config();
 
 export function parseArgs(args: string[]) {
   let keyword = 'reentry';
+  let profile: string | undefined;
   let statuses = 'forecasted|posted';
   let limit = 3;
   let persist = false;
@@ -19,6 +20,12 @@ export function parseArgs(args: string[]) {
         throw new Error('Option --keyword requires a non-empty string value');
       }
       keyword = val;
+    } else if (arg === '--profile') {
+      const val = args[++i];
+      if (!val || val.startsWith('--')) {
+        throw new Error('Option --profile requires a string value (e.g. "bridge-forward")');
+      }
+      profile = val;
     } else if (arg === '--statuses') {
       const val = args[++i];
       if (!val || val.startsWith('--')) {
@@ -36,11 +43,11 @@ export function parseArgs(args: string[]) {
     } else if (arg === '--dry-run') {
       persist = false;
     } else {
-      throw new Error(`Unsupported option: '${arg}'. Supported options: --keyword, --statuses, --limit, --dry-run, --persist`);
+      throw new Error(`Unsupported option: '${arg}'. Supported options: --keyword, --profile, --statuses, --limit, --dry-run, --persist`);
     }
   }
 
-  return { keyword, statuses, limit, dryRun: !persist };
+  return { keyword, profile, statuses, limit, dryRun: !persist };
 }
 
 async function main() {
@@ -49,7 +56,9 @@ async function main() {
 
   try {
     const options = parseArgs(args);
-    console.log(`📋 Configuration: Keyword="${options.keyword}", Statuses="${options.statuses}", Limit=${options.limit}, Mode=${options.dryRun ? 'DRY RUN (No DB changes)' : 'PERSIST (Save to DB)'}`);
+    console.log(
+      `📋 Configuration: ${options.profile ? `Profile="${options.profile}"` : `Keyword="${options.keyword}"`}, Statuses="${options.statuses}", Limit=${options.limit}, Mode=${options.dryRun ? 'DRY RUN (No DB changes)' : 'PERSIST (Save to DB)'}`
+    );
 
     const service = new IngestionService();
     const summary = await service.ingestFromGrantsGov(options);

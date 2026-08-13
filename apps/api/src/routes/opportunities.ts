@@ -1,6 +1,9 @@
 import { Router, Request, Response } from 'express';
 import { OpportunityService } from '../services/opportunityService';
 import { AnalysisService } from '../services/analysisService';
+import { RelevanceService } from '../services/relevanceService';
+import { PursuitService } from '../services/pursuitService';
+import { PursuitStage } from '@prisma/client';
 
 export const opportunitiesRouter = Router();
 
@@ -12,17 +15,18 @@ const ALLOWED_QUERY_PARAMS = new Set([
   'dataKind',
   'sourceSystem',
   'verificationStatus',
+  'pursuitStage',
+  'relevanceStatus',
   'page',
   'limit',
 ]);
 
 /**
  * GET /api/opportunities
- * Query params: status, fundingType, minimumFitScore, dataKind, sourceSystem, verificationStatus, page, limit
+ * Query params: status, fundingType, minimumFitScore, dataKind, sourceSystem, verificationStatus, pursuitStage, relevanceStatus, page, limit
  */
 opportunitiesRouter.get('/', async (req: Request, res: Response) => {
   try {
-    // Check for unexpected query parameters
     const unknownParams = Object.keys(req.query).filter((param) => !ALLOWED_QUERY_PARAMS.has(param));
     if (unknownParams.length > 0) {
       return res.status(400).json({
@@ -31,9 +35,8 @@ opportunitiesRouter.get('/', async (req: Request, res: Response) => {
       });
     }
 
-    const { status, fundingType, minimumFitScore, dataKind, sourceSystem, verificationStatus, page, limit } = req.query;
+    const { status, fundingType, minimumFitScore, dataKind, sourceSystem, verificationStatus, pursuitStage, relevanceStatus, page, limit } = req.query;
 
-    // Validate numeric parameters
     let parsedMinimumFitScore: number | undefined;
     if (minimumFitScore !== undefined) {
       parsedMinimumFitScore = Number(minimumFitScore);
@@ -80,6 +83,8 @@ opportunitiesRouter.get('/', async (req: Request, res: Response) => {
       dataKind: dataKind ? String(dataKind) : undefined,
       sourceSystem: sourceSystem ? String(sourceSystem) : undefined,
       verificationStatus: verificationStatus ? String(verificationStatus) : undefined,
+      pursuitStage: pursuitStage ? String(pursuitStage) : undefined,
+      relevanceStatus: relevanceStatus ? String(relevanceStatus) : undefined,
       page: parsedPage,
       limit: parsedLimit,
     });
@@ -89,6 +94,22 @@ opportunitiesRouter.get('/', async (req: Request, res: Response) => {
     return res.status(400).json({
       error: 'Bad Request',
       message: err.message || 'Error executing opportunity search query',
+    });
+  }
+});
+
+/**
+ * GET /api/opportunities/locked
+ * Retrieves list of opportunities currently in LOCKED pursuit stage.
+ */
+opportunitiesRouter.get('/locked', async (_req: Request, res: Response) => {
+  try {
+    const lockedMatches = await PursuitService.getLockedMatches();
+    return res.status(200).json({ data: lockedMatches, count: lockedMatches.length });
+  } catch (err: any) {
+    return res.status(500).json({
+      error: 'Internal Server Error',
+      message: err.message || 'Error retrieving locked matches',
     });
   }
 });
@@ -119,8 +140,116 @@ opportunitiesRouter.get('/:id', async (req: Request, res: Response) => {
 });
 
 /**
+ * POST /api/opportunities/:id/relevance
+ * Computes contextual relevance for opportunity against Bridge Forward profile.
+ */
+opportunitiesRouter.post('/:id/relevance', async (req: Request, res: Response) => {
+  try {
+    if (req.body && typeof req.body === 'object' && Object.keys(req.body).length > 0) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: `POST /api/opportunities/:id/relevance accepts an empty request body only. Unknown properties: ${Object.keys(req.body).join(', ')}`,
+      });
+    }
+
+    const { id } = req.params;
+    const relevance = await RelevanceService.assessRelevance(id);
+    return res.status(200).json(relevance);
+  } catch (err: any) {
+    const message = err.message || '';
+    if (message.includes('not found')) {
+      return res.status(404).json({ error: 'Not Found', message });
+    }
+    return res.status(400).json({ error: 'Bad Request', message });
+  }
+});
+
+/**
+ * GET /api/opportunities/:id/relevance
+ * Retrieves current contextual relevance record.
+ */
+opportunitiesRouter.get('/:id/relevance', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const relevance = await RelevanceService.getRelevance(id);
+    if (!relevance) {
+      return res.status(200).json({ relevance: null, message: 'No relevance assessment generated yet for this opportunity.' });
+    }
+    return res.status(200).json(relevance);
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Internal Server Error', message: err.message || 'Error retrieving relevance' });
+  }
+});
+
+/**
+ * POST /api/opportunities/:id/pursuit
+ * Transition pursuit stage (requires Bearer Token).
+ */
+opportunitiesRouter.post('/:id/pursuit', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const authHeader = req.headers.authorization;
+
+    const ALLOWED_PURSUIT_KEYS = new Set(['stage', 'reviewerId', 'notes', 'reason']);
+    const unknownBodyKeys = Object.keys(req.body || {}).filter((k) => !ALLOWED_PURSUIT_KEYS.has(k));
+    if (unknownBodyKeys.length > 0) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: `Unknown property in pursuit request body: ${unknownBodyKeys.join(', ')}`,
+      });
+    }
+
+    const { stage, reviewerId, notes, reason } = req.body || {};
+
+    if (!stage || !Object.values(PursuitStage).includes(stage as PursuitStage)) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: `Invalid or missing 'stage' parameter. Allowed values: ${Object.values(PursuitStage).join(', ')}`,
+      });
+    }
+
+    const result = await PursuitService.transitionStage({
+      fundingOpportunityId: id,
+      targetStage: stage as PursuitStage,
+      reviewerId,
+      notes,
+      reason,
+      authHeader,
+    });
+
+    return res.status(200).json(result);
+  } catch (err: any) {
+    const message = err.message || '';
+    if (message.startsWith('UNAUTHORIZED')) {
+      return res.status(401).json({ error: 'Unauthorized', message });
+    }
+    if (message.includes('not found')) {
+      return res.status(404).json({ error: 'Not Found', message });
+    }
+    return res.status(400).json({ error: 'Bad Request', message });
+  }
+});
+
+/**
+ * GET /api/opportunities/:id/pursuit/history
+ * Retrieves pursuit audit transition history.
+ */
+opportunitiesRouter.get('/:id/pursuit/history', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const history = await PursuitService.getHistory(id);
+    return res.status(200).json({ data: history, count: history.length });
+  } catch (err: any) {
+    const message = err.message || '';
+    if (message.includes('not found')) {
+      return res.status(404).json({ error: 'Not Found', message });
+    }
+    return res.status(500).json({ error: 'Internal Server Error', message });
+  }
+});
+
+/**
  * POST /api/opportunities/:id/analyze
- * Empty body only. Evaluates opportunity against Bridge Forward profile and creates/returns deterministic analysis.
  */
 opportunitiesRouter.post('/:id/analyze', async (req: Request, res: Response) => {
   try {
@@ -145,7 +274,6 @@ opportunitiesRouter.post('/:id/analyze', async (req: Request, res: Response) => 
 
 /**
  * GET /api/opportunities/:id/analysis
- * Returns current analysis, historical analysis versions, dimensions, findings, and reviews graph.
  */
 opportunitiesRouter.get('/:id/analysis', async (req: Request, res: Response) => {
   try {
@@ -163,7 +291,6 @@ opportunitiesRouter.get('/:id/analysis', async (req: Request, res: Response) => 
 
 /**
  * POST /api/opportunities/:id/analysis/review
- * Submit human review decision on current analysis version. Requires Bearer Token.
  */
 opportunitiesRouter.post('/:id/analysis/review', async (req: Request, res: Response) => {
   try {

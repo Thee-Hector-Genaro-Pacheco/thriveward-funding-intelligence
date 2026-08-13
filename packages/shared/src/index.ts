@@ -12,13 +12,28 @@ export type EligibilityStatus =
 // 2. Tri-state Status for Participant Support & Requirements
 export type TriStateStatus = 'YES' | 'NO' | 'CONDITIONAL' | 'UNKNOWN';
 
-// 3. Organization Operational Status
+// 3. Relevance Classification Status
+export type RelevanceStatus =
+  | 'RELEVANT'
+  | 'POSSIBLY_RELEVANT'
+  | 'IRRELEVANT'
+  | 'UNKNOWN';
+
+// 4. Human-Led Pursuit Stage
+export type PursuitStage =
+  | 'NEW'
+  | 'REVIEWING'
+  | 'QUALIFIED'
+  | 'LOCKED'
+  | 'DISMISSED';
+
+// 5. Organization Operational Status
 export type OrgStatus = 'PRE_INCORPORATION' | 'INCORPORATED' | 'ACTIVE';
 
-// 4. Tax-Exempt Status
+// 6. Tax-Exempt Status
 export type TaxStatus = 'NOT_OBTAINED' | 'PENDING' | 'APPROVED_501C3';
 
-// 5. Participant Support Categories
+// 7. Participant Support Categories
 export interface ParticipantSupportMatrix {
   trainingStipends: TriStateStatus;
   needsRelatedPayments: TriStateStatus;
@@ -38,7 +53,7 @@ export interface ParticipantSupportMatrix {
   otherSupportiveServices?: TriStateStatus;
 }
 
-// 6. Source Citation Provenance Model
+// 8. Source Citation Provenance Model
 export interface SourceCitation {
   id: string;
   opportunityId: string;
@@ -50,7 +65,7 @@ export interface SourceCitation {
   extractedClaim: string;
 }
 
-// 7. Scoring Dimension Breakdown (0-100 scale)
+// 9. Scoring Dimension Breakdown (0-100 scale)
 export interface BridgeFitScoreBreakdown {
   missionAlignment: number;
   populationAlignment: number;
@@ -66,7 +81,7 @@ export interface BridgeFitScoreBreakdown {
   evidenceTrackRecord: number;
 }
 
-// 8. Opportunity Analysis Result
+// 10. Opportunity Analysis Result
 export interface OpportunityAnalysis {
   id: string;
   opportunityId: string;
@@ -81,14 +96,17 @@ export interface OpportunityAnalysis {
   humanReviewedBy?: string;
 }
 
-// 9. Organization Profile Model
+// 11. Organization Profile Model
 export interface BridgeOrganizationProfile {
   name: string;
   status: OrgStatus;
   taxStatus: TaxStatus;
+  statewideGeography: string;
+  initialServiceAreas: string[];
   primaryPopulations: string[];
   primaryOutcome: string;
   coreModel: string;
+  missionStatement: string;
   programs: Array<{
     name: string;
     description: string;
@@ -97,11 +115,18 @@ export interface BridgeOrganizationProfile {
   knownLimitations: string[];
 }
 
-// 10. Default Ground-Truth Profile for Bridge Forward Foundation
+// 12. Default Ground-Truth Profile for Bridge Forward Foundation
 export const BRIDGE_FORWARD_PROFILE: BridgeOrganizationProfile = {
   name: 'Bridge Forward Foundation',
   status: 'PRE_INCORPORATION',
   taxStatus: 'NOT_OBTAINED',
+  statewideGeography: 'California',
+  initialServiceAreas: [
+    'Orange County',
+    'Los Angeles County',
+    'San Bernardino County',
+    'San Diego County',
+  ],
   primaryPopulations: [
     'Justice-involved adults',
     'System-impacted young adults',
@@ -109,6 +134,8 @@ export const BRIDGE_FORWARD_PROFILE: BridgeOrganizationProfile = {
   primaryOutcome: 'Successful reentry and long-term independence',
   coreModel:
     'Individualized reentry support combined with career-connected education, mentorship, workforce development, employer partnerships, and continued follow-up.',
+  missionStatement:
+    'Bridge Forward Foundation advances successful reentry and long-term independence for justice-involved adults and system-impacted young adults through individualized support, career-connected education, mentorship, workforce development, employer partnerships, and sustained follow-up.',
   programs: [
     { name: 'Bridge Inside', description: 'Pre-release preparation and reentry planning.', isOperational: true },
     { name: 'Bridge Reentry', description: 'Individualized Bridge Plans, mentorship, life skills.', isOperational: true },
@@ -127,3 +154,45 @@ export const BRIDGE_FORWARD_PROFILE: BridgeOrganizationProfile = {
     'Government contracts have not been obtained.',
   ],
 };
+
+/**
+ * Safely strips HTML markup and decodes standard HTML entities to plain text
+ * without using dangerouslySetInnerHTML or altering raw source snapshots.
+ */
+export function sanitizeHtmlToText(rawInput: string | null | undefined): string {
+  if (!rawInput) return '';
+
+  let text = rawInput;
+
+  // 1. Remove scripts and style blocks entirely
+  text = text.replace(/<script\b[^<]*>([\s\S]*?)<\/script>/gi, '');
+  text = text.replace(/<style\b[^<]*>([\s\S]*?)<\/style>/gi, '');
+
+  // 2. Replace line-breaking HTML tags with newlines/spaces
+  text = text.replace(/<\/(p|div|li|tr|h[1-6])>/gi, '\n');
+  text = text.replace(/<(br|hr)\s*\/?>/gi, '\n');
+
+  // 3. Strip all remaining HTML tags
+  text = text.replace(/<[^>]+>/g, ' ');
+
+  // 4. Decode HTML entities
+  text = text
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&nbsp;/g, ' ');
+
+  // Numeric decimal entities (e.g. &#8217;)
+  text = text.replace(/&#(\d+);/g, (_, dec) => String.fromCharCode(Number(dec)));
+  // Numeric hex entities (e.g. &#x2013;)
+  text = text.replace(/&#x([0-9a-f]+);/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
+
+  // 5. Normalize whitespace
+  text = text.replace(/[ \t]+/g, ' ');
+  text = text.replace(/\n\s*\n/g, '\n\n');
+
+  return text.trim();
+}

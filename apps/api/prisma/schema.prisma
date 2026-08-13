@@ -28,6 +28,21 @@ enum OpportunityStatus {
   ARCHIVED
 }
 
+enum RelevanceStatus {
+  RELEVANT
+  POSSIBLY_RELEVANT
+  IRRELEVANT
+  UNKNOWN
+}
+
+enum PursuitStage {
+  NEW
+  REVIEWING
+  QUALIFIED
+  LOCKED
+  DISMISSED
+}
+
 model OrganizationProfile {
   id                 String   @id @default(uuid())
   name               String   @default("Bridge Forward Foundation")
@@ -120,6 +135,11 @@ model FundingOpportunity {
   supportOnTheJobTraining     TriStateStatus @default(UNKNOWN)
   supportEmergencyAssistance  TriStateStatus @default(UNKNOWN)
 
+  // Phase 1D Pursuit & Triage
+  pursuitStage         PursuitStage @default(NEW)
+  dismissedReason      String?
+  discoverySearchTerms String[]     @default([])
+
   // Relations
   eligibilityRequirements EligibilityRequirement[]
   allowableCostItems      AllowableCost[]
@@ -128,6 +148,8 @@ model FundingOpportunity {
   sourceCitations         SourceCitation[]
   opportunityAnalyses     OpportunityAnalysis[]
   snapshots               SourceSnapshot[]
+  relevanceAnalyses       OpportunityRelevance[]
+  pursuitHistory          PursuitHistory[]
 
   @@unique([sourceSystem, externalOpportunityId])
 }
@@ -194,7 +216,7 @@ model OpportunityAnalysis {
   fundingOpportunity             FundingOpportunity @relation(fields: [fundingOpportunityId], references: [id], onDelete: Cascade)
   analysisVersion                String             @default("1.0")
   sourceFingerprint              String
-  profileVersion                 String             @default("1.0.0-phase0")
+  profileVersion                 String             @default("1.1.0-phase1d")
   profileHash                    String
   profileSnapshot                Json
   eligibilityDecision            String             @default("INVESTIGATE") // ELIGIBLE, INVESTIGATE, NOT_ELIGIBLE
@@ -298,6 +320,47 @@ model AnalysisReview {
   reviewerId            String
   reviewerNotes         String
   reviewedAt            DateTime            @default(now())
+}
+
+model OpportunityRelevance {
+  id                   String               @id @default(uuid())
+  fundingOpportunityId String
+  fundingOpportunity   FundingOpportunity   @relation(fields: [fundingOpportunityId], references: [id], onDelete: Cascade)
+  relevanceStatus      RelevanceStatus      @default(UNKNOWN)
+  relevanceScore       Int                  @default(0)
+  positiveReasons      String[]
+  exclusionReasons     String[]
+  explanation          String
+  evidenceFields       String[]
+  analysisVersion      String               @default("1.0")
+  profileVersion       String               @default("1.1.0-phase1d")
+  profileHash          String
+  isCurrent            Boolean              @default(true)
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+
+  citations RelevanceCitation[]
+}
+
+model RelevanceCitation {
+  id                     String               @id @default(uuid())
+  opportunityRelevanceId String
+  opportunityRelevance   OpportunityRelevance @relation(fields: [opportunityRelevanceId], references: [id], onDelete: Cascade)
+  field                  String
+  matchedTerm            String
+  contextSnippet         String
+}
+
+model PursuitHistory {
+  id                   String             @id @default(uuid())
+  fundingOpportunityId String
+  fundingOpportunity   FundingOpportunity @relation(fields: [fundingOpportunityId], references: [id], onDelete: Cascade)
+  fromStage            PursuitStage
+  toStage              PursuitStage
+  actorId              String
+  notes                String?
+  reason               String?
+  createdAt            DateTime           @default(now())
 }
 
 model IngestionRun {

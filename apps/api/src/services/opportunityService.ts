@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma';
-import { OpportunityStatus, Prisma } from '@prisma/client';
+import { OpportunityStatus, PursuitStage, RelevanceStatus, Prisma } from '@prisma/client';
 
 export interface OpportunityQueryOptions {
   status?: string;
@@ -8,6 +8,8 @@ export interface OpportunityQueryOptions {
   dataKind?: string;
   sourceSystem?: string;
   verificationStatus?: string;
+  pursuitStage?: string;
+  relevanceStatus?: string;
   page?: number;
   limit?: number;
 }
@@ -33,6 +35,14 @@ export const opportunityIncludeObject = {
     orderBy: { createdAt: 'desc' as const },
     take: 1,
   },
+  relevanceAnalyses: {
+    where: { isCurrent: true },
+    orderBy: { createdAt: 'desc' as const },
+    take: 1,
+  },
+  pursuitHistory: {
+    orderBy: { createdAt: 'desc' as const },
+  },
 };
 
 export class OpportunityService {
@@ -55,6 +65,33 @@ export class OpportunityService {
         where.isDemo = false;
       } else {
         throw new Error(`Invalid dataKind parameter: '${options.dataKind}'. Allowed values: 'demo', 'official'`);
+      }
+    }
+
+    // Filter by pursuitStage
+    if (options.pursuitStage) {
+      const stageUpper = options.pursuitStage.toUpperCase();
+      if (stageUpper === 'NEEDS_ANALYSIS') {
+        where.pursuitStage = { in: ['NEW', 'REVIEWING'] };
+      } else if (Object.values(PursuitStage).includes(stageUpper as PursuitStage)) {
+        where.pursuitStage = stageUpper as PursuitStage;
+      } else {
+        throw new Error(`Invalid pursuitStage parameter: '${options.pursuitStage}'. Allowed values: ${Object.values(PursuitStage).join(', ')}, NEEDS_ANALYSIS`);
+      }
+    }
+
+    // Filter by relevanceStatus
+    if (options.relevanceStatus) {
+      const relUpper = options.relevanceStatus.toUpperCase();
+      if (Object.values(RelevanceStatus).includes(relUpper as RelevanceStatus)) {
+        where.relevanceAnalyses = {
+          some: {
+            isCurrent: true,
+            relevanceStatus: relUpper as RelevanceStatus,
+          },
+        };
+      } else {
+        throw new Error(`Invalid relevanceStatus parameter: '${options.relevanceStatus}'. Allowed values: ${Object.values(RelevanceStatus).join(', ')}`);
       }
     }
 
