@@ -111,24 +111,41 @@ export class GrantsGovClient {
    * POST /v1/api/fetchOpportunity
    */
   async fetchOpportunity(opportunityId: string | number): Promise<GrantsGovDetailResponse> {
+    const numOppId = Number(opportunityId);
+    if (!opportunityId || isNaN(numOppId) || numOppId <= 0) {
+      throw new Error('fetchOpportunity requires a valid non-empty numeric opportunityId');
+    }
+
     const payload = {
-      oppId: String(opportunityId),
+      opportunityId: numOppId,
     };
 
     const rawResponse = await this.executePostRequest<any>('/v1/api/fetchOpportunity', payload);
-    const dataContainer = rawResponse?.data || rawResponse;
 
-    if (dataContainer?.message?.includes('not available')) {
-      throw new Error(`Grants.gov upstream fetchOpportunity service unavailable: ${dataContainer.message}`);
+    if (!rawResponse || typeof rawResponse !== 'object') {
+      throw new Error('Invalid or missing response from Grants.gov fetchOpportunity');
     }
 
-    const targetPayload = dataContainer?.opportunityDetail || dataContainer;
+    if (rawResponse.errorcode !== undefined && rawResponse.errorcode !== 0) {
+      throw new Error(`Grants.gov API returned errorcode ${rawResponse.errorcode}: ${rawResponse.msg || 'Fetch opportunity failed'}`);
+    }
 
-    const parseResult = GrantsGovDetailResponseSchema.safeParse(targetPayload);
+    if (!rawResponse.data || typeof rawResponse.data !== 'object') {
+      throw new Error('Invalid or missing data payload in Grants.gov response');
+    }
+
+    const dataObj = rawResponse.data;
+    const returnedId = String(dataObj.id ?? dataObj.oppId ?? dataObj.opportunityId ?? dataObj.synopsis?.opportunityId ?? '');
+
+    if (!returnedId || returnedId !== String(opportunityId)) {
+      throw new Error(`Identity Mismatch: Requested opp ID '${opportunityId}' does not match response detail ID '${returnedId}'`);
+    }
+
+    const parseResult = GrantsGovDetailResponseSchema.safeParse(dataObj);
     if (!parseResult.success) {
       console.warn('[GrantsGovClient] Detail payload validation warning:', parseResult.error.format());
     }
 
-    return targetPayload as GrantsGovDetailResponse;
+    return dataObj as GrantsGovDetailResponse;
   }
 }

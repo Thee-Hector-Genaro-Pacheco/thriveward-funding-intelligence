@@ -19,6 +19,7 @@ const MOCK_SEARCH_HIT = {
 };
 
 const MOCK_DETAIL_PAYLOAD = {
+  id: 'test-unit-mock-888888',
   oppId: 'test-unit-mock-888888',
   opportunityNumber: 'ETA-2026-FULL-TEST-01',
   opportunityTitle: 'Mocked Unit Test Reentry Pathways Opportunity',
@@ -92,22 +93,77 @@ describe('Phase 1B — Grants.gov Verified Ingestion & Provenance Complete Audit
       globalThis.fetch = globalFetchBak;
     });
 
-    it('constructs fetchOpportunity POST body with converted oppId string', async () => {
+    it('constructs fetchOpportunity POST body with numeric opportunityId, POST method, application/json header, and maps from response.data without transport token', async () => {
+      let capturedUrl = '';
+      let capturedMethod = '';
+      let capturedHeaders: any;
       let capturedBody: any;
       const globalFetchBak = globalThis.fetch;
-      globalThis.fetch = vi.fn(async (_url: string, init?: RequestInit) => {
+      globalThis.fetch = vi.fn(async (url: string, init?: RequestInit) => {
+        capturedUrl = url;
+        capturedMethod = init?.method || 'GET';
+        capturedHeaders = init?.headers;
         capturedBody = JSON.parse(init?.body as string);
         return {
           ok: true,
           status: 200,
-          json: async () => ({ opportunityDetail: MOCK_DETAIL_PAYLOAD }),
+          json: async () => ({
+            errorcode: 0,
+            msg: 'Webservice Succeeds',
+            token: 'transient_jwt_token_abcdef123456',
+            data: { ...MOCK_DETAIL_PAYLOAD, id: 888888, oppId: '888888' },
+          }),
         } as Response;
       }) as any;
 
       const client = new GrantsGovClient();
-      await client.fetchOpportunity(888888);
+      const res = await client.fetchOpportunity(888888);
 
-      expect(capturedBody).toEqual({ oppId: '888888' });
+      expect(capturedUrl).toBe('https://api.grants.gov/v1/api/fetchOpportunity');
+      expect(capturedMethod).toBe('POST');
+      expect(capturedHeaders).toHaveProperty('Content-Type', 'application/json');
+      expect(capturedBody).toEqual({ opportunityId: 888888 });
+      expect(res).toEqual({ ...MOCK_DETAIL_PAYLOAD, id: 888888, oppId: '888888' });
+      expect((res as any).token).toBeUndefined();
+
+      globalThis.fetch = globalFetchBak;
+    });
+
+    it('rejects fetchOpportunity when response.errorcode is non-zero', async () => {
+      const globalFetchBak = globalThis.fetch;
+      globalThis.fetch = vi.fn(async () => {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            errorcode: 5,
+            msg: 'System Error',
+          }),
+        } as Response;
+      }) as any;
+
+      const client = new GrantsGovClient();
+      await expect(client.fetchOpportunity(888888)).rejects.toThrow(/Grants.gov API returned errorcode 5/);
+
+      globalThis.fetch = globalFetchBak;
+    });
+
+    it('rejects fetchOpportunity when response.data is missing or invalid', async () => {
+      const globalFetchBak = globalThis.fetch;
+      globalThis.fetch = vi.fn(async () => {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            errorcode: 0,
+            msg: 'Webservice Succeeds',
+            data: null,
+          }),
+        } as Response;
+      }) as any;
+
+      const client = new GrantsGovClient();
+      await expect(client.fetchOpportunity(888888)).rejects.toThrow(/Invalid or missing data payload/);
 
       globalThis.fetch = globalFetchBak;
     });
@@ -128,7 +184,7 @@ describe('Phase 1B — Grants.gov Verified Ingestion & Provenance Complete Audit
       vi.spyOn(mockClient, 'searchOpportunities').mockResolvedValue({
         opportunityHits: [{ ...MOCK_SEARCH_HIT, id: 'test-malformed-detail-999' }],
       });
-      vi.spyOn(mockClient, 'fetchOpportunity').mockResolvedValue({ invalidField: true } as any);
+      vi.spyOn(mockClient, 'fetchOpportunity').mockRejectedValue(new Error('Invalid or missing data payload in Grants.gov response'));
 
       const service = new IngestionService(mockClient);
       const res = await service.ingestFromGrantsGov({ limit: 1, dryRun: false });
@@ -211,20 +267,21 @@ describe('Phase 1B — Grants.gov Verified Ingestion & Provenance Complete Audit
       globalThis.fetch = globalFetchBak;
     });
 
-    it('handles Grants.gov upstream unavailable message by throwing structured error', async () => {
+    it('handles Grants.gov errorcode response by throwing structured error', async () => {
       const globalFetchBak = globalThis.fetch;
       globalThis.fetch = vi.fn(async () => {
         return {
           ok: true,
           status: 200,
           json: async () => ({
-            data: { message: 'webservice at URI .../opportunity/details is not available' },
+            errorcode: 99,
+            msg: 'Service Unavailable',
           }),
         } as Response;
       }) as any;
 
       const client = new GrantsGovClient();
-      await expect(client.fetchOpportunity('999999')).rejects.toThrow(/fetchOpportunity service unavailable/);
+      await expect(client.fetchOpportunity('999999')).rejects.toThrow(/Grants.gov API returned errorcode 99/);
 
       globalThis.fetch = globalFetchBak;
     });
@@ -294,7 +351,7 @@ describe('Phase 1B — Grants.gov Verified Ingestion & Provenance Complete Audit
       expect(opp?.lastVerifiedTimestamp).toBeNull();
     });
 
-    it('verifies payload hash equals deterministic SHA-256 digest of canonical payload', async () => {
+    it('verifies payload hash equals deterministic SHA-256 digest of canonical data object without transport token', async () => {
       const opp = await prisma.fundingOpportunity.findUnique({
         where: {
           sourceSystem_externalOpportunityId: {
@@ -306,6 +363,12 @@ describe('Phase 1B — Grants.gov Verified Ingestion & Provenance Complete Audit
 
       const expectedHash = crypto.createHash('sha256').update(JSON.stringify(MOCK_DETAIL_PAYLOAD)).digest('hex');
       expect(opp?.sourcePayloadHash).toBe(expectedHash);
+
+      const snapshot = await prisma.sourceSnapshot.findFirst({
+        where: { externalOpportunityId: MOCK_SEARCH_HIT.id },
+      });
+      expect(snapshot?.rawPayload).toEqual(MOCK_DETAIL_PAYLOAD);
+      expect((snapshot?.rawPayload as any)?.token).toBeUndefined();
     });
 
     it('verifies SHA-256 hash is exactly 64 lowercase hexadecimal characters', async () => {
@@ -373,6 +436,7 @@ describe('Phase 1B — Grants.gov Verified Ingestion & Provenance Complete Audit
       });
       vi.spyOn(mockClient, 'fetchOpportunity').mockResolvedValue({
         ...MOCK_DETAIL_PAYLOAD,
+        id: 'DIFFERENT-ID-999',
         oppId: 'DIFFERENT-ID-999',
       });
 
@@ -466,6 +530,7 @@ describe('Phase 1B — Grants.gov Verified Ingestion & Provenance Complete Audit
       });
       vi.spyOn(mockClient, 'fetchOpportunity').mockResolvedValue({
         ...MOCK_DETAIL_PAYLOAD,
+        id: 'test-cli-dry-run-666',
         oppId: 'test-cli-dry-run-666',
       });
 

@@ -7,6 +7,7 @@ COPY packages/shared ./packages/shared
 COPY apps/api ./apps/api
 
 RUN npm install
+RUN npx prisma generate --schema=apps/api/prisma/schema.prisma
 RUN npm run build --workspace=packages/shared
 RUN npm run build --workspace=apps/api
 
@@ -21,6 +22,7 @@ COPY --from=builder /app/apps/api/package.json ./apps/api/package.json
 COPY --from=builder /app/apps/api/prisma ./apps/api/prisma
 
 RUN npm install --production
+RUN npx prisma generate --schema=apps/api/prisma/schema.prisma
 
 EXPOSE 4000
 

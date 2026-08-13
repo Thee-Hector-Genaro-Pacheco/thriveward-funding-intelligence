@@ -20,12 +20,14 @@ export const GrantsGovSearchResponseSchema = z.object({
 });
 
 export const GrantsGovDetailResponseSchema = z.object({
+  id: z.union([z.string(), z.number()]).optional(),
   oppId: z.union([z.string(), z.number()]).optional(),
   opportunityId: z.union([z.string(), z.number()]).optional(),
   opportunityNumber: z.string().optional(),
   opportunityTitle: z.string().optional(),
   agencyName: z.string().optional(),
   agencyCode: z.string().optional(),
+  owningAgencyCode: z.string().optional(),
   description: z.string().optional(),
   synopsisDescription: z.string().optional(),
   postDate: z.string().optional(),
@@ -34,11 +36,12 @@ export const GrantsGovDetailResponseSchema = z.object({
   awardFloor: z.union([z.string(), z.number()]).optional(),
   awardCeiling: z.union([z.string(), z.number()]).optional(),
   estimatedTotalProgramFunding: z.union([z.string(), z.number()]).optional(),
-  fundingInstruments: z.array(z.string()).optional(),
+  fundingInstruments: z.array(z.any()).optional(),
   eligibleApplicants: z.array(z.string()).optional(),
   additionalInformationOnEligibility: z.string().optional(),
   alnNumbers: z.array(z.string()).optional(),
   status: z.string().optional(),
   opportunityStatus: z.string().optional(),
   lastUpdatedDate: z.string().optional(),
+  synopsis: z.record(z.any()).optional(),
 });

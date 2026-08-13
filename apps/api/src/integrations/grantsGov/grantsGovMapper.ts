@@ -50,29 +50,48 @@ export class GrantsGovMapper {
    * Pure mapping from Grants.gov detail payload.
    */
   static mapDetailToOpportunity(detail: GrantsGovDetailResponse): MappedOpportunity {
-    const oppId = String(detail.oppId || detail.opportunityId || '');
+    const oppId = String(detail.id ?? detail.oppId ?? detail.opportunityId ?? detail.synopsis?.opportunityId ?? '');
     if (!oppId) {
       throw new Error('Grants.gov detail payload missing required opportunityId');
     }
 
     const officialUrl = `https://www.grants.gov/search-results-detail/${oppId}`;
-    const title = detail.opportunityTitle || `Grants.gov Notice #${detail.opportunityNumber || oppId}`;
-    const agency = detail.agencyName || (detail.agencyCode ? `Agency (${detail.agencyCode})` : 'Federal Agency');
-    const description = detail.synopsisDescription || detail.description || 'Official Grants.gov opportunity notice.';
+    const rawNumber = detail.opportunityNumber || detail.synopsis?.opportunityNumber || oppId;
+    const rawTitle = detail.opportunityTitle || detail.synopsis?.opportunityTitle || `Grants.gov Notice #${rawNumber}`;
+    const agency = detail.agencyName || detail.synopsis?.agencyName || (detail.agencyCode ? `Agency (${detail.agencyCode})` : (detail.owningAgencyCode ? `Agency (${detail.owningAgencyCode})` : 'Federal Agency'));
+    const description = detail.synopsisDescription || detail.synopsis?.synopsisDesc || detail.synopsis?.synopsisDescription || detail.description || 'Official Grants.gov opportunity notice.';
 
     let lastUpdated: Date | null = null;
-    if (detail.lastUpdatedDate) {
-      const parsed = new Date(detail.lastUpdatedDate);
+    const dateToParse = detail.lastUpdatedDate || detail.synopsis?.lastUpdatedDate;
+    if (dateToParse) {
+      const parsed = new Date(dateToParse);
       if (!isNaN(parsed.getTime())) {
         lastUpdated = parsed;
       }
     }
 
+    const postDate = detail.postDate || detail.synopsis?.postingDate || detail.synopsis?.postDate;
+    const closeDate = detail.closeDate || detail.synopsis?.responseDate || detail.synopsis?.closeDate;
+    const awardFloor = detail.awardFloor ?? detail.synopsis?.awardFloor;
+    const awardCeiling = detail.awardCeiling ?? detail.synopsis?.awardCeiling;
+    const estimatedTotalProgramFunding = detail.estimatedTotalProgramFunding ?? detail.synopsis?.estimatedTotalProgramFunding;
+
+    let eligibleApplicantTypes: string[] = [];
+    if (Array.isArray(detail.eligibleApplicants)) {
+      eligibleApplicantTypes = detail.eligibleApplicants;
+    } else if (Array.isArray(detail.synopsis?.applicantTypes)) {
+      eligibleApplicantTypes = detail.synopsis.applicantTypes
+        .map((item: any) => (typeof item === 'string' ? item : item?.description || String(item)))
+        .filter(Boolean);
+    }
+
+    const additionalInfo = detail.additionalInformationOnEligibility || detail.synopsis?.applicantEligibilityDesc;
+
     return {
       sourceSystem: 'GRANTS_GOV',
       externalOpportunityId: oppId,
-      fundingOpportunityNumber: detail.opportunityNumber || oppId,
-      title: title.trim(),
+      fundingOpportunityNumber: rawNumber,
+      title: rawTitle.trim(),
       fundingAgency: agency.trim(),
       isDemo: false,
       program: detail.alnNumbers?.length ? `ALN/CFDA #${detail.alnNumbers.join(', ')}` : null,
@@ -80,14 +99,14 @@ export class GrantsGovMapper {
       sourceUrl: officialUrl,
       status: 'PENDING_HUMAN_REVIEW',
       verificationStatus: 'PENDING_HUMAN_REVIEW',
-      openingDate: this.normalizeDate(detail.postDate),
-      deadline: this.normalizeDate(detail.closeDate),
-      awardMin: this.formatCurrency(detail.awardFloor),
-      awardMax: this.formatCurrency(detail.awardCeiling),
-      totalAvailableFunding: this.formatCurrency(detail.estimatedTotalProgramFunding),
+      openingDate: this.normalizeDate(postDate),
+      deadline: this.normalizeDate(closeDate),
+      awardMin: this.formatCurrency(awardFloor),
+      awardMax: this.formatCurrency(awardCeiling),
+      totalAvailableFunding: this.formatCurrency(estimatedTotalProgramFunding),
       geography: 'United States',
-      eligibleApplicantTypes: detail.eligibleApplicants || [],
-      eligiblePopulations: detail.additionalInformationOnEligibility ? [detail.additionalInformationOnEligibility] : [],
+      eligibleApplicantTypes,
+      eligiblePopulations: additionalInfo ? [additionalInfo] : [],
       matchRequirement: 'UNKNOWN',
       periodOfPerformance: 'UNKNOWN',
       allowableCosts: detail.fundingInstruments || [],
