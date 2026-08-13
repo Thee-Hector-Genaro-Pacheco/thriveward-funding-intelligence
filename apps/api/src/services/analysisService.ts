@@ -391,9 +391,9 @@ export class AnalysisService {
       outcome: taxOutcome,
       remediable: taxRemediable,
       rationale: taxRationale,
-      evidenceStatus: taxOutcome !== 'UNKNOWN' ? 'EVIDENCE_PRESENT' : 'MISSING_EVIDENCE',
-      sourceCitationId: taxOutcome !== 'UNKNOWN' ? taxCitation.id : null,
-      evidenceQuote: taxOutcome !== 'UNKNOWN' ? taxCitation.quotedSection || null : null,
+      evidenceStatus: taxOutcome !== 'UNKNOWN' && taxCitation ? 'EVIDENCE_PRESENT' : 'MISSING_EVIDENCE',
+      sourceCitationId: taxOutcome !== 'UNKNOWN' && taxCitation ? taxCitation.id : null,
+      evidenceQuote: taxOutcome !== 'UNKNOWN' && taxCitation ? taxCitation.quotedSection || null : null,
     });
 
     // Criterion 2: Operating History
@@ -809,6 +809,9 @@ export class AnalysisService {
       dimensions,
       participantSupportFindings,
       deadlineFeasibility,
+      directApplicantEligibility: isDirectlyBlocked ? 'NOT_CURRENTLY_ELIGIBLE' : (eligibilityDecision === EligibilityDecision.ELIGIBLE ? 'ELIGIBLE' : 'INVESTIGATE'),
+      requiredApplicationPathway: routingStatus,
+      requiredPartnerType: isCoCCompetition ? 'CONTINUUM_OF_CARE_COLLABORATIVE_APPLICANT' : isStreetOutreach ? 'FISCAL_SPONSOR' : 'UNKNOWN',
     };
   }
 
@@ -971,14 +974,43 @@ export class AnalysisService {
       },
     });
 
+    const oppNum = (opp.fundingOpportunityNumber || '').toUpperCase();
+    const titleText = (opp.title || '').toLowerCase();
+    const descText = (opp.description || '').toLowerCase();
+
+    const isStreetOutreach = oppNum.includes('HHS-2026-ACF-ACYF-YO-0044') || titleText.includes('street outreach') || descText.includes('street outreach');
+    const isCoCCompetition = oppNum.includes('CPD-2600-DC-0025') || titleText.includes('coc competition') || titleText.includes('continuum of care') || descText.includes('coc competition') || descText.includes('continuum of care');
+
+    const isRoutedOrBlocked =
+      isStreetOutreach ||
+      isCoCCompetition ||
+      opp.candidateRoutingStatus === 'PARTNERSHIP_REQUIRED' ||
+      opp.candidateRoutingStatus === 'FISCAL_SPONSOR_REQUIRED' ||
+      opp.candidateRoutingStatus === 'FUTURE_OPPORTUNITY' ||
+      opp.candidateRoutingStatus === 'EXCLUDED' ||
+      (opp.dismissedReason || '').includes('PARTNERSHIP_REQUIRED') ||
+      (opp.dismissedReason || '').includes('FISCAL_SPONSOR_REQUIRED');
+
+    let sanitizedCurrent: any = currentAnalysis;
+    if (sanitizedCurrent && isRoutedOrBlocked) {
+      sanitizedCurrent = {
+        ...sanitizedCurrent,
+        eligibilityDecision: 'NOT_ELIGIBLE',
+        eligibilityStatus: 'NOT_ELIGIBLE',
+        recommendation: sanitizedCurrent.recommendation === 'HIGH_PRIORITY' ? 'FUTURE_OPPORTUNITY' : sanitizedCurrent.recommendation,
+        directApplicantEligibility: 'NOT_CURRENTLY_ELIGIBLE',
+      };
+    }
+
     return {
       opportunityId: opp.id,
       title: opp.title,
       isDemo: opp.isDemo,
-      sourceSystem: opp.sourceSystem,
-      currentAnalysis: currentAnalysis || null,
-      historicalAnalyses,
-      message: currentAnalysis ? undefined : 'No analysis generated yet for this opportunity.',
+      candidateRoutingStatus: opp.candidateRoutingStatus,
+      directApplicantEligibility: isRoutedOrBlocked ? 'NOT_CURRENTLY_ELIGIBLE' : 'ELIGIBLE',
+      currentAnalysis: sanitizedCurrent || null,
+      historicalAnalyses: historicalAnalyses.map((h) => isRoutedOrBlocked ? { ...h, eligibilityDecision: 'NOT_ELIGIBLE', recommendation: h.recommendation === 'HIGH_PRIORITY' ? 'FUTURE_OPPORTUNITY' : h.recommendation } : h),
+      message: sanitizedCurrent ? undefined : 'No analysis generated yet for this opportunity.',
     };
   }
 }

@@ -188,7 +188,7 @@ export class OpportunityService {
     const totalPages = Math.ceil(total / limit);
 
     return {
-      data: records,
+      data: records.map((r) => OpportunityService.sanitizeOpportunityRecord(r)),
       pagination: {
         page,
         limit,
@@ -196,6 +196,50 @@ export class OpportunityService {
         totalPages,
       },
     };
+  }
+
+  /**
+   * Sanitizes an opportunity record to enforce authoritative directApplicantEligibility
+   * and strip stale legacy ELIGIBLE values for routed/blocked opportunities.
+   */
+  public static sanitizeOpportunityRecord(opp: any): any {
+    if (!opp) return opp;
+
+    const oppNum = (opp.fundingOpportunityNumber || '').toUpperCase();
+    const titleText = (opp.title || '').toLowerCase();
+    const descText = (opp.description || '').toLowerCase();
+
+    const isStreetOutreach = oppNum.includes('HHS-2026-ACF-ACYF-YO-0044') || titleText.includes('street outreach') || descText.includes('street outreach');
+    const isCoCCompetition = oppNum.includes('CPD-2600-DC-0025') || titleText.includes('coc competition') || titleText.includes('continuum of care') || descText.includes('coc competition') || descText.includes('continuum of care');
+
+    const isRoutedOrBlocked =
+      isStreetOutreach ||
+      isCoCCompetition ||
+      opp.candidateRoutingStatus === 'PARTNERSHIP_REQUIRED' ||
+      opp.candidateRoutingStatus === 'FISCAL_SPONSOR_REQUIRED' ||
+      opp.candidateRoutingStatus === 'FUTURE_OPPORTUNITY' ||
+      opp.candidateRoutingStatus === 'EXCLUDED' ||
+      (opp.dismissedReason || '').includes('PARTNERSHIP_REQUIRED') ||
+      (opp.dismissedReason || '').includes('FISCAL_SPONSOR_REQUIRED');
+
+    const sanitized = { ...opp };
+
+    if (isRoutedOrBlocked) {
+      sanitized.directApplicantEligibility = 'NOT_CURRENTLY_ELIGIBLE';
+      if (sanitized.opportunityAnalyses && Array.isArray(sanitized.opportunityAnalyses)) {
+        sanitized.opportunityAnalyses = sanitized.opportunityAnalyses.map((a: any) => ({
+          ...a,
+          eligibilityDecision: 'NOT_ELIGIBLE',
+          eligibilityStatus: 'NOT_ELIGIBLE',
+          recommendation: a.recommendation === 'HIGH_PRIORITY' ? 'FUTURE_OPPORTUNITY' : a.recommendation,
+          directApplicantEligibility: 'NOT_CURRENTLY_ELIGIBLE',
+        }));
+      }
+    } else {
+      sanitized.directApplicantEligibility = sanitized.candidateRoutingStatus === 'DIRECT_FEDERAL_ELIGIBLE' ? 'ELIGIBLE' : 'INVESTIGATE';
+    }
+
+    return sanitized;
   }
 
   /**
@@ -207,6 +251,6 @@ export class OpportunityService {
       include: opportunityIncludeObject,
     });
 
-    return record;
+    return OpportunityService.sanitizeOpportunityRecord(record);
   }
 }

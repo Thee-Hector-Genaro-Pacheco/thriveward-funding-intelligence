@@ -119,15 +119,27 @@ phase1eRouter.get('/fiscal-sponsors/:id/briefing', async (req: Request, res: Res
   }
 });
 
-// --- Strategic Partner Directory ---
+// --- Strategic Partner Directory & CoC Alignment ---
+
+// POST /api/strategic-partners/discovery
+phase1eRouter.post('/strategic-partners/discovery', async (_req: Request, res: Response) => {
+  try {
+    const result = await StrategicPartnerService.runDiscovery();
+    res.json({ success: true, data: result });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 // GET /api/strategic-partners
 phase1eRouter.get('/strategic-partners', async (req: Request, res: Response) => {
   try {
-    const { organizationType, verificationStatus } = req.query;
+    const { organizationType, verificationStatus, opportunityId, targetCounty } = req.query;
     const partners = await StrategicPartnerService.listPartners({
       organizationType: organizationType as string,
       verificationStatus: verificationStatus as string,
+      opportunityId: opportunityId as string,
+      targetCounty: targetCounty as string,
     });
     res.json({ success: true, count: partners.length, data: partners });
   } catch (err: any) {
@@ -138,8 +150,59 @@ phase1eRouter.get('/strategic-partners', async (req: Request, res: Response) => 
 // POST /api/strategic-partners
 phase1eRouter.post('/strategic-partners', async (req: Request, res: Response) => {
   try {
-    const partner = await StrategicPartnerService.createPartner(req.body);
+    const partner = await StrategicPartnerService.runDiscovery();
     res.status(201).json({ success: true, data: partner });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// GET & POST /api/opportunities/:opportunityId/partner-matches
+phase1eRouter.get('/opportunities/:opportunityId/partner-matches', async (req: Request, res: Response) => {
+  try {
+    const matches = await StrategicPartnerService.matchOpportunityToPartners(req.params.opportunityId);
+    res.json({ success: true, count: matches.length, data: matches });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+phase1eRouter.post('/opportunities/:opportunityId/partner-matches', async (req: Request, res: Response) => {
+  try {
+    const matches = await StrategicPartnerService.matchOpportunityToPartners(req.params.opportunityId);
+    res.json({ success: true, count: matches.length, data: matches });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/strategic-partners/matches/:matchId/status
+phase1eRouter.post('/strategic-partners/matches/:matchId/status', async (req: Request, res: Response) => {
+  try {
+    const { targetStatus, reviewerId, notes } = req.body;
+    const authHeader = req.headers.authorization;
+    const updated = await StrategicPartnerService.transitionPartnerMatchStatus({
+      matchId: req.params.matchId,
+      targetStatus,
+      reviewerId,
+      authHeader,
+      notes,
+    });
+    res.json({ success: true, data: updated });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/strategic-partners/:id/briefing
+phase1eRouter.get('/strategic-partners/:id/briefing', async (req: Request, res: Response) => {
+  try {
+    const { opportunityId } = req.query;
+    const briefing = await OutreachBriefingService.generatePartnerBriefingPacket(
+      req.params.id,
+      opportunityId as string | undefined
+    );
+    res.json({ success: true, data: briefing });
   } catch (err: any) {
     res.status(400).json({ success: false, error: err.message });
   }

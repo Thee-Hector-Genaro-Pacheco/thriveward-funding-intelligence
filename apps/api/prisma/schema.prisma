@@ -160,6 +160,7 @@ model FundingOpportunity {
   relevanceAnalyses       OpportunityRelevance[]
   pursuitHistory          PursuitHistory[]
   sponsorMatches          OpportunitySponsorMatch[]
+  partnerMatches          OpportunityPartnerMatch[]
   readinessPlans          OpportunityReadinessPlan[]
   grantCalendarItems      GrantCalendarItem[]
 
@@ -420,6 +421,19 @@ enum SponsorMatchStatus {
   INACTIVE
 }
 
+enum PartnerMatchStatus {
+  RESEARCH_REQUIRED
+  POSSIBLE_MATCH
+  CONTACT_APPROVED
+  CONTACTED
+  DISCOVERY_CALL
+  PARTNERSHIP_DISCUSSION
+  MOU_IN_PROGRESS
+  CONFIRMED_PARTNER
+  DECLINED
+  INACTIVE
+}
+
 enum RecurrenceConfidence {
   CONFIRMED_FORECAST
   HISTORICALLY_RECURRING
@@ -545,20 +559,66 @@ model SponsorDiscoveryQueryLog {
 }
 
 model StrategicPartnerCandidate {
-  id                 String    @id @default(uuid())
-  name               String
-  organizationType   String
-  websiteUrl         String
-  geography          String
-  mission            String
-  servicesOffered    String[]
-  collaborationFocus String
-  contactChannel     String    @default("UNKNOWN")
-  verificationStatus String    @default("PENDING_HUMAN_REVIEW")
-  lastVerified       DateTime?
-  internalNotes      String?
-  createdAt          DateTime  @default(now())
-  updatedAt          DateTime  @updatedAt
+  id                              String             @id @default(uuid())
+  name                            String
+  legalOrganizationName           String             @default("UNKNOWN")
+  organizationType                String
+  websiteUrl                      String
+  geography                       String
+  countiesServed                  String[]           @default([])
+  cocNumber                       String             @default("UNKNOWN")
+  collaborativeApplicantOrg       String             @default("UNKNOWN")
+  leadAgency                      String             @default("UNKNOWN")
+  verifiedOfficialRole            String             @default("UNKNOWN")
+  officialDirectoryUrl            String             @default("UNKNOWN")
+  applicationCoordinatedEntryRole String             @default("UNKNOWN")
+  currentCycleParticipationInfo   String             @default("UNKNOWN")
+  mission                         String
+  servicesOffered                 String[]
+  collaborationFocus              String
+  contactChannel                  String             @default("UNKNOWN")
+  verificationStatus              String             @default("PENDING_HUMAN_REVIEW")
+  isFixture                       Boolean            @default(false)
+  hasLiveVerification             Boolean            @default(false)
+  lastVerified                    DateTime?
+  internalNotes                   String?
+  status                          PartnerMatchStatus @default(RESEARCH_REQUIRED)
+  createdAt                       DateTime           @default(now())
+  updatedAt                       DateTime           @updatedAt
+
+  citations          PartnerSourceCitation[]
+  opportunityMatches OpportunityPartnerMatch[]
+}
+
+model PartnerSourceCitation {
+  id                          String                    @id @default(uuid())
+  strategicPartnerCandidateId String
+  strategicPartnerCandidate   StrategicPartnerCandidate @relation(fields: [strategicPartnerCandidateId], references: [id], onDelete: Cascade)
+  sourceUrl                   String
+  quotedSection               String?
+  extractedClaim              String
+  verificationLevel           String                    @default("OFFICIAL_DIRECTORY")
+  fetchedAt                   DateTime                  @default(now())
+}
+
+model OpportunityPartnerMatch {
+  id                          String                    @id @default(uuid())
+  fundingOpportunityId        String
+  fundingOpportunity          FundingOpportunity        @relation(fields: [fundingOpportunityId], references: [id], onDelete: Cascade)
+  strategicPartnerCandidateId String
+  strategicPartnerCandidate   StrategicPartnerCandidate @relation(fields: [strategicPartnerCandidateId], references: [id], onDelete: Cascade)
+  matchScore                  Int                       @default(0)
+  evidenceCoverage            Int                       @default(0)
+  status                      PartnerMatchStatus        @default(POSSIBLE_MATCH)
+  humanApproved               Boolean                   @default(false)
+  alignmentRationale          String
+  verifiedOfficialRole        String                    @default("UNKNOWN")
+  countiesOverlap             String[]                  @default([])
+  concerns                    String[]                  @default([])
+  missingInfo                 String[]                  @default([])
+  recommendedNextStep         String                    @default("Review partnership potential")
+  createdAt                   DateTime                  @default(now())
+  updatedAt                   DateTime                  @updatedAt
 }
 
 model OpportunitySponsorMatch {

@@ -257,4 +257,121 @@ Service Footprint: ${verifiedCountiesStr}`;
       safeguardNotice,
     };
   }
+
+  /**
+   * Generates a strategic partner outreach briefing packet for CoC Collaborative Applicant alignment.
+   * Performs zero automated external side-effects.
+   */
+  public static async generatePartnerBriefingPacket(
+    partnerId: string,
+    fundingOpportunityId?: string
+  ) {
+    const partner = await prisma.strategicPartnerCandidate.findUnique({
+      where: { id: partnerId },
+      include: { citations: true },
+    });
+
+    if (!partner) {
+      throw new Error(`Strategic partner candidate #${partnerId} not found`);
+    }
+
+    let opp: any = null;
+    if (fundingOpportunityId) {
+      opp = await prisma.fundingOpportunity.findUnique({
+        where: { id: fundingOpportunityId },
+      });
+    }
+
+    const counties = BRIDGE_FORWARD_PROFILE.initialServiceAreas;
+    const countiesStr = `${counties.slice(0, -1).join(', ')}, and ${counties[counties.length - 1]}`;
+
+    const recipientEmail = partner.contactChannel && partner.contactChannel !== 'UNKNOWN' ? partner.contactChannel : `[ADD PARTNER RECIPIENT EMAIL]`;
+
+    const oppTitle = opp?.title || 'FY2026 Continuum of Care Competition and Youth Homelessness Demonstration Program';
+    const oppNumber = opp?.fundingOpportunityNumber || 'CPD-2600-DC-0025';
+    const agency = opp?.fundingAgency || 'Department of Housing and Urban Development';
+    const deadline = opp?.deadline || '2026-08-26';
+
+    const subject = `Preliminary CoC Partnership Inquiry — Bridge Forward Foundation (${oppTitle})`;
+
+    const bodyText = `Dear Leadership & CoC Planning Team at ${partner.name},
+
+I am writing on behalf of Bridge Forward Foundation, an emerging Southern California organization dedicated to stabilizing housing, career pathways, and technology education for justice-involved adults and system-impacted young people in ${countiesStr}.
+
+We are preparing for the upcoming federal solicitation "${oppTitle}" (Notice #${oppNumber}, Agency: ${agency}), which appears potentially aligned based on preliminary, human-review-required analysis.
+
+As direct application for this competition requires submission through an official Continuum of Care (CoC) Collaborative Applicant via e-snaps, we are reaching out to discuss potential partnership and local CoC project submission alignment with ${partner.name} (${partner.cocNumber || 'CoC Lead'}).
+
+Opportunity & Pathway Context:
+- Solicitation Title: ${oppTitle}
+- Notice Number: ${oppNumber}
+- Funding Agency: ${agency}
+- HUD Deadline: ${deadline}
+- Required Pathway: PARTNERSHIP_REQUIRED (e-snaps CoC Collaborative Applicant Submission)
+- Required Partner Type: CONTINUUM_OF_CARE_COLLABORATIVE_APPLICANT
+- Bridge Forward Footprint: ${countiesStr}
+
+Bridge Forward Foundation Readiness Status:
+Bridge Forward Foundation is currently PRE_INCORPORATION (lacking legal-entity status, active SAM.gov/UEI, and 501(c)(3) status). We seek to participate as a project applicant/subrecipient under your CoC rating and ranking process.
+
+Key Partnership Discussion Items:
+1. Collaborative Applicant e-snaps submission process and project application intake schedule.
+2. Local CoC competition review, rating/ranking criteria, and priority funding tiers.
+3. Programmatic eligibility for reentry housing and unhoused youth support services.
+4. Coordinated Entry System (CES) integration, referral protocols, and HMIS reporting.
+5. Required MOUs, subrecipient governance, and non-federal match fund documentation.
+6. Local CoC submission deadline and required lead time prior to federal closing.
+
+Thank you for your leadership and guidance.
+
+Best regards,
+
+Bridge Forward Foundation Team
+Contact Email: [ADD VERIFIED BRIDGE FORWARD EMAIL]
+Service Counties: ${countiesStr}`;
+
+    const discoveryCallQuestions = [
+      `1. What is ${partner.name}'s process and timeline for receiving project applications for the ${oppNumber} competition in ${partner.cocNumber || 'your CoC'}?`,
+      `2. Does ${partner.name} confirm its role as the official HUD-designated CoC Collaborative Applicant (verified role: ${partner.verifiedOfficialRole})?`,
+      `3. What are the local CoC rating, ranking, and bonus project priorities for reentry and unhoused youth populations?`,
+      `4. How are Coordinated Entry System (CES) referrals and HMIS data sharing structured for subrecipient projects?`,
+      `5. What subrecipient MOUs, governance agreements, and match documentation are required for project inclusion in the CoC Consolidated Application?`,
+      `6. What is the internal local submission deadline prior to the HUD closing date of ${deadline}?`,
+    ];
+
+    const followUpDate = new Date();
+    followUpDate.setDate(followUpDate.getDate() + 7);
+
+    return {
+      partnerId: partner.id,
+      partnerName: partner.name,
+      cocNumber: partner.cocNumber,
+      verifiedOfficialRole: partner.verifiedOfficialRole,
+      websiteUrl: partner.websiteUrl,
+      geography: partner.geography,
+      countiesServed: partner.countiesServed,
+      opportunityId: opp?.id,
+      opportunityTitle: oppTitle,
+      opportunityNumber: oppNumber,
+      agency,
+      deadline,
+      requiredPathway: 'PARTNERSHIP_REQUIRED',
+      requiredPartnerType: 'CONTINUUM_OF_CARE_COLLABORATIVE_APPLICANT',
+      bridgeForwardSummary: {
+        name: BRIDGE_FORWARD_PROFILE.name,
+        status: BRIDGE_FORWARD_PROFILE.status,
+        serviceCounties: BRIDGE_FORWARD_PROFILE.initialServiceAreas,
+        mission: BRIDGE_FORWARD_PROFILE.missionStatement,
+      },
+      draftInquiryEmail: {
+        to: recipientEmail,
+        subject,
+        bodyText,
+      },
+      discoveryCallQuestions,
+      recommendedFollowUpDate: followUpDate.toISOString().split('T')[0],
+      safeguardNotice:
+        '🛡️ HUMAN-CONTROLLED OUTREACH SAFEGUARD: Bridge AI generates briefing packets and email drafts for human review ONLY. Bridge AI will NEVER send an email, submit an application, sign an agreement, make a legal certification, or commit funds without explicit human authorization.',
+    };
+  }
 }
