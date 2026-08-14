@@ -77,7 +77,7 @@ describe('Phase 1F Final Acceptance Test Suite', () => {
 
         if (ocMatch) {
           expect(ocMatch.overlapCounties).toEqual(['Orange County']);
-          expect(ocMatch.coverageScope).toBe('ONE_OF_TWO_LAUNCH_COUNTIES');
+          expect(ocMatch.coverageScope).toBe('ONE_OF_TWO_ACTIVE_LAUNCH_COUNTIES');
           expect(ocMatch.matchScore).toBe(90);
           expect(ocMatch.evidenceCoverage).toBe(95);
           expect(ocMatch.dimensionBreakdown).toBeDefined();

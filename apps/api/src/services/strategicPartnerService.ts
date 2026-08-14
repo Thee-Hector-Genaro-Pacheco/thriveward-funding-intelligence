@@ -303,6 +303,12 @@ export class StrategicPartnerService {
       results.push(candidate);
     }
 
+    // Regenerate current partner matches for open opportunities
+    const opps = await prisma.fundingOpportunity.findMany({ select: { id: true } });
+    for (const opp of opps) {
+      await this.matchOpportunityToPartners(opp.id);
+    }
+
     return {
       discoveredCount: results.length,
       partners: results,
@@ -370,7 +376,7 @@ export class StrategicPartnerService {
     await this.ensureSeededPartners();
 
     const allPartners = await prisma.strategicPartnerCandidate.findMany({
-      include: { citations: true, contactChannels: true },
+      include: { citations: true, contactChannels: true, opportunityMatches: true },
       orderBy: { name: 'asc' },
     });
 
@@ -474,7 +480,7 @@ export class StrategicPartnerService {
       });
 
       const coverageScope = overlapCounties.length === 1
-        ? 'ONE_OF_TWO_LAUNCH_COUNTIES'
+        ? 'ONE_OF_TWO_ACTIVE_LAUNCH_COUNTIES'
         : overlapCounties.length === 2
         ? 'FULL_TWO_COUNTY_LAUNCH_FOOTPRINT'
         : 'OUT_OF_LAUNCH_SCOPE';

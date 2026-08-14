@@ -81,7 +81,7 @@ describe('Phase 1E — Fiscal Sponsor Inquiry Briefing Generator Regression Test
   it('3. Briefing uses exact Project Thriveward service counties: Orange County and Los Angeles County', async () => {
     const packet = await OutreachBriefingService.generateSponsorBriefingPacket(communityInitiativesId);
 
-    const verifiedCounties = 'Orange County, and Los Angeles County';
+    const verifiedCounties = 'Orange County and Los Angeles County';
     expect(packet.draftInquiryEmail.bodyText).toContain(verifiedCounties);
     expect(packet.bridgeForwardSummary.serviceCounties).toEqual([
       'Orange County',

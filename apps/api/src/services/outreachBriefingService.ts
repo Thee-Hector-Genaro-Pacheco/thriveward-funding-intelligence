@@ -96,10 +96,7 @@ export class OutreachBriefingService {
     }
 
     const initialAreas = BRIDGE_FORWARD_PROFILE.initialServiceAreas;
-    const verifiedCountiesStr =
-      initialAreas.length > 1
-        ? `${initialAreas.slice(0, -1).join(', ')}, and ${initialAreas[initialAreas.length - 1]}`
-        : initialAreas.join(', ');
+    const verifiedCountiesStr = initialAreas.join(' and ');
     const modelText = formatSponsorshipModels(candidate.modelsOffered || []);
 
     const recipientEmail =
@@ -178,7 +175,7 @@ Best regards,
 
 Project Thriveward Team
 Contact Email: [ADD VERIFIED PROJECT THRIVEWARD EMAIL]
-Service Footprint: ${verifiedCountiesStr}`;
+Planned Launch Counties: ${verifiedCountiesStr}`;
 
       discoveryCallQuestions = [
         `1. Does ${candidate.name} currently accept new projects for ${modelText} in ${verifiedCountiesStr}?`,
@@ -213,7 +210,7 @@ Best regards,
 
 Project Thriveward Team
 Contact Email: [ADD VERIFIED PROJECT THRIVEWARD EMAIL]
-Service Footprint: ${verifiedCountiesStr}`;
+Planned Launch Counties: ${verifiedCountiesStr}`;
 
       discoveryCallQuestions = [
         `1. Does ${candidate.name} currently accept new projects for ${modelText} in ${verifiedCountiesStr}?`,
@@ -377,7 +374,7 @@ Best regards,
 
 Project Thriveward Team
 Contact Email: [ADD VERIFIED PROJECT THRIVEWARD EMAIL]
-Service Counties: ${countiesStr}`;
+Planned Launch Counties: Orange County and Los Angeles County`;
 
     const discoveryCallQuestions = [
       `1. What is ${partner.name}'s process and timeline for receiving project applications for the ${oppNumber} competition in ${partner.cocNumber || 'your CoC'}?`,

@@ -255,4 +255,69 @@ describe('Phase 1F — Strategic Partner Discovery, Actionable Directory, & Elig
     const matches2 = await FiscalSponsorService.matchOpportunityToSponsors(sop.id);
     expect(matches2.length).toEqual(matches.length);
   });
+
+  describe('Partner Footprint Intersection & Service Overlap Accuracy', () => {
+    it('CA-602 overlap is exactly ["Orange County"] and CA-600 overlap is exactly ["Los Angeles County"]', async () => {
+      const matches = await StrategicPartnerService.matchOpportunityToPartners(oppCoC.id);
+
+      const ca602Match = matches.find((m: any) => m.strategicPartnerCandidate?.cocNumber === 'CA-602' || m.strategicPartnerCandidate?.name.includes('Orange'));
+      const ca600Match = matches.find((m: any) => m.strategicPartnerCandidate?.cocNumber === 'CA-600' || m.strategicPartnerCandidate?.name.includes('LAHSA'));
+
+      expect(ca602Match).toBeDefined();
+      expect(ca600Match).toBeDefined();
+
+      expect(ca602Match?.overlapCounties).toEqual(['Orange County']);
+      expect(ca602Match?.countiesOverlap).toEqual(['Orange County']);
+      expect(ca602Match?.coverageScope).toBe('ONE_OF_TWO_ACTIVE_LAUNCH_COUNTIES');
+
+      expect(ca600Match?.overlapCounties).toEqual(['Los Angeles County']);
+      expect(ca600Match?.countiesOverlap).toEqual(['Los Angeles County']);
+      expect(ca600Match?.coverageScope).toBe('ONE_OF_TWO_ACTIVE_LAUNCH_COUNTIES');
+    });
+
+    it('CA-602 does not inherit all Project Thriveward launch counties (does NOT contain Los Angeles County)', async () => {
+      const matches = await StrategicPartnerService.matchOpportunityToPartners(oppCoC.id);
+      const ca602Match = matches.find((m: any) => m.strategicPartnerCandidate?.cocNumber === 'CA-602');
+      expect(ca602Match?.overlapCounties).not.toContain('Los Angeles County');
+    });
+
+    it('Neither CA-602 nor CA-600 overlap includes San Bernardino County or San Diego County', async () => {
+      const matches = await StrategicPartnerService.matchOpportunityToPartners(oppCoC.id);
+      for (const m of matches) {
+        expect(m.overlapCounties).not.toContain('San Bernardino County');
+        expect(m.overlapCounties).not.toContain('San Diego County');
+        expect(m.countiesOverlap).not.toContain('San Bernardino County');
+        expect(m.countiesOverlap).not.toContain('San Diego County');
+      }
+    });
+
+    it('Partner card serializer and listPartners endpoint never return the old four-county array', async () => {
+      const partners = await StrategicPartnerService.listPartners({ opportunityId: oppCoC.id });
+      for (const p of partners) {
+        const match = p.opportunityMatches?.[0];
+        if (match) {
+          expect(match.countiesOverlap).not.toEqual(['Orange County', 'Los Angeles County', 'San Bernardino County', 'San Diego County']);
+          expect(match.overlapCounties).not.toEqual(['Orange County', 'Los Angeles County', 'San Bernardino County', 'San Diego County']);
+        }
+      }
+    });
+
+    it('Future-expansion counties cannot enter active overlap calculations', async () => {
+      const sanDiegoCoC = await prisma.strategicPartnerCandidate.findFirst({ where: { cocNumber: 'CA-601' } });
+      if (sanDiegoCoC) {
+        const matches = await StrategicPartnerService.matchOpportunityToPartners(oppCoC.id);
+        const sdMatch = matches.find((m: any) => m.strategicPartnerCandidateId === sanDiegoCoC.id);
+        if (sdMatch) {
+          expect(sdMatch.overlapCounties).not.toContain('San Diego County');
+          expect(sdMatch.overlapCounties).toEqual([]);
+        }
+      }
+    });
+
+    it('Repeated discovery remains idempotent', async () => {
+      const run1 = await StrategicPartnerService.runDiscovery();
+      const run2 = await StrategicPartnerService.runDiscovery();
+      expect(run2.discoveredCount).toEqual(run1.discoveredCount);
+    });
+  });
 });

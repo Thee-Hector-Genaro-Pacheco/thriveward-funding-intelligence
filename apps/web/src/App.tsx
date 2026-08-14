@@ -1364,7 +1364,17 @@ export function App() {
                     <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap', margin: '0.75rem 0', fontSize: '0.8rem', color: '#94a3b8' }}>
                       <div>🎯 Opportunity Match Score: <strong style={{ color: '#34d399' }}>{match?.matchScore || 95}/100</strong></div>
                       <div>📋 Evidence Coverage: <strong style={{ color: '#c084fc' }}>{match?.evidenceCoverage || 95}%</strong></div>
-                      <div>📍 Service Footprint Overlap: <strong style={{ color: '#60a5fa' }}>{match?.countiesOverlap?.join(', ') || 'Orange, LA, San Bernardino, San Diego'}</strong></div>
+                      {(() => {
+                        const overlapArr = (match?.countiesOverlap && match.countiesOverlap.length > 0)
+                          ? match.countiesOverlap
+                          : (match?.overlapCounties && match.overlapCounties.length > 0)
+                          ? match.overlapCounties
+                          : (Array.isArray(p.countiesServed)
+                              ? p.countiesServed.filter((c: string) => ['Orange County', 'Los Angeles County'].includes(c))
+                              : []);
+                        const displayStr = overlapArr.length > 0 ? overlapArr.join(', ') : 'None (Out of Launch Scope)';
+                        return <div>📍 Service Footprint Overlap: <strong style={{ color: '#60a5fa' }}>{displayStr}</strong></div>;
+                      })()}
                     </div>
 
                     {/* Append-Only Workflow Status Selector */}
