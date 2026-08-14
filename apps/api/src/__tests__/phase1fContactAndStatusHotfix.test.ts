@@ -42,16 +42,12 @@ describe('Phase 1F — Contact-Integrity and Current-Cycle Status Hotfix Test Su
     }
 
     lahsaCandidate = await prisma.strategicPartnerCandidate.findFirst({
-      where: {
-        OR: [{ cocNumber: 'CA-600' }, { name: { contains: 'LAHSA', mode: 'insensitive' } }],
-      },
+      where: { cocNumber: 'CA-600' },
       include: { contactChannels: true, citations: true },
     });
 
     orangeCandidate = await prisma.strategicPartnerCandidate.findFirst({
-      where: {
-        OR: [{ cocNumber: 'CA-602' }, { name: { contains: 'Orange', mode: 'insensitive' } }],
-      },
+      where: { cocNumber: 'CA-602' },
       include: { contactChannels: true, citations: true },
     });
   });

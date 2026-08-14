@@ -44,7 +44,7 @@ export class OpportunityNarrativeService {
 
     // 3. Build partner-specific geographic localization narrative
     const partnerCounty = OpportunityNarrativeService.resolvePartnerCounty(partner);
-    const partnerCocNumber = partner?.cocNumber || (partnerCounty.includes('Orange') ? 'CA-602' : partnerCounty.includes('Los Angeles') ? 'CA-600' : 'CoC Lead');
+    const partnerCocNumber = (partner?.cocNumber && partner.cocNumber !== 'UNKNOWN') ? partner.cocNumber : (partnerCounty.includes('Orange') ? 'CA-602' : partnerCounty.includes('Los Angeles') ? 'CA-600' : partnerCounty.includes('San Bernardino') ? 'CA-609' : partnerCounty.includes('San Diego') ? 'CA-601' : 'CoC Lead');
     const geographicContextNarrative =
       OpportunityNarrativeService.generateGeographicNarrative(partnerCounty, partnerCocNumber);
 
@@ -52,7 +52,7 @@ export class OpportunityNarrativeService {
     const narrativeEvidenceFacts = [
       `Bridge Forward Foundation is PRE_INCORPORATION (nonprofit initiative stage)`,
       `Service footprint spans Orange, Los Angeles, San Bernardino, and San Diego Counties`,
-      `All operational and planned programs are developing or pre-release support models; zero prior cohort outcomes fabricated`,
+      `Bridge Forward’s service models are planned or developing; no completed cohort outcomes or operating history are claimed.`,
       `Opportunity pathway: ${input.requiredApplicationPathway || opp?.candidateRoutingStatus || 'PARTNERSHIP_REQUIRED'}`,
     ];
 

@@ -14,10 +14,34 @@ export type TriStateStatus = 'YES' | 'NO' | 'CONDITIONAL' | 'UNKNOWN';
 
 // 3. Relevance Classification Status
 export type RelevanceStatus =
+  | 'STRONGLY_RELEVANT'
   | 'RELEVANT'
   | 'POSSIBLY_RELEVANT'
   | 'IRRELEVANT'
   | 'UNKNOWN';
+
+export function mapScoreToRelevanceStatus(score: number): RelevanceStatus {
+  if (score >= 75) return 'STRONGLY_RELEVANT';
+  if (score >= 50) return 'RELEVANT';
+  if (score >= 25) return 'POSSIBLY_RELEVANT';
+  return 'IRRELEVANT';
+}
+
+export function formatRelevanceStatusLabel(statusOrScore: RelevanceStatus | number): string {
+  const status = typeof statusOrScore === 'number' ? mapScoreToRelevanceStatus(statusOrScore) : statusOrScore;
+  switch (status) {
+    case 'STRONGLY_RELEVANT':
+      return 'Strongly Relevant';
+    case 'RELEVANT':
+      return 'Relevant';
+    case 'POSSIBLY_RELEVANT':
+      return 'Possibly Relevant';
+    case 'IRRELEVANT':
+      return 'Irrelevant';
+    default:
+      return 'Unknown';
+  }
+}
 
 // 4. Human-Led Pursuit Stage
 export type PursuitStage =

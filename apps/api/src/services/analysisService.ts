@@ -995,8 +995,8 @@ export class AnalysisService {
     if (sanitizedCurrent && isRoutedOrBlocked) {
       sanitizedCurrent = {
         ...sanitizedCurrent,
-        eligibilityDecision: 'NOT_ELIGIBLE',
-        eligibilityStatus: 'NOT_ELIGIBLE',
+        eligibilityDecision: 'NOT_CURRENTLY_ELIGIBLE',
+        eligibilityStatus: 'NOT_CURRENTLY_ELIGIBLE',
         recommendation: sanitizedCurrent.recommendation === 'HIGH_PRIORITY' ? 'FUTURE_OPPORTUNITY' : sanitizedCurrent.recommendation,
         directApplicantEligibility: 'NOT_CURRENTLY_ELIGIBLE',
       };
@@ -1007,9 +1007,9 @@ export class AnalysisService {
       title: opp.title,
       isDemo: opp.isDemo,
       candidateRoutingStatus: opp.candidateRoutingStatus,
-      directApplicantEligibility: isRoutedOrBlocked ? 'NOT_CURRENTLY_ELIGIBLE' : 'ELIGIBLE',
+      directApplicantEligibility: isRoutedOrBlocked || opp.candidateRoutingStatus !== 'DIRECT_FEDERAL_ELIGIBLE' ? 'NOT_CURRENTLY_ELIGIBLE' : 'ELIGIBLE',
       currentAnalysis: sanitizedCurrent || null,
-      historicalAnalyses: historicalAnalyses.map((h) => isRoutedOrBlocked ? { ...h, eligibilityDecision: 'NOT_ELIGIBLE', recommendation: h.recommendation === 'HIGH_PRIORITY' ? 'FUTURE_OPPORTUNITY' : h.recommendation } : h),
+      historicalAnalyses: historicalAnalyses.map((h) => isRoutedOrBlocked ? { ...h, eligibilityDecision: 'NOT_CURRENTLY_ELIGIBLE', recommendation: h.recommendation === 'HIGH_PRIORITY' ? 'FUTURE_OPPORTUNITY' : h.recommendation } : h),
       message: sanitizedCurrent ? undefined : 'No analysis generated yet for this opportunity.',
     };
   }

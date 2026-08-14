@@ -205,7 +205,7 @@ describe('Phase 1F — Opportunity-Specific Organization Narrative & Positioning
     });
 
     expect(result.narrativeEvidenceFacts).toContain(
-      'All operational and planned programs are developing or pre-release support models; zero prior cohort outcomes fabricated'
+      'Bridge Forward’s service models are planned or developing; no completed cohort outcomes or operating history are claimed.'
     );
     expect(result.opportunitySpecificOrganizationNarrative).toContain('We are developing a youth-centered service model');
   });

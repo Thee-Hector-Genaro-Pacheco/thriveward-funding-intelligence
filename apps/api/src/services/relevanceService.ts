@@ -1,7 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { RelevanceStatus } from '@prisma/client';
 import { BRIDGE_FORWARD_PROFILE, getProfileHash } from '../config/bridgeForwardProfile';
-import { sanitizeHtmlToText } from '@bridge-ai/shared';
+import { sanitizeHtmlToText, mapScoreToRelevanceStatus } from '@bridge-ai/shared';
 import { ExclusionGateEngine } from './exclusionGateEngine';
 import { GrantsGovMapper } from '../integrations/grantsGov/grantsGovMapper';
 
@@ -73,8 +73,8 @@ export class RelevanceService {
     let explanation = '';
 
     if (evalRes.isExcluded) {
-      status = RelevanceStatus.IRRELEVANT;
       score = 0;
+      status = mapScoreToRelevanceStatus(score);
       const reasonKey = evalRes.exclusionReason || 'EXCLUDED_CONTEXTUALLY_IRRELEVANT';
       exclusionReasons.push(reasonKey);
       explanation = evalRes.explanation;
@@ -84,8 +84,8 @@ export class RelevanceService {
         contextSnippet: titleText.slice(0, 150),
       });
     } else if (evalRes.routingStatus === 'FUTURE_OPPORTUNITY' || evalRes.routingStatus === 'PARTNERSHIP_REQUIRED') {
-      status = RelevanceStatus.POSSIBLY_RELEVANT;
       score = 40;
+      status = mapScoreToRelevanceStatus(score);
       positiveReasons.push(...evalRes.matchedLanes);
       explanation = evalRes.explanation;
       citations.push({
@@ -94,8 +94,8 @@ export class RelevanceService {
         contextSnippet: descText.slice(0, 150),
       });
     } else {
-      status = RelevanceStatus.RELEVANT;
       score = 85;
+      status = mapScoreToRelevanceStatus(score);
       positiveReasons.push(...evalRes.matchedLanes);
       explanation = evalRes.explanation;
       citations.push({
@@ -160,7 +160,7 @@ export class RelevanceService {
     return {
       id: record.id,
       fundingOpportunityId: record.fundingOpportunityId,
-      relevanceStatus: record.relevanceStatus,
+      relevanceStatus: mapScoreToRelevanceStatus(record.relevanceScore),
       relevanceScore: record.relevanceScore,
       positiveReasons: record.positiveReasons,
       exclusionReasons: record.exclusionReasons,
@@ -188,7 +188,7 @@ export class RelevanceService {
     return {
       id: record.id,
       fundingOpportunityId: record.fundingOpportunityId,
-      relevanceStatus: record.relevanceStatus,
+      relevanceStatus: mapScoreToRelevanceStatus(record.relevanceScore),
       relevanceScore: record.relevanceScore,
       positiveReasons: record.positiveReasons,
       exclusionReasons: record.exclusionReasons,

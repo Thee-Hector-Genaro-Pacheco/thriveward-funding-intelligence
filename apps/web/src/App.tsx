@@ -407,12 +407,12 @@ export function App() {
     }
   };
 
-  const handleFetchPartnerBriefing = async (partnerId: string, opportunityId?: string) => {
+  const handleFetchPartnerBriefing = async (partnerId: string, opportunityId?: string, inquiryPurpose: string = 'GRANT_COMPETITION') => {
     try {
       const targetOppId = opportunityId || selectedOppForPartnerView?.id;
       const url = targetOppId
-        ? `/api/strategic-partners/${partnerId}/briefing?opportunityId=${targetOppId}`
-        : `/api/strategic-partners/${partnerId}/briefing`;
+        ? `/api/strategic-partners/${partnerId}/briefing?opportunityId=${targetOppId}&inquiryPurpose=${inquiryPurpose}`
+        : `/api/strategic-partners/${partnerId}/briefing?inquiryPurpose=${inquiryPurpose}`;
       const res = await fetch(url);
       if (res.ok) {
         const json = await res.json();
@@ -1308,10 +1308,22 @@ export function App() {
                           </button>
                         )}
                         <button
-                          onClick={() => handleFetchPartnerBriefing(p.id, selectedOppForPartnerView?.id)}
+                          onClick={() => handleFetchPartnerBriefing(p.id, selectedOppForPartnerView?.id, 'GRANT_COMPETITION')}
                           style={{ background: 'rgba(59, 130, 246, 0.2)', border: '1px solid #3b82f6', color: '#93c5fd', padding: '0.4rem 0.85rem', borderRadius: '0.4rem', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600 }}
                         >
-                          📝 Draft Partnership Inquiry
+                          📄 Generate Competition/NOFO Briefing
+                        </button>
+                        <button
+                          onClick={() => handleFetchPartnerBriefing(p.id, selectedOppForPartnerView?.id, 'GENERAL')}
+                          style={{ background: 'rgba(147, 51, 234, 0.2)', border: '1px solid #a855f7', color: '#d8b4fe', padding: '0.4rem 0.75rem', borderRadius: '0.4rem', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600 }}
+                        >
+                          💬 General Inquiry
+                        </button>
+                        <button
+                          onClick={() => handleFetchPartnerBriefing(p.id, selectedOppForPartnerView?.id, 'CES_INTEGRATION')}
+                          style={{ background: 'rgba(245, 158, 11, 0.2)', border: '1px solid #f59e0b', color: '#fde68a', padding: '0.4rem 0.85rem', borderRadius: '0.4rem', fontSize: '0.85rem', cursor: 'pointer', fontWeight: 600 }}
+                        >
+                          🔄 CES Integration
                         </button>
                       </div>
                     </div>
@@ -1822,11 +1834,13 @@ export function App() {
 
             {/* Editable Subject & Body Text Section */}
             <div style={{ marginBottom: '1.25rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
                 <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#93c5fd' }}>
-                  ✉️ Editable Draft Inquiry Email (Human Review & Dispatch)
+                  ✉️ Editable Draft Inquiry Email ({partnerBriefingPacket.inquiryPurpose || 'GRANT_COMPETITION'})
                 </h3>
-                <span style={{ fontSize: '0.78rem', color: '#94a3b8' }}>To: {partnerBriefingPacket.draftInquiryEmail?.to}</span>
+                <span style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem', borderRadius: '0.35rem', background: partnerBriefingPacket.draftInquiryEmail?.to?.includes('[VERIFY') ? 'rgba(239, 68, 68, 0.2)' : 'rgba(59, 130, 246, 0.2)', border: partnerBriefingPacket.draftInquiryEmail?.to?.includes('[VERIFY') ? '1px solid #ef4444' : '1px solid #3b82f6', color: partnerBriefingPacket.draftInquiryEmail?.to?.includes('[VERIFY') ? '#fca5a5' : '#93c5fd', fontWeight: 700 }}>
+                  To: {partnerBriefingPacket.draftInquiryEmail?.to}
+                </span>
               </div>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>

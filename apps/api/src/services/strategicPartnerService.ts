@@ -1,5 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { PartnerMatchStatus } from '@prisma/client';
+import { ContactProvenanceVerifier } from './contactProvenanceVerifier';
 
 export interface CreateStrategicPartnerInput {
   name: string;
@@ -318,10 +319,14 @@ export class StrategicPartnerService {
 
     const channels = partner.contactChannels || [];
     const match = channels.find(
-      (c: any) => c.purposeCategory === purposeCategory && c.contactType === 'EMAIL'
+      (c: any) =>
+        c.purposeCategory === purposeCategory &&
+        c.contactType === 'EMAIL' &&
+        !c.contactValue.includes('cocinfo@lahsa.org') &&
+        !c.contactValue.includes('cocinfo@ochca.com')
     );
 
-    if (match && match.contactValue && match.contactValue.includes('@')) {
+    if (match && match.contactValue && match.contactValue.includes('@') && match.verificationStatus !== 'UNVERIFIED') {
       return match.contactValue;
     }
 
@@ -444,34 +449,71 @@ export class StrategicPartnerService {
     const matches = [];
 
     for (const partner of partners) {
-      let score = 50;
-      let evidenceCoverage = 75;
       const concerns: string[] = [];
       const missingInfo: string[] = [];
-      const countiesOverlap: string[] = [];
-
-      // Check county overlap
       const partnerCounties = partner.countiesServed || [];
-      const partnerGeo = partner.geography.toLowerCase();
+      const overlapCounties: string[] = [];
 
+      // Calculate exact set intersection: partner.countiesServed ∩ BRIDGE_FORWARD_COUNTIES
       BRIDGE_FORWARD_COUNTIES.forEach((county) => {
         const key = county.toLowerCase().replace(' county', '');
-        if (partnerCounties.some((c) => c.toLowerCase().includes(key)) || partnerGeo.includes(key)) {
-          countiesOverlap.push(county);
+        const matchesServed = partnerCounties.some((c: string) => c.toLowerCase().includes(key));
+        const matchesGeoName = partner.name.toLowerCase().includes(key) || (partner.cocNumber && partner.cocNumber.toLowerCase().includes(key));
+
+        if (matchesServed || matchesGeoName) {
+          if (partner.cocNumber === 'CA-602' && county === 'Orange County') overlapCounties.push(county);
+          else if (partner.cocNumber === 'CA-600' && county === 'Los Angeles County') overlapCounties.push(county);
+          else if (partner.cocNumber === 'CA-609' && county === 'San Bernardino County') overlapCounties.push(county);
+          else if (partner.cocNumber === 'CA-601' && county === 'San Diego County') overlapCounties.push(county);
+          else if (!partner.cocNumber || partner.cocNumber === 'UNKNOWN') {
+            if (matchesServed) overlapCounties.push(county);
+          }
         }
       });
 
-      if (countiesOverlap.length > 0) {
-        score += 25;
-      } else {
+      const coverageScope = overlapCounties.length === 1
+        ? 'ONE_OF_FOUR_TARGET_COUNTIES'
+        : overlapCounties.length === 4
+        ? 'FULL_FOUR_COUNTY_FOOTPRINT'
+        : 'PARTIAL_FOOTPRINT';
+
+      // 6 Weighted Dimension Scoring System (Total 100 points)
+      // 1. Verified Official Role (Weight 25)
+      const rolePoints = partner.verifiedOfficialRole === 'CONFIRMED_COLLABORATIVE_APPLICANT' ? 25 : 0;
+
+      // 2. Actual County Overlap (Weight 20: 5 pts per target county overlapping)
+      const countyPoints = overlapCounties.length * 5;
+
+      // 3. Required Partner Type Match (Weight 20)
+      const partnerTypePoints = partner.organizationType === 'CONTINUUM_OF_CARE' ? 20 : 0;
+
+      // 4. Opportunity-Program Alignment (Weight 15)
+      const programPoints = (partner.servicesOffered || []).length > 0 ? 15 : 10;
+
+      // 5. Current Cycle Evidence (Weight 10)
+      const cyclePoints = partner.hasLiveVerification ? 10 : 5;
+
+      // 6. Verified Contact Availability (Weight 10)
+      const contactVal = StrategicPartnerService.selectContactForPurpose(partner, 'GRANT_COMPETITION');
+      const contactPoints = contactVal.includes('@') && !contactVal.includes('[VERIFY') ? 10 : 0;
+
+      const totalScore = Math.min(100, rolePoints + countyPoints + partnerTypePoints + programPoints + cyclePoints + contactPoints);
+      const evidenceCoverage = partner.verifiedOfficialRole === 'CONFIRMED_COLLABORATIVE_APPLICANT' ? 95 : 60;
+
+      const dimensionBreakdown = [
+        { dimensionKey: 'verifiedOfficialRole', weight: 25, pointsAwarded: rolePoints, status: rolePoints === 25 ? 'MATCH' : 'MISMATCH' },
+        { dimensionKey: 'countyOverlap', weight: 20, pointsAwarded: countyPoints, status: countyPoints > 0 ? 'MATCH' : 'MISMATCH' },
+        { dimensionKey: 'requiredPartnerType', weight: 20, pointsAwarded: partnerTypePoints, status: partnerTypePoints === 20 ? 'MATCH' : 'MISMATCH' },
+        { dimensionKey: 'programAlignment', weight: 15, pointsAwarded: programPoints, status: programPoints === 15 ? 'MATCH' : 'MISMATCH' },
+        { dimensionKey: 'currentCycleEvidence', weight: 10, pointsAwarded: cyclePoints, status: cyclePoints === 10 ? 'MATCH' : 'MISMATCH' },
+        { dimensionKey: 'verifiedContactAvailability', weight: 10, pointsAwarded: contactPoints, status: contactPoints === 10 ? 'MATCH' : 'MISMATCH' },
+      ];
+
+      if (overlapCounties.length === 0) {
         concerns.push('No direct county overlap with Bridge Forward service counties (Orange, LA, San Bernardino, San Diego).');
       }
 
-      // Check verified role
-      if (partner.verifiedOfficialRole === 'CONFIRMED_COLLABORATIVE_APPLICANT') {
-        score += 25;
-        evidenceCoverage = 95;
-      } else {
+      if (partner.verifiedOfficialRole !== 'CONFIRMED_COLLABORATIVE_APPLICANT') {
         missingInfo.push('Authoritative confirmation of Collaborative Applicant designation via e-snaps listing required.');
       }
 
@@ -483,11 +525,14 @@ export class StrategicPartnerService {
       });
 
       const matchData = {
-        matchScore: Math.min(100, score),
+        matchScore: totalScore,
         evidenceCoverage,
-        alignmentRationale: `${partner.name} (${partner.cocNumber || partner.organizationType}) evaluated for ${opp.title}. Verified Role: ${partner.verifiedOfficialRole}. Service Footprint Overlap: ${countiesOverlap.join(', ')}.`,
+        alignmentRationale: `${partner.name} (${partner.cocNumber || partner.organizationType}) evaluated for ${opp.title}. Verified Role: ${partner.verifiedOfficialRole}. Local County Focus: ${overlapCounties.join(', ')} (${coverageScope}).`,
         verifiedOfficialRole: partner.verifiedOfficialRole,
-        countiesOverlap,
+        countiesOverlap: overlapCounties,
+        overlapCounties,
+        coverageScope,
+        dimensionBreakdown,
         concerns,
         missingInfo,
         recommendedNextStep: partner.verifiedOfficialRole === 'CONFIRMED_COLLABORATIVE_APPLICANT' 
@@ -500,7 +545,7 @@ export class StrategicPartnerService {
         match = await prisma.opportunityPartnerMatch.update({
           where: { id: existingMatch.id },
           data: matchData,
-          include: { strategicPartnerCandidate: { include: { citations: true } } },
+          include: { strategicPartnerCandidate: { include: { citations: true, contactChannels: true } } },
         });
       } else {
         match = await prisma.opportunityPartnerMatch.create({
@@ -511,7 +556,7 @@ export class StrategicPartnerService {
             humanApproved: false,
             ...matchData,
           },
-          include: { strategicPartnerCandidate: { include: { citations: true } } },
+          include: { strategicPartnerCandidate: { include: { citations: true, contactChannels: true } } },
         });
       }
 
@@ -530,6 +575,8 @@ export class StrategicPartnerService {
     reviewerId?: string;
     authHeader?: string;
     notes?: string;
+    reason?: string;
+    metadata?: any;
   }) {
     const match = await prisma.opportunityPartnerMatch.findUnique({
       where: { id: params.matchId },
@@ -538,6 +585,24 @@ export class StrategicPartnerService {
 
     if (!match) {
       throw new Error(`Partner match record '${params.matchId}' not found.`);
+    }
+
+    const validTransitions: Record<string, string[]> = {
+      RESEARCH_REQUIRED: ['POSSIBLE_MATCH', 'CONTACT_APPROVED', 'DECLINED', 'INACTIVE'],
+      POSSIBLE_MATCH: ['CONTACT_APPROVED', 'DECLINED', 'INACTIVE'],
+      CONTACT_APPROVED: ['CONTACTED', 'DECLINED', 'INACTIVE'],
+      CONTACTED: ['DISCOVERY_CALL', 'DECLINED', 'INACTIVE'],
+      DISCOVERY_CALL: ['PARTNERSHIP_DISCUSSION', 'DECLINED', 'INACTIVE'],
+      PARTNERSHIP_DISCUSSION: ['MOU_IN_PROGRESS', 'DECLINED', 'INACTIVE'],
+      MOU_IN_PROGRESS: ['CONFIRMED_PARTNER', 'DECLINED', 'INACTIVE'],
+      CONFIRMED_PARTNER: ['INACTIVE'],
+      DECLINED: ['RESEARCH_REQUIRED'],
+      INACTIVE: ['RESEARCH_REQUIRED'],
+    };
+
+    const allowedNext = validTransitions[match.status] || [];
+    if (params.targetStatus !== match.status && !allowedNext.includes(params.targetStatus)) {
+      throw new Error(`Invalid workflow transition from '${match.status}' to '${params.targetStatus}'. Allowed transitions: ${allowedNext.join(', ')}`);
     }
 
     const requiresHumanAuth = (
@@ -564,13 +629,25 @@ export class StrategicPartnerService {
       }
     }
 
+    // Record append-only history entry
+    await prisma.partnerWorkflowHistory.create({
+      data: {
+        strategicPartnerCandidateId: match.strategicPartnerCandidateId,
+        previousStage: match.status,
+        newStage: params.targetStatus,
+        performedBy: params.reviewerId || 'HUMAN_OPERATOR',
+        reason: params.reason || params.notes || `Transitioned workflow stage from ${match.status} to ${params.targetStatus}`,
+        metadata: params.metadata || null,
+      },
+    });
+
     return await prisma.opportunityPartnerMatch.update({
       where: { id: params.matchId },
       data: {
         status: params.targetStatus,
         humanApproved: requiresHumanAuth ? true : match.humanApproved,
       },
-      include: { strategicPartnerCandidate: { include: { citations: true } } },
+      include: { strategicPartnerCandidate: { include: { citations: true, workflowHistory: true } } },
     });
   }
 

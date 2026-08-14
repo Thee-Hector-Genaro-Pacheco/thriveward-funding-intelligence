@@ -141,8 +141,35 @@ export function getCanonicalProfileJson(profile: BridgeForwardProfile = BRIDGE_F
 }
 
 /**
+ * Returns the lowercase 64-character SHA-256 digest of the exact mission statement string.
+ */
+export function getMissionStatementHash(profile: BridgeForwardProfile = BRIDGE_FORWARD_PROFILE): string {
+  return crypto.createHash('sha256').update(profile.missionStatement).digest('hex');
+}
+
+/**
  * Returns the lowercase 64-character SHA-256 digest of the canonical profile.
  */
-export function getProfileHash(profile: BridgeForwardProfile = BRIDGE_FORWARD_PROFILE): string {
+export function getCanonicalProfileHash(profile: BridgeForwardProfile = BRIDGE_FORWARD_PROFILE): string {
   return crypto.createHash('sha256').update(getCanonicalProfileJson(profile)).digest('hex');
+}
+
+/**
+ * Backwards compatible alias for getCanonicalProfileHash.
+ */
+export function getProfileHash(profile: BridgeForwardProfile = BRIDGE_FORWARD_PROFILE): string {
+  return getCanonicalProfileHash(profile);
+}
+
+/**
+ * Returns both distinct hashes for verification.
+ */
+export function computeProfileHashes(profile: BridgeForwardProfile = BRIDGE_FORWARD_PROFILE): {
+  missionStatementHash: string;
+  canonicalProfileHash: string;
+} {
+  return {
+    missionStatementHash: getMissionStatementHash(profile),
+    canonicalProfileHash: getCanonicalProfileHash(profile),
+  };
 }
