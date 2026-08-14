@@ -2,6 +2,7 @@ import { prisma } from '../lib/prisma';
 import { BRIDGE_FORWARD_PROFILE } from '@bridge-ai/shared';
 import { calculateSopMatchRequirement } from './sopMatchCalculator';
 import { StrategicPartnerService } from './strategicPartnerService';
+import { OpportunityNarrativeService } from './opportunityNarrativeService';
 
 export interface SponsorBriefingPacket {
   candidateId: string;
@@ -26,6 +27,11 @@ export interface SponsorBriefingPacket {
     mission: string;
     targetPopulations: string[];
   };
+  selectedNarrativeLenses: string[];
+  opportunitySpecificOrganizationNarrative: string;
+  geographicContextNarrative: string;
+  narrativeEvidenceFacts: string[];
+  narrativeSafeguardsApplied: string[];
   draftInquiryEmail: {
     to: string;
     subject: string;
@@ -222,6 +228,12 @@ Service Footprint: ${verifiedCountiesStr}`;
     followUpDate.setDate(followUpDate.getDate() + 7);
     const recommendedFollowUpDate = followUpDate.toISOString().split('T')[0];
 
+    const narrative = OpportunityNarrativeService.buildOpportunitySpecificNarrative({
+      opportunity: opp,
+      organizationProfile: BRIDGE_FORWARD_PROFILE,
+      selectedPartner: candidate,
+    });
+
     const safeguardNotice =
       '🛡️ HUMAN-CONTROLLED OUTREACH SAFEGUARD: Bridge AI generates briefing packets and email drafts for human review ONLY. Bridge AI will NEVER send an email, submit an application, sign an agreement, make a legal certification, or commit funds without explicit human authorization.';
 
@@ -248,6 +260,11 @@ Service Footprint: ${verifiedCountiesStr}`;
         mission: BRIDGE_FORWARD_PROFILE.missionStatement,
         targetPopulations: BRIDGE_FORWARD_PROFILE.primaryPopulations,
       },
+      selectedNarrativeLenses: narrative.selectedNarrativeLenses,
+      opportunitySpecificOrganizationNarrative: narrative.opportunitySpecificOrganizationNarrative,
+      geographicContextNarrative: narrative.geographicContextNarrative,
+      narrativeEvidenceFacts: narrative.narrativeEvidenceFacts,
+      narrativeSafeguardsApplied: narrative.narrativeSafeguardsApplied,
       draftInquiryEmail: {
         to: recipientEmail,
         subject,
@@ -304,9 +321,25 @@ Service Footprint: ${verifiedCountiesStr}`;
 
     const subject = `${subjectPrefix}: ${oppTitle} (${oppNumber})`;
 
+    const effectiveOpp = opp || {
+      title: oppTitle,
+      fundingOpportunityNumber: oppNumber,
+      fundingAgency: agency,
+      deadline,
+      candidateRoutingStatus: 'PARTNERSHIP_REQUIRED',
+    };
+
+    const narrative = OpportunityNarrativeService.buildOpportunitySpecificNarrative({
+      opportunity: effectiveOpp,
+      organizationProfile: BRIDGE_FORWARD_PROFILE,
+      selectedPartner: partner,
+    });
+
     const bodyText = `Dear Leadership & CoC Planning Team at ${partner.name},
 
-I am writing on behalf of Bridge Forward Foundation, an emerging Southern California organization dedicated to stabilizing housing, career pathways, and technology education for justice-involved adults and system-impacted young people in ${countiesStr}.
+${narrative.opportunitySpecificOrganizationNarrative}
+
+${narrative.geographicContextNarrative}
 
 We are evaluating this opportunity and seeking guidance regarding its current status, local process, and future participation requirements for "${oppTitle}" (Notice #${oppNumber}, Agency: ${agency}), which appears potentially aligned based on preliminary, human-review-required analysis.
 
@@ -373,6 +406,11 @@ Service Counties: ${countiesStr}`;
         serviceCounties: BRIDGE_FORWARD_PROFILE.initialServiceAreas,
         mission: BRIDGE_FORWARD_PROFILE.missionStatement,
       },
+      selectedNarrativeLenses: narrative.selectedNarrativeLenses,
+      opportunitySpecificOrganizationNarrative: narrative.opportunitySpecificOrganizationNarrative,
+      geographicContextNarrative: narrative.geographicContextNarrative,
+      narrativeEvidenceFacts: narrative.narrativeEvidenceFacts,
+      narrativeSafeguardsApplied: narrative.narrativeSafeguardsApplied,
       draftInquiryEmail: {
         to: recipientEmail,
         subject,

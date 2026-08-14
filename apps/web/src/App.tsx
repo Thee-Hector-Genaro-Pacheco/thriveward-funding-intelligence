@@ -197,6 +197,11 @@ export interface SponsorBriefingPacket {
     mission: string;
     targetPopulations: string[];
   };
+  selectedNarrativeLenses?: string[];
+  opportunitySpecificOrganizationNarrative?: string;
+  geographicContextNarrative?: string;
+  narrativeEvidenceFacts?: string[];
+  narrativeSafeguardsApplied?: string[];
   draftInquiryEmail: {
     to: string;
     subject: string;
@@ -1677,6 +1682,26 @@ export function App() {
               </div>
             )}
 
+            {/* Opportunity-Specific Positioning Read-Only Panel */}
+            {briefingPacket.selectedNarrativeLenses && (
+              <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(147, 197, 253, 0.3)', padding: '0.85rem 1rem', borderRadius: '0.5rem', marginBottom: '1.25rem', fontSize: '0.825rem' }}>
+                <div style={{ fontWeight: 700, color: '#60a5fa', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  🎯 Opportunity-Specific Positioning
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.5rem' }}>
+                  {briefingPacket.selectedNarrativeLenses.map((lens: string, idx: number) => (
+                    <span key={idx} className="badge badge-purple" style={{ fontSize: '0.725rem' }}>Lens: {lens}</span>
+                  ))}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.4rem', color: '#cbd5e1', fontSize: '0.78rem' }}>
+                  <div><strong>Primary Population:</strong> Justice-involved & system-impacted youth & young adults</div>
+                  <div><strong>Selected Partner Geography:</strong> {briefingPacket.geography || 'Southern California'}</div>
+                  <div><strong>Legal-Stage Safeguard:</strong> Emerging nonprofit initiative (PRE_INCORPORATION)</div>
+                  <div><strong>Current-Cycle Safeguard:</strong> Information-seeking guidance (Evaluating status)</div>
+                </div>
+              </div>
+            )}
+
             {/* Editable Subject & Body Text Section */}
             <div style={{ marginBottom: '1.25rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
@@ -1774,6 +1799,26 @@ export function App() {
                 <div><strong>Bridge Forward Footprint:</strong> Orange, LA, San Bernardino, San Diego Counties</div>
               </div>
             </div>
+
+            {/* Opportunity-Specific Positioning Read-Only Panel */}
+            {partnerBriefingPacket.selectedNarrativeLenses && (
+              <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(147, 197, 253, 0.3)', padding: '0.85rem 1rem', borderRadius: '0.5rem', marginBottom: '1.25rem', fontSize: '0.825rem' }}>
+                <div style={{ fontWeight: 700, color: '#60a5fa', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  🎯 Opportunity-Specific Positioning
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.5rem' }}>
+                  {partnerBriefingPacket.selectedNarrativeLenses.map((lens: string, idx: number) => (
+                    <span key={idx} className="badge badge-purple" style={{ fontSize: '0.725rem' }}>Lens: {lens}</span>
+                  ))}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.4rem', color: '#cbd5e1', fontSize: '0.78rem' }}>
+                  <div><strong>Primary Population:</strong> Justice-involved & system-impacted youth & young adults</div>
+                  <div><strong>Selected Partner Geography:</strong> {partnerBriefingPacket.geography || 'Southern California'}</div>
+                  <div><strong>Legal-Stage Safeguard:</strong> Emerging nonprofit initiative (PRE_INCORPORATION)</div>
+                  <div><strong>Current-Cycle Safeguard:</strong> Information-seeking guidance (Evaluating status)</div>
+                </div>
+              </div>
+            )}
 
             {/* Editable Subject & Body Text Section */}
             <div style={{ marginBottom: '1.25rem' }}>

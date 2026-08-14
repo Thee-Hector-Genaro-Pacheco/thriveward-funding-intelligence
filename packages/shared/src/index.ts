@@ -234,3 +234,41 @@ export function sanitizeHtmlToText(rawInput: string | null | undefined): string 
 
   return text.trim();
 }
+
+export interface SponsorBriefingPacket {
+  candidateId: string;
+  candidateName: string;
+  websiteUrl: string;
+  geography: string;
+  opportunityId?: string;
+  opportunityTitle?: string;
+  opportunityNumber?: string;
+  fundingAgency?: string;
+  deadline?: string;
+  awardRange?: string;
+  matchRequirement?: string;
+  candidateRoutingStatus?: string;
+  readinessBlockers?: string;
+  inquiryType: 'SPECIFIC_OPPORTUNITY' | 'GENERAL_INTRODUCTORY';
+  bridgeForwardSummary: {
+    name: string;
+    status: string;
+    geography: string;
+    serviceCounties: string[];
+    mission: string;
+    targetPopulations: string[];
+  };
+  selectedNarrativeLenses?: string[];
+  opportunitySpecificOrganizationNarrative?: string;
+  geographicContextNarrative?: string;
+  narrativeEvidenceFacts?: string[];
+  narrativeSafeguardsApplied?: string[];
+  draftInquiryEmail: {
+    to: string;
+    subject: string;
+    bodyText: string;
+  };
+  discoveryCallQuestions: string[];
+  recommendedFollowUpDate: string;
+  safeguardNotice: string;
+}
