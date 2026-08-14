@@ -83,7 +83,7 @@ describe('Phase 1F — Contact-Integrity and Current-Cycle Status Hotfix Test Su
       'GRANT_COMPETITION'
     );
     expect(grantBriefing.draftInquiryEmail.to).toBe('CareCoordination@ceo.oc.gov');
-    expect(grantBriefing.draftInquiryEmail.subject).toContain('CoC NOFO Question — Bridge Forward Foundation');
+    expect(grantBriefing.draftInquiryEmail.subject).toContain('CoC NOFO Question — Project Thriveward');
 
     // Test CES integration inquiry
     const cesBriefing = await OutreachBriefingService.generatePartnerBriefingPacket(

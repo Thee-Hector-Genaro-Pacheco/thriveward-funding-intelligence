@@ -50,9 +50,9 @@ export class OpportunityNarrativeService {
 
     // 4. Document underlying evidence facts
     const narrativeEvidenceFacts = [
-      `Bridge Forward Foundation is PRE_INCORPORATION (nonprofit initiative stage)`,
+      `Project Thriveward is PRE_INCORPORATION (nonprofit initiative stage)`,
       `Planned Launch Service Areas: Orange County and Los Angeles County`,
-      `Bridge Forward’s service models are planned or developing; no completed cohort outcomes or operating history are claimed.`,
+      `Project Thriveward’s service models are planned or developing; no completed cohort outcomes or operating history are claimed.`,
       `Opportunity pathway: ${input.requiredApplicationPathway || opp?.candidateRoutingStatus || 'PARTNERSHIP_REQUIRED'}`,
     ];
 
@@ -111,14 +111,14 @@ export class OpportunityNarrativeService {
 
   private static generatePositioningNarrative(lenses: NarrativeLens[], opp?: any): string {
     if (lenses.includes('YOUTH_JUSTICE_REENTRY')) {
-      return `I am writing on behalf of Bridge Forward Foundation, an emerging Southern California nonprofit initiative developing a youth-centered service model for justice-involved and system-impacted youth and young adults, including young people transitioning from juvenile justice involvement. Our planned work connects housing stabilization, individualized reentry support, mentorship, education and workforce pathways, and sustained community-based support.`;
+      return `I am writing on behalf of Project Thriveward, an emerging Southern California nonprofit initiative focused on developing a youth-centered service model for justice-involved and system-impacted youth and young adults, including young people transitioning from juvenile justice involvement. Our planned model connects housing stabilization, individualized reentry support, mentorship, education and workforce pathways, and sustained community-based support.`;
     }
 
     if (lenses.includes('ADULT_REENTRY')) {
-      return `I am writing on behalf of Bridge Forward Foundation, an emerging Southern California nonprofit initiative focused on helping justice-involved adults achieve successful community reentry, career-connected education, and long-term independence. We are developing an individualized reentry support model combining pre-release preparation, mentorship, workforce development, and employer partnerships.`;
+      return `I am writing on behalf of Project Thriveward, an emerging Southern California nonprofit initiative focused on helping justice-involved adults achieve successful community reentry, career-connected education, and long-term independence. We are developing an individualized reentry support model combining pre-release preparation, mentorship, workforce development, and employer partnerships.`;
     }
 
-    return `I am writing on behalf of Bridge Forward Foundation, an emerging Southern California nonprofit initiative focused on advancing housing stability, career-connected education, and community support for justice-involved adults and system-impacted young people. We are developing an integrated service model combining individualized support, skills training, and sustained community partnerships.`;
+    return `I am writing on behalf of Project Thriveward, an emerging Southern California nonprofit initiative focused on advancing housing stability, career-connected education, and community support for justice-involved adults and system-impacted young people. We are developing an integrated service model combining individualized support, skills training, and sustained community partnerships.`;
   }
 
   private static resolvePartnerCounty(partner?: any): string {
@@ -130,6 +130,6 @@ export class OpportunityNarrativeService {
   }
 
   private static generateGeographicNarrative(county: string, cocNumber: string): string {
-    return `Bridge Forward’s planned launch footprint includes Orange and Los Angeles counties. This inquiry specifically concerns potential participation in ${county}’s ${cocNumber} Continuum of Care process and opportunities to support justice-involved youth experiencing or at risk of homelessness.`;
+    return `Project Thriveward’s planned launch footprint includes Orange and Los Angeles counties. This inquiry specifically concerns potential participation in ${county}’s ${cocNumber} Continuum of Care process and opportunities to support justice-involved youth and young adults experiencing or at risk of homelessness.`;
   }
 }

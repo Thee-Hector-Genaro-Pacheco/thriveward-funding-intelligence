@@ -470,7 +470,7 @@ describe('Phase 1B — Grants.gov Verified Ingestion & Provenance Complete Audit
                 profileSnapshot: { profileId: 'bridge-forward-org-profile' },
                 overallFitScore: 85,
                 eligibilityStatus: 'HIGH_PRIORITY',
-                reasoningSummary: 'Human reviewer confirmed fit for Bridge Forward Controls to Code.',
+                reasoningSummary: 'Human reviewer confirmed fit for Project Thriveward Controls to Code.',
               },
             ],
           },
@@ -507,7 +507,7 @@ describe('Phase 1B — Grants.gov Verified Ingestion & Provenance Complete Audit
       expect(updatedOpp?.supportLaptops).toBe('YES');
       expect(updatedOpp?.opportunityAnalyses[0].overallFitScore).toBe(85);
       expect(updatedOpp?.opportunityAnalyses[0].eligibilityStatus).toBe('HIGH_PRIORITY');
-      expect(updatedOpp?.opportunityAnalyses[0].reasoningSummary).toBe('Human reviewer confirmed fit for Bridge Forward Controls to Code.');
+      expect(updatedOpp?.opportunityAnalyses[0].reasoningSummary).toBe('Human reviewer confirmed fit for Project Thriveward Controls to Code.');
       expect(updatedOpp?.snapshots.length).toBe(2);
     });
   });

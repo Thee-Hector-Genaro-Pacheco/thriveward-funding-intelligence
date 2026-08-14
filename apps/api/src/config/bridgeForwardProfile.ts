@@ -32,9 +32,9 @@ export interface BridgeForwardProfile {
 
 export const BRIDGE_FORWARD_PROFILE: BridgeForwardProfile = {
   profileId: 'bridge-forward-org-profile',
-  profileVersion: '1.2.0-phase1f',
+  profileVersion: '1.3.0-phase1f',
   effectiveDate: '2026-08-14',
-  organizationName: 'Bridge Forward Foundation',
+  organizationName: 'Project Thriveward',
   organizationStage: 'PRE_INCORPORATION',
   taxStatus: 'NOT_OBTAINED',
   fiscalSponsorStatus: 'NOT_OBTAINED',
@@ -82,7 +82,7 @@ export const BRIDGE_FORWARD_PROFILE: BridgeForwardProfile = {
   ],
   primaryOutcome: 'Successful reentry and long-term independence',
   missionStatement:
-    'Bridge Forward Foundation advances successful reentry and long-term independence for justice-involved adults and system-impacted young people through housing and basic-needs stabilization, individualized reentry support, career-connected education, technology and skilled-trades training, mentorship, employment pathways, and sustained community support.',
+    'Project Thriveward advances successful reentry and long-term independence for justice-involved adults and system-impacted young people through housing and basic-needs stabilization, individualized reentry support, career-connected education, technology and skilled-trades training, mentorship, employment pathways, and sustained community-based support.',
   programModels: [
     'Bridge Inside',
     'Bridge Reentry',

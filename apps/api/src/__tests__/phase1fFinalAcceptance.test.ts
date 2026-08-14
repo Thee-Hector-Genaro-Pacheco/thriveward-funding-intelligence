@@ -109,7 +109,7 @@ describe('Phase 1F Final Acceptance Test Suite', () => {
       };
       const narrative = OpportunityNarrativeService.buildOpportunitySpecificNarrative({ opportunity: opp });
       expect(narrative.narrativeEvidenceFacts).toContain(
-        'Bridge Forward’s service models are planned or developing; no completed cohort outcomes or operating history are claimed.'
+        'Project Thriveward’s service models are planned or developing; no completed cohort outcomes or operating history are claimed.'
       );
     });
   });

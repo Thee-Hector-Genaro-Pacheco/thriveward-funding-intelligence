@@ -78,16 +78,14 @@ describe('Phase 1E — Fiscal Sponsor Inquiry Briefing Generator Regression Test
     expect(packet.draftInquiryEmail.bodyText).toContain('Cost Sharing / Match Requirement:');
   });
 
-  it('3. Briefing uses exact Bridge Forward service counties: Orange County, Los Angeles County, San Bernardino County, and San Diego County', async () => {
+  it('3. Briefing uses exact Project Thriveward service counties: Orange County and Los Angeles County', async () => {
     const packet = await OutreachBriefingService.generateSponsorBriefingPacket(communityInitiativesId);
 
-    const verifiedCounties = 'Orange County, Los Angeles County, San Bernardino County, and San Diego County';
+    const verifiedCounties = 'Orange County, and Los Angeles County';
     expect(packet.draftInquiryEmail.bodyText).toContain(verifiedCounties);
     expect(packet.bridgeForwardSummary.serviceCounties).toEqual([
       'Orange County',
       'Los Angeles County',
-      'San Bernardino County',
-      'San Diego County',
     ]);
   });
 
@@ -103,10 +101,10 @@ describe('Phase 1E — Fiscal Sponsor Inquiry Briefing Generator Regression Test
     }
   });
 
-  it('5. Contact email displays [ADD VERIFIED BRIDGE FORWARD EMAIL] and never fabricates unverified email addresses', async () => {
+  it('5. Contact email displays [ADD VERIFIED PROJECT THRIVEWARD EMAIL] and never fabricates unverified email addresses', async () => {
     const packet = await OutreachBriefingService.generateSponsorBriefingPacket(communityPartnersId);
 
-    expect(packet.draftInquiryEmail.bodyText).toContain('Contact Email: [ADD VERIFIED BRIDGE FORWARD EMAIL]');
+    expect(packet.draftInquiryEmail.bodyText).toContain('Contact Email: [ADD VERIFIED PROJECT THRIVEWARD EMAIL]');
     expect(packet.draftInquiryEmail.bodyText).not.toContain('info@bridgeforward.org');
   });
 

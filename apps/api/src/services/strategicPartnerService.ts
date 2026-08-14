@@ -512,7 +512,7 @@ export class StrategicPartnerService {
       ];
 
       if (overlapCounties.length === 0) {
-        concerns.push('No direct county overlap with Bridge Forward planned launch counties (Orange County, Los Angeles County).');
+        concerns.push('No direct county overlap with Project Thriveward planned launch counties (Orange County, Los Angeles County).');
       }
 
       if (partner.verifiedOfficialRole !== 'CONFIRMED_COLLABORATIVE_APPLICANT') {

@@ -237,7 +237,7 @@ export class ExclusionGateEngine {
       return {
         isExcluded: true,
         exclusionReason: 'EXCLUDED_APPLICANT_TYPE',
-        explanation: 'Applicant eligibility is restricted to tribal governments or government agencies where Bridge Forward is ineligible.',
+        explanation: 'Applicant eligibility is restricted to tribal governments or government agencies where Project Thriveward is ineligible.',
       };
     }
 
@@ -446,7 +446,7 @@ export class ExclusionGateEngine {
         recommendedPathway: 'fiscal sponsor',
         blockingReason: 'PRE_INCORPORATION: Federal grant submission requires legal entity status, EIN, SAM.gov/UEI registration, and Grants.gov AOR.',
         capacityNotes: 'Street Outreach Program for runaway and homeless youth. Official solicitation eligibility includes nonprofits with and without 501(c)(3) status, but direct submission requires active SAM.gov/UEI registration and incorporated entity status.',
-        explanation: 'FISCAL_SPONSOR_REQUIRED: Mission relevant. Official eligibility includes nonprofits with and without 501(c)(3) tax status. Bridge Forward remains blocked because it is PRE_INCORPORATION and lacks verified legal-entity status, EIN, SAM.gov/UEI registration, Grants.gov AOR, fiscal sponsor, matching-fund capacity, and relevant operating history.',
+        explanation: 'FISCAL_SPONSOR_REQUIRED: Mission relevant. Official eligibility includes nonprofits with and without 501(c)(3) tax status. Project Thriveward remains blocked because it is PRE_INCORPORATION and lacks verified legal-entity status, EIN, SAM.gov/UEI registration, Grants.gov AOR, fiscal sponsor, matching-fund capacity, and relevant operating history.',
       };
     }
 
@@ -470,7 +470,7 @@ export class ExclusionGateEngine {
         recommendedPathway: 'fiscal sponsor',
         blockingReason: 'PRE_INCORPORATION: Stand Down event grants require established 501(c)(3) or veteran service organization with active SAM.gov/UEI.',
         capacityNotes: 'DOL VETS Stand Down grant notice. Requires incorporated entity with SAM.gov/UEI.',
-        explanation: 'FISCAL_SPONSOR_REQUIRED: Mission relevant, but Bridge Forward is PRE_INCORPORATION and requires fiscal sponsor or incorporation.',
+        explanation: 'FISCAL_SPONSOR_REQUIRED: Mission relevant, but Project Thriveward is PRE_INCORPORATION and requires fiscal sponsor or incorporation.',
       };
     }
 
@@ -496,7 +496,7 @@ export class ExclusionGateEngine {
           recommendedPathway: 'partnership',
           blockingReason: 'EXCLUDED_APPLICANT_TYPE: Restricted to public government agencies or educational institutions.',
           capacityNotes: 'Solicitation restricted to public agencies.',
-          explanation: 'EXCLUDED_APPLICANT_TYPE: Bridge Forward is ineligible for direct application as a non-government entity.',
+          explanation: 'EXCLUDED_APPLICANT_TYPE: Project Thriveward is ineligible for direct application as a non-government entity.',
         };
       }
       return {
@@ -546,7 +546,7 @@ export class ExclusionGateEngine {
     }
 
     // Default check for profile mode vs general mode:
-    const isBridgeForwardProfile = profile === 'bridge-forward';
+    const isBridgeForwardProfile = profile === 'bridge-forward' || profile === 'project-thriveward';
 
     if (!isBridgeForwardProfile) {
       return {
@@ -557,7 +557,7 @@ export class ExclusionGateEngine {
       };
     }
 
-    // Ground Truth for Bridge Forward Profile (PRE_INCORPORATION):
+    // Ground Truth for Project Thriveward Profile (PRE_INCORPORATION):
     const requires501c3 =
       /\b501\(c\)\(3\)\b/i.test(fullText) ||
       /\bincorporated non-profit\b/i.test(fullText) ||
@@ -570,7 +570,7 @@ export class ExclusionGateEngine {
         recommendedPathway: 'incorporation',
         blockingReason: 'PRE_INCORPORATION: Direct federal submission requires incorporated 501(c)(3) entity with active SAM.gov/UEI.',
         capacityNotes: 'Requires incorporated 501(c)(3) tax-exempt status.',
-        explanation: 'FUTURE_OPPORTUNITY: Mission relevant, but requires 501(c)(3) tax status not currently held by Bridge Forward.',
+        explanation: 'FUTURE_OPPORTUNITY: Mission relevant, but requires 501(c)(3) tax status not currently held by Project Thriveward.',
       };
     }
 
@@ -579,7 +579,7 @@ export class ExclusionGateEngine {
       applicantReadiness: 'NOT_READY_PRE_INCORPORATION',
       recommendedPathway: 'fiscal sponsor',
       blockingReason: 'PRE_INCORPORATION: Federal grant submission requires active SAM.gov registration, UEI, and Grants.gov AOR.',
-      capacityNotes: 'Bridge Forward is currently PRE_INCORPORATION without SAM.gov/UEI registration.',
+      capacityNotes: 'Project Thriveward is currently PRE_INCORPORATION without SAM.gov/UEI registration.',
       explanation: 'FISCAL_SPONSOR_REQUIRED: Mission relevant, but requires fiscal sponsor or incorporation + SAM.gov/UEI registrations.',
     };
   }
@@ -613,8 +613,8 @@ export class ExclusionGateEngine {
         routingStatus: 'EXCLUDED',
         applicantReadiness: 'NOT_READY_PRE_INCORPORATION',
         recommendedPathway: 'none',
-        blockingReason: 'EXCLUDED: Opportunity lacks affirmative evidence matching any of Bridge Forward\'s 6 program lanes.',
-        explanation: 'EXCLUDED: Opportunity lacks affirmative evidence matching any of Bridge Forward\'s 6 program lanes.',
+        blockingReason: 'EXCLUDED: Opportunity lacks affirmative evidence matching any of Project Thriveward\'s 6 program lanes.',
+        explanation: 'EXCLUDED: Opportunity lacks affirmative evidence matching any of Project Thriveward\'s 6 program lanes.',
         matchedLanes: [],
         evidenceQuotes: [],
       };

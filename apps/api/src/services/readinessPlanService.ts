@@ -65,7 +65,7 @@ export class ReadinessPlanService {
           'Program Budget & Narrative Template',
         ],
         matchFundStrategy: sopMatch.formattedSummary,
-        responsibleOwner: 'Bridge Forward Executive Lead & Project Counsel',
+        responsibleOwner: 'Project Thriveward Executive Lead & Project Counsel',
         targetCompletionDate: new Date('2027-04-15T00:00:00Z'),
         isComplete: false,
         tasks: {
@@ -173,7 +173,7 @@ export class ReadinessPlanService {
         operatingHistoryAndCapacityGaps: ['Document operating history', 'Build financial reserve'],
         requiredDocuments: ['Fiscal Sponsor MOU / Articles of Incorporation', 'Program Budget', 'Board Roster'],
         matchFundStrategy: 'Evaluate match requirements and secure foundation commitments.',
-        responsibleOwner: 'Bridge Forward Executive Team',
+        responsibleOwner: 'Project Thriveward Executive Team',
         targetCompletionDate: new Date('2027-06-30T00:00:00Z'),
         isComplete: false,
         tasks: {

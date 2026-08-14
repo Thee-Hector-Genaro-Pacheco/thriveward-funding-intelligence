@@ -363,11 +363,11 @@ export class AnalysisService {
 
     if (isStreetOutreach) {
       taxOutcome = 'SATISFIED';
-      taxRationale = 'Official solicitation eligibility includes nonprofits with and without 501(c)(3) tax status. Bridge Forward remains blocked due to PRE_INCORPORATION status (lacking legal-entity status, EIN, SAM.gov/UEI, Grants.gov AOR, fiscal sponsor, matching funds, and operating history).';
+      taxRationale = 'Official solicitation eligibility includes nonprofits with and without 501(c)(3) tax status. Project Thriveward remains blocked due to PRE_INCORPORATION status (lacking legal-entity status, EIN, SAM.gov/UEI, Grants.gov AOR, fiscal sponsor, matching funds, and operating history).';
     } else if (routingStatus === 'PARTNERSHIP_REQUIRED' || isCoCCompetition) {
       taxOutcome = 'FAILED';
       taxRemediable = true;
-      taxRationale = 'Direct application blocked: Requires submission through official Continuum of Care (CoC) Collaborative Applicant via e-snaps. Bridge Forward is PRE_INCORPORATION.';
+      taxRationale = 'Direct application blocked: Requires submission through official Continuum of Care (CoC) Collaborative Applicant via e-snaps. Project Thriveward is PRE_INCORPORATION.';
     } else if (applicantTypes.length > 0) {
       const allowsNonprofits = applicantTypes.some((t: string) => t.includes('nonprofit') || t.includes('public') || t.includes('cbo') || t.includes('all'));
       const requires501c3Only = applicantTypes.some((t: string) => t.includes('501(c)(3) only') || t.includes('incorporated only') || t.includes('501(c)(3) incorporated only'));
@@ -377,7 +377,7 @@ export class AnalysisService {
       } else if (requires501c3Only) {
         taxOutcome = 'FAILED';
         taxRemediable = true;
-        taxRationale = 'Opportunity requires existing 501(c)(3) tax-exempt status (Bridge Forward currently pre-incorporation).';
+        taxRationale = 'Opportunity requires existing 501(c)(3) tax-exempt status (Project Thriveward currently pre-incorporation).';
       }
     }
 
@@ -407,7 +407,7 @@ export class AnalysisService {
       if (opHistoryReq.includes('3 years') || opHistoryReq.includes('5 years') || opHistoryReq.includes('track record')) {
         opOutcome = 'FAILED';
         opRemediable = true;
-        opRationale = `Requires established operating history (${opp.operatingHistoryRequirements}). Bridge Forward has 0 operating history years.`;
+        opRationale = `Requires established operating history (${opp.operatingHistoryRequirements}). Project Thriveward has 0 operating history years.`;
       } else {
         opOutcome = 'SATISFIED';
         opRationale = 'No minimum operating history restriction specified.';
@@ -518,11 +518,11 @@ export class AnalysisService {
 
       if (def.key === 'applicantTypeTaxStatus') {
         matchStatus = 'MISMATCH';
-        rationale = 'Bridge Forward is PRE_INCORPORATION (lacking 501(c)(3) status, EIN, and SAM.gov/UEI registration). Direct application is ineligible.';
+        rationale = 'Project Thriveward is PRE_INCORPORATION (lacking 501(c)(3) status, EIN, and SAM.gov/UEI registration). Direct application is ineligible.';
         citation = taxCitation;
       } else if (def.key === 'operatingHistoryReadiness') {
         matchStatus = 'MISMATCH';
-        rationale = 'Bridge Forward has 0 operating history years and no completed participant cohorts.';
+        rationale = 'Project Thriveward has 0 operating history years and no completed participant cohorts.';
         citation = opCitation;
       } else if (def.key === 'geographicEligibility') {
         if (geoOutcome === 'SATISFIED') {
@@ -600,7 +600,7 @@ export class AnalysisService {
         rationale = `Closing date is ${deadlineStr} (${daysRemaining} days remaining). Completing required partnership/sponsorship within ${daysRemaining} days is not feasible (${leadTimeRequired}). ${feasibilityClassification}.`;
       } else if (def.key === 'strategicMissionAlignment') {
         matchStatus = 'MATCH';
-        rationale = 'Strong strategic alignment with Bridge Forward mission lanes (Housing Stability / Reentry / Youth Reentry).';
+        rationale = 'Strong strategic alignment with Project Thriveward mission lanes (Housing Stability / Reentry / Youth Reentry).';
         citation = findCitation((c) => c.extractedClaim.toLowerCase().includes('youth') || c.extractedClaim.toLowerCase().includes('housing') || c.extractedClaim.toLowerCase().includes('reentry')) || genericCitation;
       } else {
         if (citation) {
@@ -682,7 +682,7 @@ export class AnalysisService {
       recommendation = OpportunityRecommendation.INVESTIGATE;
     }
 
-    const reasoningSummary = `Evaluated against Bridge Forward Profile v${BRIDGE_FORWARD_PROFILE.profileVersion}. Direct Application Eligibility: NOT_CURRENTLY_ELIGIBLE (${routingStatus}). Required Pathway: ${routingStatus}. Overall Fit Score: ${overallFitScore}/100. Evidence Coverage: ${evidenceCoverage}%. Recommendation: ${recommendation}.`;
+    const reasoningSummary = `Evaluated against Project Thriveward Profile v${BRIDGE_FORWARD_PROFILE.profileVersion}. Direct Application Eligibility: NOT_CURRENTLY_ELIGIBLE (${routingStatus}). Required Pathway: ${routingStatus}. Overall Fit Score: ${overallFitScore}/100. Evidence Coverage: ${evidenceCoverage}%. Recommendation: ${recommendation}.`;
 
     // --- 4. 15 Participant Support Categories ---
     const participantSupportFindings: Array<{

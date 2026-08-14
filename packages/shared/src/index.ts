@@ -159,17 +159,15 @@ export interface BridgeOrganizationProfile {
   knownLimitations: string[];
 }
 
-// 12. Default Ground-Truth Profile for Bridge Forward Foundation
+// 12. Default Ground-Truth Profile for Project Thriveward
 export const BRIDGE_FORWARD_PROFILE: BridgeOrganizationProfile = {
-  name: 'Bridge Forward Foundation',
+  name: 'Project Thriveward',
   status: 'PRE_INCORPORATION',
   taxStatus: 'NOT_OBTAINED',
   statewideGeography: 'California',
   initialServiceAreas: [
     'Orange County',
     'Los Angeles County',
-    'San Bernardino County',
-    'San Diego County',
   ],
   primaryPopulations: [
     'Justice-involved adults',
@@ -179,7 +177,7 @@ export const BRIDGE_FORWARD_PROFILE: BridgeOrganizationProfile = {
   coreModel:
     'Individualized reentry support combined with career-connected education, mentorship, workforce development, employer partnerships, and continued follow-up.',
   missionStatement:
-    'Bridge Forward Foundation advances successful reentry and long-term independence for justice-involved adults and system-impacted young people through housing and basic-needs stabilization, individualized reentry support, career-connected education, technology and skilled-trades training, mentorship, employment pathways, and sustained community support.',
+    'Project Thriveward advances successful reentry and long-term independence for justice-involved adults and system-impacted young people through housing and basic-needs stabilization, individualized reentry support, career-connected education, technology and skilled-trades training, mentorship, employment pathways, and sustained community-based support.',
   programs: [
     { name: 'Bridge Inside', description: 'Pre-release preparation and reentry planning.', isOperational: true },
     { name: 'Bridge Reentry', description: 'Individualized Bridge Plans, mentorship, life skills.', isOperational: true },

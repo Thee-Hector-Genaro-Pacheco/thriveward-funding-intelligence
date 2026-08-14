@@ -108,7 +108,7 @@ export class OutreachBriefingService {
         : `[ADD SPONSOR RECIPIENT EMAIL]`;
 
     const readinessBlockers =
-      'Bridge Forward Foundation is currently PRE_INCORPORATION (lacking legal-entity status, EIN, active SAM.gov/UEI registration, Grants.gov AOR credentials, matching funds, and operating history).';
+      'Project Thriveward is currently PRE_INCORPORATION (lacking legal-entity status, EIN, active SAM.gov/UEI registration, Grants.gov AOR credentials, matching funds, and operating history).';
 
     let subject = '';
     let bodyText = '';
@@ -147,11 +147,11 @@ export class OutreachBriefingService {
 
       candidateRoutingStatus = opp.candidateRoutingStatus || opp.dismissedReason || 'POTENTIAL_PATHWAY';
 
-      subject = `Preliminary Fiscal Sponsorship Inquiry — Bridge Forward Foundation (${opp.title})`;
+      subject = `Preliminary Fiscal Sponsorship Inquiry — Project Thriveward (${opp.title})`;
 
       bodyText = `Dear Partnerships Team at ${candidate.name},
 
-I am writing on behalf of Bridge Forward Foundation, an emerging Southern California organization focused on stabilizing housing, career pathways, and technology education for justice-involved adults and system-impacted young people in ${verifiedCountiesStr}.
+I am writing on behalf of Project Thriveward, an emerging Southern California organization focused on stabilizing housing, career pathways, and technology education for justice-involved adults and system-impacted young people in ${verifiedCountiesStr}.
 
 We are actively preparing for the federal grant solicitation "${opp.title}" (Notice #${opp.fundingOpportunityNumber}, Agency: ${opp.fundingAgency}), which appears potentially aligned with our mission based on preliminary, human-review-required analysis.
 
@@ -164,7 +164,7 @@ Key Opportunity Details:
 - Cost Sharing / Match Requirement: ${matchRequirement}
 - Opportunity Pathway Routing: ${candidateRoutingStatus}
 
-Bridge Forward Foundation Readiness Status:
+Project Thriveward Readiness Status:
 ${readinessBlockers} Consequently, we are seeking a verified California fiscal sponsor offering ${modelText} to serve as the legal applicant and administer federal government grant funds for this opportunity.
 
 We would welcome 15–20 minutes to discuss:
@@ -176,8 +176,8 @@ Thank you for your time and guidance.
 
 Best regards,
 
-Bridge Forward Foundation Team
-Contact Email: [ADD VERIFIED BRIDGE FORWARD EMAIL]
+Project Thriveward Team
+Contact Email: [ADD VERIFIED PROJECT THRIVEWARD EMAIL]
 Service Footprint: ${verifiedCountiesStr}`;
 
       discoveryCallQuestions = [
@@ -189,17 +189,17 @@ Service Footprint: ${verifiedCountiesStr}`;
       ];
     } else {
       // General Introductory Inquiry (No opportunity selected)
-      subject = `Preliminary Fiscal Sponsorship Inquiry — Bridge Forward Foundation (General Inquiry for Future Funding Cycles)`;
+      subject = `Preliminary Fiscal Sponsorship Inquiry — Project Thriveward (General Inquiry for Future Funding Cycles)`;
 
       bodyText = `Dear Partnerships Team at ${candidate.name},
 
-I am writing on behalf of Bridge Forward Foundation, an emerging Southern California organization focused on stabilizing housing, career pathways, and technology education for justice-involved adults and system-impacted young people in ${verifiedCountiesStr}.
+I am writing on behalf of Project Thriveward, an emerging Southern California organization focused on stabilizing housing, career pathways, and technology education for justice-involved adults and system-impacted young people in ${verifiedCountiesStr}.
 
-As Bridge Forward Foundation is currently pre-incorporation, we are seeking information regarding potential ${modelText} for future public and private grant opportunities aligned with our mission.
+As Project Thriveward is currently pre-incorporation, we are seeking information regarding potential ${modelText} for future public and private grant opportunities aligned with our mission.
 
 We are not requesting sponsorship for a specific open solicitation at this time. Rather, we are conducting preliminary outreach to understand your intake process, capacity, and requirements for future funding cycles.
 
-Bridge Forward Foundation Readiness Status:
+Project Thriveward Readiness Status:
 ${readinessBlockers}
 
 We would welcome 15–20 minutes to discuss:
@@ -211,8 +211,8 @@ Thank you for your time and guidance.
 
 Best regards,
 
-Bridge Forward Foundation Team
-Contact Email: [ADD VERIFIED BRIDGE FORWARD EMAIL]
+Project Thriveward Team
+Contact Email: [ADD VERIFIED PROJECT THRIVEWARD EMAIL]
 Service Footprint: ${verifiedCountiesStr}`;
 
       discoveryCallQuestions = [
@@ -235,7 +235,7 @@ Service Footprint: ${verifiedCountiesStr}`;
     });
 
     const safeguardNotice =
-      '🛡️ HUMAN-CONTROLLED OUTREACH SAFEGUARD: Bridge AI generates briefing packets and email drafts for human review ONLY. Bridge AI will NEVER send an email, submit an application, sign an agreement, make a legal certification, or commit funds without explicit human authorization.';
+      '🛡️ HUMAN-CONTROLLED OUTREACH SAFEGUARD: Project Thriveward generates briefing packets and email drafts for human review ONLY. Project Thriveward will NEVER send an email, submit an application, sign an agreement, make a legal certification, or commit funds without explicit human authorization.';
 
     return {
       candidateId: candidate.id,
@@ -253,7 +253,7 @@ Service Footprint: ${verifiedCountiesStr}`;
       readinessBlockers,
       inquiryType: opp ? 'SPECIFIC_OPPORTUNITY' : 'GENERAL_INTRODUCTORY',
       bridgeForwardSummary: {
-        name: BRIDGE_FORWARD_PROFILE.name,
+        name: 'Project Thriveward',
         status: BRIDGE_FORWARD_PROFILE.status,
         geography: BRIDGE_FORWARD_PROFILE.statewideGeography,
         serviceCounties: BRIDGE_FORWARD_PROFILE.initialServiceAreas,
@@ -315,11 +315,17 @@ Service Footprint: ${verifiedCountiesStr}`;
     const agency = opp?.fundingAgency || 'Department of Housing and Urban Development';
     const deadline = opp?.deadline || '2026-08-26';
 
-    const subjectPrefix = (partner.cocNumber === 'CA-602' || (partner.name || '').includes('Orange')) && inquiryPurpose === 'GRANT_COMPETITION'
-      ? 'CoC NOFO Question — Bridge Forward Foundation'
-      : 'Preliminary CoC Partnership Inquiry — Bridge Forward Foundation';
-
-    const subject = `${subjectPrefix}: ${oppTitle} (${oppNumber})`;
+    const isOrange = partner.cocNumber === 'CA-602' || (partner.name || '').includes('Orange');
+    let subject: string;
+    if (isOrange && inquiryPurpose === 'GRANT_COMPETITION') {
+      subject = `CoC NOFO Question — Project Thriveward: ${oppTitle} (${oppNumber})`;
+    } else if (isOrange && inquiryPurpose === 'GENERAL') {
+      subject = `Partnership Inquiry — Project Thriveward and Orange County Continuum of Care`;
+    } else if (isOrange && inquiryPurpose === 'CES_INTEGRATION') {
+      subject = `Coordinated Entry System Inquiry — Project Thriveward and Orange County Continuum of Care`;
+    } else {
+      subject = `Preliminary CoC Partnership Inquiry — Project Thriveward: ${oppTitle} (${oppNumber})`;
+    }
 
     const effectiveOpp = opp || {
       title: oppTitle,
@@ -352,10 +358,10 @@ Opportunity & Pathway Context:
 - HUD Deadline: ${deadline}
 - Required Pathway: PARTNERSHIP_REQUIRED (e-snaps CoC Collaborative Applicant Submission)
 - Required Partner Type: CONTINUUM_OF_CARE_COLLABORATIVE_APPLICANT
-- Bridge Forward Footprint: ${countiesStr}
+- Project Thriveward Footprint: ${countiesStr}
 
-Bridge Forward Foundation Readiness Status:
-Bridge Forward Foundation is currently PRE_INCORPORATION (lacking legal-entity status, active SAM.gov/UEI, and 501(c)(3) status). We seek to participate as a project applicant/subrecipient under your CoC rating and ranking process.
+Project Thriveward Readiness Status:
+Project Thriveward is currently PRE_INCORPORATION (lacking legal-entity status, active SAM.gov/UEI, and 501(c)(3) status). We seek to participate as a project applicant/subrecipient under your CoC rating and ranking process.
 
 Key Partnership Discussion Items:
 1. Collaborative Applicant e-snaps submission process and project application intake schedule.
@@ -369,8 +375,8 @@ Thank you for your leadership and guidance.
 
 Best regards,
 
-Bridge Forward Foundation Team
-Contact Email: [ADD VERIFIED BRIDGE FORWARD EMAIL]
+Project Thriveward Team
+Contact Email: [ADD VERIFIED PROJECT THRIVEWARD EMAIL]
 Service Counties: ${countiesStr}`;
 
     const discoveryCallQuestions = [

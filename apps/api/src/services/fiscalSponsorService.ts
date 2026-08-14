@@ -509,7 +509,7 @@ export class FiscalSponsorService {
         score += 15;
         matchedLanes.push('California Regional Geography');
       } else {
-        concerns.push(`Sponsor geography (${candidate.geography}) may not cover Bridge Forward service area.`);
+        concerns.push(`Sponsor geography (${candidate.geography}) may not cover Project Thriveward service area.`);
       }
 
       // 2. Government grant administration capability

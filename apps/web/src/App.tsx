@@ -676,7 +676,7 @@ export function App() {
         <div className="header-badge">Phase 1E • Fiscal Sponsor, Strategic Partner Discovery & Funding Readiness Active</div>
         <h1 className="brand-title">Bridge AI</h1>
         <p className="brand-subtitle">
-          Funding Intelligence & Grant Readiness Platform for Bridge Forward Foundation
+          Funding Intelligence & Grant Readiness Platform for Project Thriveward
         </p>
       </header>
 
@@ -870,7 +870,7 @@ export function App() {
                     No directly actionable opportunities currently available.
                   </h3>
                   <p style={{ color: '#cbd5e1', fontSize: '0.9rem', lineHeight: 1.5 }}>
-                    Bridge Forward is pre-incorporation. Mission-aligned opportunities requiring a fiscal sponsor or partner are available under <strong>Potential Pathways</strong>.
+                    Project Thriveward is pre-incorporation. Mission-aligned opportunities requiring a fiscal sponsor or partner are available under <strong>Potential Pathways</strong>.
                   </p>
                 </div>
               ) : (
@@ -1808,7 +1808,7 @@ export function App() {
                 <div><strong>Funding Agency:</strong> {partnerBriefingPacket.agency}</div>
                 <div><strong>Application Deadline:</strong> {partnerBriefingPacket.deadline}</div>
                 <div><strong>Required Pathway:</strong> {partnerBriefingPacket.requiredPathway}</div>
-                <div><strong>Bridge Forward Footprint:</strong> Orange, LA, San Bernardino, San Diego Counties</div>
+                <div><strong>Project Thriveward Footprint:</strong> Orange County and Los Angeles County</div>
               </div>
             </div>
 
@@ -1914,7 +1914,7 @@ export function App() {
       </div>
 
       <footer>
-        <p>Bridge AI Platform • Phase 1E Fiscal Sponsor & Funding Readiness Foundation • Bridge Forward Foundation</p>
+        <p>Bridge AI Platform • Phase 1E Fiscal Sponsor & Funding Readiness Foundation • Project Thriveward</p>
       </footer>
     </div>
   );

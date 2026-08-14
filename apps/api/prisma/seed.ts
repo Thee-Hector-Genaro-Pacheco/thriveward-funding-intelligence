@@ -5,27 +5,27 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Seeding deterministic Bridge AI demonstration records...');
 
-  // 1. Organization Profile (Bridge Forward Foundation)
+  // 1. Organization Profile (Project Thriveward)
   const orgProfile = await prisma.organizationProfile.upsert({
     where: { id: 'demo-org-profile-001' },
     update: {
-      name: 'Bridge Forward Foundation',
+      name: 'Project Thriveward',
       status: 'PRE_INCORPORATION',
       taxStatus: 'NOT_OBTAINED',
       primaryPopulations: ['Justice-involved adults', 'System-impacted young people'],
       primaryOutcome: 'Successful reentry and long-term independence',
       coreModel:
-        'Bridge Forward Foundation advances successful reentry and long-term independence for justice-involved adults and system-impacted young people through housing and basic-needs stabilization, individualized reentry support, career-connected education, technology and skilled-trades training, mentorship, employment pathways, and sustained community support.',
+        'Project Thriveward advances successful reentry and long-term independence for justice-involved adults and system-impacted young people through housing and basic-needs stabilization, individualized reentry support, career-connected education, technology and skilled-trades training, mentorship, employment pathways, and sustained community support.',
     },
     create: {
       id: 'demo-org-profile-001',
-      name: 'Bridge Forward Foundation',
+      name: 'Project Thriveward',
       status: 'PRE_INCORPORATION',
       taxStatus: 'NOT_OBTAINED',
       primaryPopulations: ['Justice-involved adults', 'System-impacted young people'],
       primaryOutcome: 'Successful reentry and long-term independence',
       coreModel:
-        'Bridge Forward Foundation advances successful reentry and long-term independence for justice-involved adults and system-impacted young people through housing and basic-needs stabilization, individualized reentry support, career-connected education, technology and skilled-trades training, mentorship, employment pathways, and sustained community support.',
+        'Project Thriveward advances successful reentry and long-term independence for justice-involved adults and system-impacted young people through housing and basic-needs stabilization, individualized reentry support, career-connected education, technology and skilled-trades training, mentorship, employment pathways, and sustained community support.',
       limitations: [
         'Organization has not yet incorporated.',
         '501(c)(3) status has not yet been obtained.',
@@ -136,9 +136,9 @@ async function main() {
 
       eligibilityRequirements: {
         create: [
-          { id: 'demo-req-001-1', criteriaCategory: 'Geographic Focus', description: 'Must serve participants in California.', isMandatory: true, verifiedStatus: TriStateStatus.YES, notes: 'Bridge Forward operates in CA.' },
+          { id: 'demo-req-001-1', criteriaCategory: 'Geographic Focus', description: 'Must serve participants in California.', isMandatory: true, verifiedStatus: TriStateStatus.YES, notes: 'Project Thriveward operates in CA.' },
           { id: 'demo-req-001-2', criteriaCategory: 'Target Population', description: 'Must serve justice-involved or system-impacted individuals.', isMandatory: true, verifiedStatus: TriStateStatus.YES, notes: 'Primary target population match.' },
-          { id: 'demo-req-001-3', criteriaCategory: 'Entity Status', description: '501(c)(3) tax status OR explicit fiscal sponsorship agreement.', isMandatory: true, verifiedStatus: TriStateStatus.CONDITIONAL, notes: 'Bridge Forward requires a fiscal sponsor prior to grant application.' },
+          { id: 'demo-req-001-3', criteriaCategory: 'Entity Status', description: '501(c)(3) tax status OR explicit fiscal sponsorship agreement.', isMandatory: true, verifiedStatus: TriStateStatus.CONDITIONAL, notes: 'Project Thriveward requires a fiscal sponsor prior to grant application.' },
         ],
       },
 
@@ -193,7 +193,7 @@ async function main() {
             missingEligibilityRequirements: ['Requires finalized Fiscal Sponsor agreement prior to formal submission'],
             missingCapabilities: ['Employer MOUs are currently in active development'],
             reasoningSummary:
-              'High mission and population alignment with Bridge Forward Controls to Code and reentry model. Mandatory tax-status eligibility met conditionally via fiscal sponsor pathway.',
+              'High mission and population alignment with Project Thriveward Controls to Code and reentry model. Mandatory tax-status eligibility met conditionally via fiscal sponsor pathway.',
             missionAlignmentScore: 95,
             populationAlignmentScore: 100,
             programAlignmentScore: 90,
@@ -262,7 +262,7 @@ async function main() {
 
       eligibilityRequirements: {
         create: [
-          { id: 'demo-req-002-1', criteriaCategory: 'Operating History', description: 'Requires 3+ years of operating history and audited financial records.', isMandatory: true, verifiedStatus: TriStateStatus.NO, notes: 'DISQUALIFIER: Bridge Forward is currently pre-incorporation.' },
+          { id: 'demo-req-002-1', criteriaCategory: 'Operating History', description: 'Requires 3+ years of operating history and audited financial records.', isMandatory: true, verifiedStatus: TriStateStatus.NO, notes: 'DISQUALIFIER: Project Thriveward is currently pre-incorporation.' },
           { id: 'demo-req-002-2', criteriaCategory: 'Tax Status', description: 'Requires direct 501(c)(3) status (Fiscal sponsors not eligible).', isMandatory: true, verifiedStatus: TriStateStatus.NO, notes: 'DISQUALIFIER: 501(c)(3) status not yet obtained.' },
         ],
       },
@@ -312,7 +312,7 @@ async function main() {
             overallFitScore: 42,
             eligibilityStatus: EligibilityStatus.NOT_ELIGIBLE,
             missingEligibilityRequirements: [
-              'Bridge Forward does not satisfy the mandatory 3-year operating history requirement.',
+              'Project Thriveward does not satisfy the mandatory 3-year operating history requirement.',
               'Direct 501(c)(3) status required; fiscal sponsorship not permitted for this FOA.',
             ],
             missingCapabilities: ['No completed cohorts or historical employment placement track record.'],
