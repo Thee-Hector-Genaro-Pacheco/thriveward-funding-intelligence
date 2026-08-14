@@ -15,6 +15,8 @@ export interface BridgeForwardProfile {
   registrations: string;
   statewideGeography: string;
   initialServiceAreas: string[];
+  activeLaunchCounties: string[];
+  futureExpansionCounties: string[];
   serviceGeographies: string[];
   targetPopulations: string[];
   primaryPopulations: string[];
@@ -30,8 +32,8 @@ export interface BridgeForwardProfile {
 
 export const BRIDGE_FORWARD_PROFILE: BridgeForwardProfile = {
   profileId: 'bridge-forward-org-profile',
-  profileVersion: '1.1.1-phase1d',
-  effectiveDate: '2026-08-12',
+  profileVersion: '1.2.0-phase1f',
+  effectiveDate: '2026-08-14',
   organizationName: 'Bridge Forward Foundation',
   organizationStage: 'PRE_INCORPORATION',
   taxStatus: 'NOT_OBTAINED',
@@ -45,6 +47,12 @@ export const BRIDGE_FORWARD_PROFILE: BridgeForwardProfile = {
   initialServiceAreas: [
     'Orange County',
     'Los Angeles County',
+  ],
+  activeLaunchCounties: [
+    'Orange County',
+    'Los Angeles County',
+  ],
+  futureExpansionCounties: [
     'San Bernardino County',
     'San Diego County',
   ],
@@ -52,8 +60,6 @@ export const BRIDGE_FORWARD_PROFILE: BridgeForwardProfile = {
     'California',
     'Orange County',
     'Los Angeles County',
-    'San Bernardino County',
-    'San Diego County',
   ],
   targetPopulations: [
     'Justice-involved adults',
@@ -126,6 +132,8 @@ export function getCanonicalProfileJson(profile: BridgeForwardProfile = BRIDGE_F
     registrations: profile.registrations,
     statewideGeography: profile.statewideGeography,
     initialServiceAreas: [...profile.initialServiceAreas].sort(),
+    activeLaunchCounties: [...(profile.activeLaunchCounties || ['Orange County', 'Los Angeles County'])].sort(),
+    futureExpansionCounties: [...(profile.futureExpansionCounties || ['San Bernardino County', 'San Diego County'])].sort(),
     serviceGeographies: [...profile.serviceGeographies].sort(),
     primaryPopulations: [...(profile.targetPopulations || profile.primaryPopulations)].sort(),
     primaryLaunchModel: profile.primaryLaunchModel,

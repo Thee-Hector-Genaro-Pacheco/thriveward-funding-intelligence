@@ -590,7 +590,7 @@ async function main() {
   // 5. Phase 1E — Strategic Partners Seed
   const partner1 = await prisma.strategicPartnerCandidate.upsert({
     where: { id: 'partner-riverside-coc' },
-    update: {},
+    update: { verificationStatus: 'FUTURE_EXPANSION' },
     create: {
       id: 'partner-riverside-coc',
       name: 'Riverside County Continuum of Care (CoC CA-608)',
@@ -599,17 +599,17 @@ async function main() {
       geography: 'Riverside County / Inland Empire',
       mission: 'Coordinates housing and supportive services for unhoused individuals and youth in Riverside County.',
       servicesOffered: ['Emergency shelter', 'Coordinated entry system', 'Youth housing placement'],
-      collaborationFocus: 'Subrecipient partnership & coordinated youth outreach',
+      collaborationFocus: 'Subrecipient partnership & coordinated youth outreach (Future Expansion)',
       contactChannel: 'coc@rivco.org',
-      verificationStatus: 'VERIFIED_OFFICIAL',
+      verificationStatus: 'FUTURE_EXPANSION',
       lastVerified: new Date(),
-      internalNotes: 'Essential regional CoC partner for Street Outreach Program subrecipient network.',
+      internalNotes: 'Regional CoC partner retained for future expansion. Out of active launch footprint.',
     },
   });
 
   const partner2 = await prisma.strategicPartnerCandidate.upsert({
     where: { id: 'partner-sbvc-applied-tech' },
-    update: {},
+    update: { verificationStatus: 'FUTURE_EXPANSION' },
     create: {
       id: 'partner-sbvc-applied-tech',
       name: 'San Bernardino Valley College — Division of Applied Technology',
@@ -618,11 +618,11 @@ async function main() {
       geography: 'San Bernardino County / Inland Empire',
       mission: 'Provides vocational certification and apprenticeship training in automotive, welding, HVAC, and trades.',
       servicesOffered: ['Vocational training', 'Apprenticeship certifications', 'Industry credentials'],
-      collaborationFocus: 'Technical education subrecipient & career pathway referral partner',
+      collaborationFocus: 'Technical education subrecipient & career pathway referral partner (Future Expansion)',
       contactChannel: 'appliedtech@valleycollege.edu',
-      verificationStatus: 'VERIFIED_OFFICIAL',
+      verificationStatus: 'FUTURE_EXPANSION',
       lastVerified: new Date(),
-      internalNotes: 'Key academic and lab equipment partner for Controls to Code pathway.',
+      internalNotes: 'Key academic partner retained for future expansion. Out of active launch footprint.',
     },
   });
 

@@ -34,9 +34,12 @@ export interface ListPartnerFilters {
   targetCounty?: string;
 }
 
-const BRIDGE_FORWARD_COUNTIES = [
+const ACTIVE_LAUNCH_COUNTIES = [
   'Orange County',
   'Los Angeles County',
+];
+
+const FUTURE_EXPANSION_COUNTIES = [
   'San Bernardino County',
   'San Diego County',
 ];
@@ -108,15 +111,15 @@ export class StrategicPartnerService {
         leadAgency: 'Regional Task Force on Homelessness San Diego',
         verifiedOfficialRole: 'CONFIRMED_COLLABORATIVE_APPLICANT',
         applicationCoordinatedEntryRole: 'CoC Collaborative Applicant & HMIS Lead',
-        currentCycleParticipationInfo: 'Official Collaborative Applicant for CA-601 FY2026 HUD CoC Competition',
+        currentCycleParticipationInfo: 'Official Collaborative Applicant for CA-601 FY2026 HUD CoC Competition (Future Expansion)',
         mission: 'Transform homelessness crisis response through data-driven programs, CoC leadership, and regional housing solutions.',
         servicesOffered: ['CoC Competition Management', 'Coordinated Entry System (CES)', 'HMIS Lead Agency', 'Youth Homelessness Services'],
-        collaborationFocus: 'San Diego Youth & Reentry Housing Support Partnership',
+        collaborationFocus: 'San Diego Youth & Reentry Housing Support Partnership (Future Expansion)',
         contactChannel: 'info@rtfhsd.org',
-        verificationStatus: 'VERIFIED_HUMAN_REVIEWED',
+        verificationStatus: 'FUTURE_EXPANSION',
         isFixture: false,
         hasLiveVerification: true,
-        internalNotes: 'Authoritative CoC Collaborative Applicant for CA-601 serving San Diego County.',
+        internalNotes: 'Auditable CoC directory record retained for future expansion. Out of active launch footprint.',
       },
       {
         name: 'San Bernardino County Continuum of Care / Homeless Partnership',
@@ -131,15 +134,15 @@ export class StrategicPartnerService {
         leadAgency: 'San Bernardino County Office of Homeless Services',
         verifiedOfficialRole: 'CONFIRMED_COLLABORATIVE_APPLICANT',
         applicationCoordinatedEntryRole: 'CoC Collaborative Applicant & Administrative Entity',
-        currentCycleParticipationInfo: 'Official Collaborative Applicant for CA-609 FY2026 HUD CoC Competition',
+        currentCycleParticipationInfo: 'Official Collaborative Applicant for CA-609 FY2026 HUD CoC Competition (Future Expansion)',
         mission: 'Coordinate countywide resources and strategic partnerships to prevent and end homelessness in San Bernardino County.',
         servicesOffered: ['CoC Grant Administration', 'Interagency Homeless Partnership', 'Coordinated Entry System'],
-        collaborationFocus: 'San Bernardino County Reentry and Skilled-Trades Housing Partnership',
+        collaborationFocus: 'San Bernardino County Reentry Partnership (Future Expansion)',
         contactChannel: 'homelessness@sbcounty.gov',
-        verificationStatus: 'VERIFIED_HUMAN_REVIEWED',
+        verificationStatus: 'FUTURE_EXPANSION',
         isFixture: false,
         hasLiveVerification: true,
-        internalNotes: 'Authoritative CoC Collaborative Applicant for CA-609 serving San Bernardino County.',
+        internalNotes: 'Auditable CoC directory record retained for future expansion. Out of active launch footprint.',
       },
     ];
 
@@ -356,11 +359,11 @@ export class StrategicPartnerService {
 
   /**
    * List strategic partner candidates with strict filtering.
-   * Enforces that for CoC requirements:
+   * Enforces that for active current launch requirements:
    * 1. Partner type MUST be CONTINUUM_OF_CARE
    * 2. Community colleges are strictly excluded.
-   * 3. Must overlap Bridge Forward's 4 service counties.
-   * 4. Riverside County CoC (CA-608) is NOT ranked as a geographic match unless explicitly in footprint.
+   * 3. Must overlap Bridge Forward's 2 active launch counties (Orange County and Los Angeles County).
+           San Bernardino (CA-609), San Diego (CA-601), and Riverside (CA-608) are excluded from active current launch scope.
    */
   public static async listPartners(filters?: ListPartnerFilters) {
     // Ensure authoritative CoCs exist in DB
@@ -396,7 +399,7 @@ export class StrategicPartnerService {
       filtered = filtered.filter((p) => {
         const pType = (p.organizationType || '').toUpperCase();
         const pName = (p.name || '').toLowerCase();
-        
+
         // Strictly exclude community colleges from CoC search
         if (targetType.includes('CONTINUUM_OF_CARE') || targetType.includes('COC')) {
           if (pType.includes('COLLEGE') || pName.includes('college') || pName.includes('community college')) {
@@ -408,22 +411,23 @@ export class StrategicPartnerService {
       });
     }
 
-    // Filter geography to Bridge Forward's 4 counties
+    // Filter geography strictly to Bridge Forward's 2 active launch counties (Orange and LA)
     filtered = filtered.filter((p) => {
       const counties = p.countiesServed || [];
       const geoText = (p.geography || '').toLowerCase();
+      const cocNum = p.cocNumber || '';
 
-      // Explicitly exclude Riverside County CoC unless explicitly part of requested footprint
-      if (p.cocNumber === 'CA-608' || (geoText.includes('riverside') && !geoText.includes('los angeles') && !geoText.includes('orange') && !geoText.includes('san bernardino') && !geoText.includes('san diego'))) {
+      // Exclude future-expansion / out-of-scope CoCs (CA-609 San Bernardino, CA-601 San Diego, CA-608 Riverside)
+      if (cocNum === 'CA-609' || cocNum === 'CA-601' || cocNum === 'CA-608' || p.verificationStatus === 'FUTURE_EXPANSION') {
         return false;
       }
 
-      const hasFootprintMatch = BRIDGE_FORWARD_COUNTIES.some((county) => {
+      const hasLaunchFootprintMatch = ACTIVE_LAUNCH_COUNTIES.some((county) => {
         const lowerCounty = county.toLowerCase().replace(' county', '');
         return counties.some((c) => c.toLowerCase().includes(lowerCounty)) || geoText.includes(lowerCounty);
       });
 
-      return hasFootprintMatch;
+      return hasLaunchFootprintMatch;
     });
 
     if (filters?.verificationStatus) {
@@ -434,7 +438,7 @@ export class StrategicPartnerService {
   }
 
   /**
-   * Match an opportunity to strategic partners idempotently.
+   * Match an opportunity to strategic partners idempotently for the 2-county launch footprint.
    */
   public static async matchOpportunityToPartners(opportunityId: string) {
     const opp = await prisma.fundingOpportunity.findUnique({
@@ -454,8 +458,8 @@ export class StrategicPartnerService {
       const partnerCounties = partner.countiesServed || [];
       const overlapCounties: string[] = [];
 
-      // Calculate exact set intersection: partner.countiesServed ∩ BRIDGE_FORWARD_COUNTIES
-      BRIDGE_FORWARD_COUNTIES.forEach((county) => {
+      // Calculate exact set intersection: partner.countiesServed ∩ ACTIVE_LAUNCH_COUNTIES
+      ACTIVE_LAUNCH_COUNTIES.forEach((county) => {
         const key = county.toLowerCase().replace(' county', '');
         const matchesServed = partnerCounties.some((c: string) => c.toLowerCase().includes(key));
         const matchesGeoName = partner.name.toLowerCase().includes(key) || (partner.cocNumber && partner.cocNumber.toLowerCase().includes(key));
@@ -463,8 +467,6 @@ export class StrategicPartnerService {
         if (matchesServed || matchesGeoName) {
           if (partner.cocNumber === 'CA-602' && county === 'Orange County') overlapCounties.push(county);
           else if (partner.cocNumber === 'CA-600' && county === 'Los Angeles County') overlapCounties.push(county);
-          else if (partner.cocNumber === 'CA-609' && county === 'San Bernardino County') overlapCounties.push(county);
-          else if (partner.cocNumber === 'CA-601' && county === 'San Diego County') overlapCounties.push(county);
           else if (!partner.cocNumber || partner.cocNumber === 'UNKNOWN') {
             if (matchesServed) overlapCounties.push(county);
           }
@@ -472,17 +474,17 @@ export class StrategicPartnerService {
       });
 
       const coverageScope = overlapCounties.length === 1
-        ? 'ONE_OF_FOUR_TARGET_COUNTIES'
-        : overlapCounties.length === 4
-        ? 'FULL_FOUR_COUNTY_FOOTPRINT'
-        : 'PARTIAL_FOOTPRINT';
+        ? 'ONE_OF_TWO_LAUNCH_COUNTIES'
+        : overlapCounties.length === 2
+        ? 'FULL_TWO_COUNTY_LAUNCH_FOOTPRINT'
+        : 'OUT_OF_LAUNCH_SCOPE';
 
       // 6 Weighted Dimension Scoring System (Total 100 points)
       // 1. Verified Official Role (Weight 25)
       const rolePoints = partner.verifiedOfficialRole === 'CONFIRMED_COLLABORATIVE_APPLICANT' ? 25 : 0;
 
-      // 2. Actual County Overlap (Weight 20: 5 pts per target county overlapping)
-      const countyPoints = overlapCounties.length * 5;
+      // 2. Actual Launch County Overlap (Weight 20: 10 pts per active launch county overlapping)
+      const countyPoints = overlapCounties.length * 10;
 
       // 3. Required Partner Type Match (Weight 20)
       const partnerTypePoints = partner.organizationType === 'CONTINUUM_OF_CARE' ? 20 : 0;
@@ -510,7 +512,7 @@ export class StrategicPartnerService {
       ];
 
       if (overlapCounties.length === 0) {
-        concerns.push('No direct county overlap with Bridge Forward service counties (Orange, LA, San Bernardino, San Diego).');
+        concerns.push('No direct county overlap with Bridge Forward planned launch counties (Orange County, Los Angeles County).');
       }
 
       if (partner.verifiedOfficialRole !== 'CONFIRMED_COLLABORATIVE_APPLICANT') {

@@ -166,7 +166,7 @@ describe('Phase 1F — Opportunity-Specific Organization Narrative & Positioning
       'specifically concerns potential participation in Orange County’s CA-602 Continuum of Care process'
     );
     expect(result.geographicContextNarrative).toContain(
-      'Although our planned service footprint includes Orange, Los Angeles, San Bernardino, and San Diego counties'
+      'Bridge Forward’s planned launch footprint includes Orange and Los Angeles counties'
     );
   });
 
@@ -207,7 +207,7 @@ describe('Phase 1F — Opportunity-Specific Organization Narrative & Positioning
     expect(result.narrativeEvidenceFacts).toContain(
       'Bridge Forward’s service models are planned or developing; no completed cohort outcomes or operating history are claimed.'
     );
-    expect(result.opportunitySpecificOrganizationNarrative).toContain('We are developing a youth-centered service model');
+    expect(result.opportunitySpecificOrganizationNarrative).toContain('developing a youth-centered service model');
   });
 
   it('10. Repeated briefing generation is deterministic and idempotent', () => {

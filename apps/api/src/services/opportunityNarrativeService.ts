@@ -51,7 +51,7 @@ export class OpportunityNarrativeService {
     // 4. Document underlying evidence facts
     const narrativeEvidenceFacts = [
       `Bridge Forward Foundation is PRE_INCORPORATION (nonprofit initiative stage)`,
-      `Service footprint spans Orange, Los Angeles, San Bernardino, and San Diego Counties`,
+      `Planned Launch Service Areas: Orange County and Los Angeles County`,
       `Bridge Forward’s service models are planned or developing; no completed cohort outcomes or operating history are claimed.`,
       `Opportunity pathway: ${input.requiredApplicationPathway || opp?.candidateRoutingStatus || 'PARTNERSHIP_REQUIRED'}`,
     ];
@@ -60,7 +60,7 @@ export class OpportunityNarrativeService {
     const narrativeSafeguardsApplied = [
       `LENS_FILTERED: Emphasized opportunity-aligned mission lenses (${selectedNarrativeLenses.join(', ')}) instead of master mission`,
       `LEGAL_STAGE_SAFEGUARD: Described as 'emerging Southern California nonprofit initiative' (PRE_INCORPORATION)`,
-      `GEOGRAPHIC_LOCALIZATION: Localized inquiry to ${partnerCounty} (${partnerCocNumber}) while acknowledging 4-county footprint`,
+      `GEOGRAPHIC_LOCALIZATION: Localized inquiry to ${partnerCounty} (${partnerCocNumber}) within 2-county launch footprint (Orange & Los Angeles counties)`,
       `CURRENT_CYCLE_STATUS_SAFEGUARD: Enforced information-seeking wording for unverified/conflicting cycles`,
       `TERMINOLOGY_SAFEGUARD: Used non-stigmatizing labels ('justice-involved youth and young adults', 'system-impacted youth')`,
       `ZERO_FABRICATION_SAFEGUARD: Preserved pre-incorporation limitations; zero fabricated outcomes or historical cohorts`,
@@ -111,7 +111,7 @@ export class OpportunityNarrativeService {
 
   private static generatePositioningNarrative(lenses: NarrativeLens[], opp?: any): string {
     if (lenses.includes('YOUTH_JUSTICE_REENTRY')) {
-      return `I am writing on behalf of Bridge Forward Foundation, an emerging Southern California nonprofit initiative focused on helping justice-involved and system-impacted youth and young adults—including young people transitioning from juvenile justice involvement—achieve housing stability, successful community reentry, educational progress, and pathways to employment. We are developing a youth-centered service model that combines housing navigation, individualized reentry support, mentorship, education and workforce pathways, and sustained community-based support.`;
+      return `I am writing on behalf of Bridge Forward Foundation, an emerging Southern California nonprofit initiative developing a youth-centered service model for justice-involved and system-impacted youth and young adults, including young people transitioning from juvenile justice involvement. Our planned work connects housing stabilization, individualized reentry support, mentorship, education and workforce pathways, and sustained community-based support.`;
     }
 
     if (lenses.includes('ADULT_REENTRY')) {
@@ -125,13 +125,11 @@ export class OpportunityNarrativeService {
     if (!partner) return 'Orange County';
     if (partner.cocNumber === 'CA-602' || (partner.name || '').includes('Orange')) return 'Orange County';
     if (partner.cocNumber === 'CA-600' || (partner.name || '').includes('LAHSA') || (partner.geography || '').includes('Los Angeles')) return 'Los Angeles County';
-    if (partner.cocNumber === 'CA-601' || (partner.name || '').includes('San Diego')) return 'San Diego County';
-    if (partner.cocNumber === 'CA-609' || (partner.name || '').includes('San Bernardino')) return 'San Bernardino County';
     if (partner.countiesServed && partner.countiesServed.length > 0) return partner.countiesServed[0];
     return 'Orange County';
   }
 
   private static generateGeographicNarrative(county: string, cocNumber: string): string {
-    return `Although our planned service footprint includes Orange, Los Angeles, San Bernardino, and San Diego counties, this inquiry specifically concerns potential participation in ${county}’s ${cocNumber} Continuum of Care process and opportunities to serve justice-involved youth experiencing or at risk of homelessness.`;
+    return `Bridge Forward’s planned launch footprint includes Orange and Los Angeles counties. This inquiry specifically concerns potential participation in ${county}’s ${cocNumber} Continuum of Care process and opportunities to support justice-involved youth experiencing or at risk of homelessness.`;
   }
 }

@@ -1210,7 +1210,7 @@ export function App() {
                     {selectedOppForPartnerView.title} ({selectedOppForPartnerView.fundingOpportunityNumber})
                   </h3>
                   <p style={{ fontSize: '0.85rem', color: '#93c5fd', marginTop: '0.25rem' }}>
-                    <strong>Target Service Counties:</strong> Orange County, Los Angeles County, San Bernardino County, San Diego County
+                    <strong>Planned Launch Service Areas:</strong> Orange County and Los Angeles County
                   </p>
                   {selectedOppForPartnerView.dismissedReason && (
                     <p style={{ fontSize: '0.8rem', color: '#fca5a5', marginTop: '0.2rem' }}>
