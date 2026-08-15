@@ -1376,7 +1376,7 @@ export function App() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
               {partners.map((p: any) => {
                 const match = p.opportunityMatches?.[0];
-                const currentStatus = match?.status || p.status || 'RESEARCH_REQUIRED';
+                const currentStatus = p.canonicalStatus || p.status || 'RESEARCH_REQUIRED';
 
                 return (
                   <div key={p.id} style={{ background: 'rgba(15, 23, 42, 0.7)', border: '1px solid var(--border-color)', borderRadius: '0.75rem', padding: '1.25rem' }}>

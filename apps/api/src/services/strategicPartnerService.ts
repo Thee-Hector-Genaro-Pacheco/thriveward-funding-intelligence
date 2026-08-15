@@ -1,6 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { PartnerMatchStatus } from '@prisma/client';
 import { ContactProvenanceVerifier } from './contactProvenanceVerifier';
+import crypto from 'crypto';
 
 export interface CreateStrategicPartnerInput {
   name: string;
@@ -337,6 +338,83 @@ export class StrategicPartnerService {
    * 3. Must overlap Bridge Forward's 2 active launch counties (Orange County and Los Angeles County).
            San Bernardino (CA-609), San Diego (CA-601), and Riverside (CA-608) are excluded from active current launch scope.
    */
+  public static async reconcileLegacyStatuses() {
+    const candidates = await prisma.strategicPartnerCandidate.findMany({
+      include: {
+        opportunityMatches: true,
+        engagements: { include: { workflowHistory: true } },
+      },
+    });
+
+    for (const candidate of candidates) {
+      const primaryEng = candidate.engagements?.[0];
+      const hasHumanHistory = primaryEng?.workflowHistory?.some(
+        (h) => h.humanActorName && h.humanActorName !== 'System Data Repair Service' && !h.humanActorName.includes('System')
+      );
+
+      const hasLegacyPossibleMatch =
+        candidate.status === PartnerMatchStatus.POSSIBLE_MATCH ||
+        candidate.opportunityMatches.some((m) => m.status === PartnerMatchStatus.POSSIBLE_MATCH);
+
+      if (!hasHumanHistory && hasLegacyPossibleMatch) {
+        await prisma.opportunityPartnerMatch.updateMany({
+          where: { strategicPartnerCandidateId: candidate.id, status: PartnerMatchStatus.POSSIBLE_MATCH },
+          data: { status: PartnerMatchStatus.RESEARCH_REQUIRED },
+        });
+
+        await prisma.strategicPartnerCandidate.update({
+          where: { id: candidate.id },
+          data: { status: PartnerMatchStatus.RESEARCH_REQUIRED },
+        });
+
+        let eng = primaryEng;
+        if (!eng) {
+          eng = await prisma.outreachEngagement.create({
+            data: {
+              strategicPartnerCandidateId: candidate.id,
+              currentStatus: PartnerMatchStatus.RESEARCH_REQUIRED,
+              inquiryPurpose: 'GRANT_COMPETITION',
+              dataOrigin: candidate.cocNumber === 'CA-DEMO' ? 'DEMO' : 'OFFICIAL_LIVE',
+            },
+            include: { workflowHistory: true },
+          });
+        } else if (eng.currentStatus !== PartnerMatchStatus.RESEARCH_REQUIRED) {
+          eng = await prisma.outreachEngagement.update({
+            where: { id: eng.id },
+            data: { currentStatus: PartnerMatchStatus.RESEARCH_REQUIRED },
+            include: { workflowHistory: true },
+          });
+        }
+
+        const hasRepairEvent = eng.workflowHistory.some((h) => h.humanActorName === 'System Data Repair Service' || (h.reason || '').includes('reconciliation'));
+        if (!hasRepairEvent) {
+          const eventContent = `REPAIR:${eng.id}:${PartnerMatchStatus.POSSIBLE_MATCH}:${PartnerMatchStatus.RESEARCH_REQUIRED}:${Date.now()}`;
+          const eventHash = crypto.createHash('sha256').update(eventContent).digest('hex');
+
+          await prisma.outreachWorkflowHistory.create({
+            data: {
+              engagementId: eng.id,
+              previousStatus: PartnerMatchStatus.POSSIBLE_MATCH,
+              newStatus: PartnerMatchStatus.RESEARCH_REQUIRED,
+              humanActorName: 'System Data Repair Service',
+              reason: 'System data reconciliation: legacy status POSSIBLE_MATCH lacked required human-attributed workflow transition history. Reconciled to canonical status RESEARCH_REQUIRED.',
+              eventHash,
+            },
+          });
+        }
+      }
+    }
+  }
+
+  /**
+   * List strategic partner candidates with strict filtering.
+   * Enforces that for active current launch requirements:
+   * 1. Partner type MUST be CONTINUUM_OF_CARE
+   * 2. Community colleges are strictly excluded.
+   * 3. Must overlap Bridge Forward's 2 active launch counties (Orange County and Los Angeles County).
+   * 4. Excludes DEMO candidates (CA-DEMO) by default unless includeDemo=true is explicitly allowed in non-production.
+   * 5. Returns canonical server-authoritative status from OutreachEngagement.
+   */
   public static async listPartners(filters?: ListPartnerFilters) {
     if (filters?.includeDemo && process.env.NODE_ENV === 'production') {
       const err: any = new Error('Production environment cannot expose demo data (includeDemo is prohibited in production).');
@@ -346,11 +424,17 @@ export class StrategicPartnerService {
 
     const allowDemo = filters?.includeDemo === true && process.env.NODE_ENV !== 'production';
 
-    // Ensure authoritative CoCs exist in DB
+    // Ensure authoritative CoCs exist in DB & reconcile legacy unverified statuses
     await this.ensureSeededPartners();
+    await this.reconcileLegacyStatuses();
 
     const allPartners = await prisma.strategicPartnerCandidate.findMany({
-      include: { citations: true, contactChannels: true, opportunityMatches: true },
+      include: {
+        citations: true,
+        contactChannels: true,
+        opportunityMatches: true,
+        engagements: { include: { workflowHistory: true } },
+      },
       orderBy: { name: 'asc' },
     });
 
@@ -418,7 +502,28 @@ export class StrategicPartnerService {
       filtered = filtered.filter((p) => p.verificationStatus === filters.verificationStatus);
     }
 
-    return filtered;
+    return filtered.map((p) => {
+      const primaryEng = p.engagements?.[0];
+      const hasHumanHistory = primaryEng?.workflowHistory?.some(
+        (h: any) => h.actorType === 'HUMAN' || (h.actorName && !h.actorName.includes('System') && !h.actorName.includes('SYSTEM'))
+      );
+
+      const canonicalStatus = (primaryEng && (primaryEng.currentStatus === PartnerMatchStatus.RESEARCH_REQUIRED || hasHumanHistory))
+        ? primaryEng.currentStatus
+        : PartnerMatchStatus.RESEARCH_REQUIRED;
+
+      const updatedMatches = p.opportunityMatches.map((m) => ({
+        ...m,
+        status: canonicalStatus,
+      }));
+
+      return {
+        ...p,
+        status: canonicalStatus,
+        canonicalStatus,
+        opportunityMatches: updatedMatches,
+      };
+    });
   }
 
   /**

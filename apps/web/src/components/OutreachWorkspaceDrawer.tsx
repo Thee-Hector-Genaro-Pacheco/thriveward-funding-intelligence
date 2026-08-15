@@ -844,27 +844,35 @@ export const OutreachWorkspaceDrawer: React.FC<OutreachWorkspaceDrawerProps> = (
                 Append-Only Workflow Transition History:
               </h3>
 
-              {engagement.workflowHistory?.map((h: any) => (
-                <div key={h.id} style={{ background: 'rgba(15, 23, 42, 0.7)', border: '1px solid var(--border-color)', borderRadius: '0.5rem', padding: '0.85rem' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem', flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#60a5fa' }}>
-                      {h.previousStatus} → <strong style={{ color: '#34d399' }}>{h.newStatus}</strong>
-                    </span>
-                    <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
-                      {new Date(h.timestamp).toLocaleString()}
-                    </span>
+              {engagement.workflowHistory?.map((h: any) => {
+                const isSystemRepair = h.actorType === 'SYSTEM_DATA_REPAIR' || (h.actorName && h.actorName.includes('System'));
+                return (
+                  <div key={h.id} style={{ background: isSystemRepair ? 'rgba(120, 53, 15, 0.25)' : 'rgba(15, 23, 42, 0.7)', border: isSystemRepair ? '1px solid #78350f' : '1px solid var(--border-color)', borderRadius: '0.5rem', padding: '0.85rem' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#60a5fa' }}>
+                        {h.previousStatus} → <strong style={{ color: '#34d399' }}>{h.newStatus}</strong>
+                      </span>
+                      {isSystemRepair && (
+                        <span className="badge badge-amber" style={{ background: '#78350f', color: '#fde68a', fontSize: '0.7rem' }}>
+                          🛠️ SYSTEM DATA REPAIR
+                        </span>
+                      )}
+                      <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>
+                        {new Date(h.timestamp).toLocaleString()}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: isSystemRepair ? '#fde68a' : '#cbd5e1' }}>
+                      <strong>Actor:</strong> {isSystemRepair ? '⚙️ System Data Repair Service (Not a human action)' : (h.actorName || h.humanActorName || 'Authorized Human Operator')}
+                    </div>
+                    <div style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>
+                      <strong>Reason:</strong> {h.reason}
+                    </div>
+                    <div style={{ fontSize: '0.725rem', color: '#94a3b8', marginTop: '0.3rem' }}>
+                      Event SHA-256: <code>{h.eventHash}</code>
+                    </div>
                   </div>
-                  <div style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>
-                    <strong>Actor:</strong> {h.humanActorName}
-                  </div>
-                  <div style={{ fontSize: '0.8rem', color: '#cbd5e1' }}>
-                    <strong>Reason:</strong> {h.reason}
-                  </div>
-                  <div style={{ fontSize: '0.725rem', color: '#94a3b8', marginTop: '0.3rem' }}>
-                    Event SHA-256: <code>{h.eventHash}</code>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

@@ -28,9 +28,10 @@ phase1eRouter.get('/outreach/dashboard', async (req: Request, res: Response) => 
 phase1eRouter.get('/outreach/engagements/:partnerId', async (req: Request, res: Response) => {
   try {
     const { opportunityId, inquiryPurpose, dataOrigin } = req.query;
+    const cleanOppId = (opportunityId && opportunityId !== '' && opportunityId !== 'undefined') ? (opportunityId as string) : undefined;
     const engagement = await OutreachTrackingService.getOrCreateEngagement({
       partnerId: req.params.partnerId,
-      opportunityId: opportunityId as string | undefined,
+      opportunityId: cleanOppId,
       inquiryPurpose: inquiryPurpose as string | undefined,
       dataOrigin: dataOrigin as string | undefined,
     });

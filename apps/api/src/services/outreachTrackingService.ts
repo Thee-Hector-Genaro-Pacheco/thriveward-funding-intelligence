@@ -27,11 +27,12 @@ export class OutreachTrackingService {
   }) {
     const inquiryPurpose = input.inquiryPurpose || 'GRANT_COMPETITION';
     const dataOrigin = input.dataOrigin || 'OFFICIAL_LIVE';
+    const opportunityId = (input.opportunityId && input.opportunityId !== '' && input.opportunityId !== 'undefined') ? input.opportunityId : null;
 
     let engagement = await prisma.outreachEngagement.findFirst({
       where: {
         strategicPartnerCandidateId: input.partnerId,
-        fundingOpportunityId: input.opportunityId || null,
+        fundingOpportunityId: opportunityId,
         inquiryPurpose,
       },
       include: {
@@ -53,11 +54,11 @@ export class OutreachTrackingService {
     if (!engagement) {
       // Find opportunity partner match ID if exists
       let oppMatchId: string | null = null;
-      if (input.opportunityId) {
+      if (opportunityId) {
         const match = await prisma.opportunityPartnerMatch.findFirst({
           where: {
             strategicPartnerCandidateId: input.partnerId,
-            fundingOpportunityId: input.opportunityId,
+            fundingOpportunityId: opportunityId,
           },
         });
         if (match) oppMatchId = match.id;
@@ -73,7 +74,7 @@ export class OutreachTrackingService {
       engagement = await prisma.outreachEngagement.create({
         data: {
           strategicPartnerCandidateId: input.partnerId,
-          fundingOpportunityId: input.opportunityId || null,
+          fundingOpportunityId: opportunityId,
           opportunityPartnerMatchId: oppMatchId,
           inquiryPurpose,
           currentStatus: initialStatus,
