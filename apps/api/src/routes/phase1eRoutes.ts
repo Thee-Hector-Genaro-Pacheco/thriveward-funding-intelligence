@@ -5,10 +5,129 @@ import { ReadinessPlanService } from '../services/readinessPlanService';
 import { GrantCalendarService } from '../services/grantCalendarService';
 import { OutreachBriefingService } from '../services/outreachBriefingService';
 import { SponsorDiscoveryService } from '../services/sponsorDiscoveryService';
+import { OutreachTrackingService } from '../services/outreachTrackingService';
 import { calculateSopMatchRequirement } from '../services/sopMatchCalculator';
 import { SponsorMatchStatus, RecurrenceConfidence, PlanTaskStatus } from '@prisma/client';
 
 export const phase1eRouter = Router();
+
+// --- Phase 1G: Human-Controlled Outreach & Response Tracking ---
+
+// GET /api/outreach/dashboard
+phase1eRouter.get('/outreach/dashboard', async (_req: Request, res: Response) => {
+  try {
+    const data = await OutreachTrackingService.getFollowUpDashboard();
+    res.json({ success: true, data });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/outreach/engagements/:partnerId
+phase1eRouter.get('/outreach/engagements/:partnerId', async (req: Request, res: Response) => {
+  try {
+    const { opportunityId, inquiryPurpose, dataOrigin } = req.query;
+    const engagement = await OutreachTrackingService.getOrCreateEngagement({
+      partnerId: req.params.partnerId,
+      opportunityId: opportunityId as string | undefined,
+      inquiryPurpose: inquiryPurpose as string | undefined,
+      dataOrigin: dataOrigin as string | undefined,
+    });
+    res.json({ success: true, data: engagement });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// GET /api/outreach/timeline/:engagementId
+phase1eRouter.get('/outreach/timeline/:engagementId', async (req: Request, res: Response) => {
+  try {
+    const engagement = await OutreachTrackingService.getEngagementTimeline(req.params.engagementId);
+    res.json({ success: true, data: engagement });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/outreach/drafts
+phase1eRouter.post('/outreach/drafts', async (req: Request, res: Response) => {
+  try {
+    const draft = await OutreachTrackingService.saveDraftVersion(req.body);
+    res.status(201).json({ success: true, data: draft });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/outreach/approvals
+phase1eRouter.post('/outreach/approvals', async (req: Request, res: Response) => {
+  try {
+    const approval = await OutreachTrackingService.approveAndFreezeDraft(req.body);
+    res.status(201).json({ success: true, data: approval });
+  } catch (err: any) {
+    res.status(err.statusCode || 400).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/outreach/sent
+phase1eRouter.post('/outreach/sent', async (req: Request, res: Response) => {
+  try {
+    const delivery = await OutreachTrackingService.markOutreachAsSent(req.body);
+    res.status(201).json({ success: true, data: delivery });
+  } catch (err: any) {
+    res.status(err.statusCode || 400).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/outreach/responses
+phase1eRouter.post('/outreach/responses', async (req: Request, res: Response) => {
+  try {
+    const responseRecord = await OutreachTrackingService.recordResponse(req.body);
+    res.status(201).json({ success: true, data: responseRecord });
+  } catch (err: any) {
+    res.status(err.statusCode || 400).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/outreach/follow-ups
+phase1eRouter.post('/outreach/follow-ups', async (req: Request, res: Response) => {
+  try {
+    const followUp = await OutreachTrackingService.createOrUpdateFollowUp(req.body);
+    res.status(201).json({ success: true, data: followUp });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/outreach/discovery-calls
+phase1eRouter.post('/outreach/discovery-calls', async (req: Request, res: Response) => {
+  try {
+    const call = await OutreachTrackingService.recordDiscoveryCall(req.body);
+    res.status(201).json({ success: true, data: call });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/outreach/mou-checklist
+phase1eRouter.post('/outreach/mou-checklist', async (req: Request, res: Response) => {
+  try {
+    const item = await OutreachTrackingService.createOrUpdateMouChecklistItem(req.body);
+    res.status(201).json({ success: true, data: item });
+  } catch (err: any) {
+    res.status(400).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/outreach/transitions
+phase1eRouter.post('/outreach/transitions', async (req: Request, res: Response) => {
+  try {
+    const transition = await OutreachTrackingService.transitionWorkflowStatus(req.body);
+    res.json({ success: true, data: transition });
+  } catch (err: any) {
+    res.status(err.statusCode || 400).json({ success: false, error: err.message });
+  }
+});
 
 // --- Fiscal Sponsor Directory & Matching ---
 

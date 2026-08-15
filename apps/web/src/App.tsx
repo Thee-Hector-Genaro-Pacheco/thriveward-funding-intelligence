@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import './index.css';
 import { BRIDGE_FORWARD_PROFILE } from '@bridge-ai/shared';
+import { OutreachWorkspaceDrawer } from './components/OutreachWorkspaceDrawer';
 
 export interface FundingOpportunity {
   id: string;
@@ -277,6 +278,52 @@ export function App() {
   const [partnerCopiedEmail, setPartnerCopiedEmail] = useState<boolean>(false);
   const [partnerDiscoveryLoading, setPartnerDiscoveryLoading] = useState<boolean>(false);
 
+  // Phase 1G Outreach Workspace & Dashboard State
+  const [outreachEngagement, setOutreachEngagement] = useState<any | null>(null);
+  const [outreachDashboard, setOutreachDashboard] = useState<any | null>(null);
+
+  const fetchOutreachDashboard = async () => {
+    try {
+      const res = await fetch('/api/outreach/dashboard');
+      if (res.ok) {
+        const data = await res.json();
+        setOutreachDashboard(data.data || null);
+      }
+    } catch (err) {
+      console.error('Error fetching outreach dashboard:', err);
+    }
+  };
+
+  const handleOpenOutreachWorkspace = async (partnerId: string, opportunityId?: string, inquiryPurpose = 'GRANT_COMPETITION') => {
+    try {
+      const query = new URLSearchParams();
+      if (opportunityId) query.append('opportunityId', opportunityId);
+      if (inquiryPurpose) query.append('inquiryPurpose', inquiryPurpose);
+      const res = await fetch(`/api/outreach/engagements/${partnerId}?${query.toString()}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json();
+      setOutreachEngagement(data.data);
+    } catch (err: any) {
+      setError(`Failed to open outreach workspace: ${err.message}`);
+    }
+  };
+
+  const handleRefreshOutreachWorkspace = async () => {
+    if (outreachEngagement?.id) {
+      try {
+        const res = await fetch(`/api/outreach/timeline/${outreachEngagement.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          setOutreachEngagement(data.data);
+        }
+      } catch (err) {
+        console.error('Error refreshing outreach timeline:', err);
+      }
+    }
+    fetchPartners();
+    fetchOutreachDashboard();
+  };
+
   const [actionMessage, setActionMessage] = useState<string | null>(null);
   const [discoveryResult, setDiscoveryResult] = useState<any | null>(null);
   const [discoveryLoading, setDiscoveryLoading] = useState<boolean>(false);
@@ -430,32 +477,7 @@ export function App() {
     }
   };
 
-  const handleTransitionPartnerStatus = async (matchId: string, targetStatus: string) => {
-    try {
-      const token = 'authorized-reviewer-123';
-      const res = await fetch(`/api/strategic-partners/matches/${matchId}/status`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          targetStatus,
-          reviewerId: 'authorized-reviewer-human',
-          notes: 'Human-approved status transition',
-        }),
-      });
-      if (res.ok) {
-        setActionMessage(`✓ Partner status updated to ${targetStatus}`);
-        fetchPartners(selectedOppForPartnerView?.id);
-      } else {
-        const err = await res.json();
-        alert(err.error || 'Failed to update partner status.');
-      }
-    } catch (e: any) {
-      alert(e.message || 'Failed to update partner status.');
-    }
-  };
+
 
   const handleNavigateToOpportunityPartners = (opp: FundingOpportunity, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -502,6 +524,7 @@ export function App() {
       fetchSponsors();
     } else if (activePrimaryTab === 'PARTNERS') {
       fetchPartners();
+      fetchOutreachDashboard();
     } else if (activePrimaryTab === 'READINESS') {
       fetchReadinessPlans();
     } else if (activePrimaryTab === 'CALENDAR') {
@@ -1242,6 +1265,40 @@ export function App() {
             </div>
           )}
 
+          {/* Phase 1G Outreach & Follow-up Tracking Dashboard */}
+          {outreachDashboard && (
+            <div style={{ background: 'rgba(15, 23, 42, 0.85)', border: '1px solid var(--border-color)', borderRadius: '0.75rem', padding: '1.25rem', marginBottom: '1.5rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#f8fafc', margin: 0, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  📊 Follow-Up & Response Tracking Dashboard <span style={{ fontSize: '0.75rem', background: '#2563eb', color: '#fff', padding: '0.15rem 0.5rem', borderRadius: '0.3rem', fontWeight: 700 }}>Phase 1G Live</span>
+                </h3>
+                <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>🔒 Zero Automated Transmission Safeguard Active</span>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '0.75rem' }}>
+                <div style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '0.75rem', borderRadius: '0.5rem', textAlign: 'center', border: outreachDashboard.counts.dueToday > 0 ? '1px solid #fbbf24' : '1px solid rgba(255,255,255,0.05)' }}>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fbbf24' }}>{outreachDashboard.counts.dueToday}</div>
+                  <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.2rem' }}>Due Today</div>
+                </div>
+                <div style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '0.75rem', borderRadius: '0.5rem', textAlign: 'center', border: outreachDashboard.counts.overdue > 0 ? '1px solid #f87171' : '1px solid rgba(255,255,255,0.05)' }}>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#f87171' }}>{outreachDashboard.counts.overdue}</div>
+                  <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.2rem' }}>Overdue</div>
+                </div>
+                <div style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '0.75rem', borderRadius: '0.5rem', textAlign: 'center' }}>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#60a5fa' }}>{outreachDashboard.counts.upcoming}</div>
+                  <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.2rem' }}>Upcoming</div>
+                </div>
+                <div style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '0.75rem', borderRadius: '0.5rem', textAlign: 'center' }}>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#c084fc' }}>{outreachDashboard.counts.awaitingResponse}</div>
+                  <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.2rem' }}>Awaiting Response</div>
+                </div>
+                <div style={{ background: 'rgba(30, 41, 59, 0.6)', padding: '0.75rem', borderRadius: '0.5rem', textAlign: 'center' }}>
+                  <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#34d399' }}>{outreachDashboard.counts.responsesReceived}</div>
+                  <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.2rem' }}>Responses Received</div>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', marginBottom: '1rem' }}>
             <div>
               <h2 className="section-title" style={{ margin: 0 }}>🏛️ Strategic Program Partners Directory & CoC Alignment</h2>
@@ -1377,30 +1434,19 @@ export function App() {
                       })()}
                     </div>
 
-                    {/* Append-Only Workflow Status Selector */}
+                    {/* Server-Authoritative Workflow Status Badge & Action Controls */}
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginTop: '0.85rem', paddingTop: '0.65rem', borderTop: '1px solid rgba(255,255,255,0.08)', flexWrap: 'wrap' }}>
                       <span style={{ fontSize: '0.85rem', color: '#94a3b8', fontWeight: 600 }}>Workflow Status:</span>
-                      <select
-                        value={currentStatus}
-                        onChange={(e) => {
-                          if (match?.id) {
-                            handleTransitionPartnerStatus(match.id, e.target.value);
-                          }
-                        }}
-                        style={{ background: '#1e293b', border: '1px solid var(--border-color)', color: '#f8fafc', padding: '0.35rem 0.65rem', borderRadius: '0.4rem', fontSize: '0.85rem', fontWeight: 600 }}
-                      >
-                        <option value="RESEARCH_REQUIRED">RESEARCH_REQUIRED</option>
-                        <option value="POSSIBLE_MATCH">POSSIBLE_MATCH</option>
-                        <option value="CONTACT_APPROVED">CONTACT_APPROVED (Human Authorized)</option>
-                        <option value="CONTACTED">CONTACTED</option>
-                        <option value="DISCOVERY_CALL">DISCOVERY_CALL</option>
-                        <option value="PARTNERSHIP_DISCUSSION">PARTNERSHIP_DISCUSSION</option>
-                        <option value="MOU_IN_PROGRESS">MOU_IN_PROGRESS</option>
-                        <option value="CONFIRMED_PARTNER">CONFIRMED_PARTNER</option>
-                        <option value="DECLINED">DECLINED</option>
-                        <option value="INACTIVE">INACTIVE</option>
-                      </select>
+                      <span className="badge badge-purple" style={{ fontSize: '0.85rem', fontWeight: 700 }}>
+                        {currentStatus}
+                      </span>
                       {match?.humanApproved && <span style={{ fontSize: '0.75rem', color: '#6ee7b7', fontWeight: 600 }}>✓ Human Authorized</span>}
+                      <button
+                        onClick={() => handleOpenOutreachWorkspace(p.id, selectedOppForPartnerView?.id, 'GRANT_COMPETITION')}
+                        style={{ background: 'rgba(59, 130, 246, 0.25)', border: '1px solid #3b82f6', color: '#60a5fa', padding: '0.35rem 0.75rem', borderRadius: '0.4rem', fontSize: '0.8rem', fontWeight: 600, cursor: 'pointer', marginLeft: 'auto' }}
+                      >
+                        💬 Open Outreach Workspace & Timeline History
+                      </button>
                     </div>
 
                     {/* Source Citation Link */}
@@ -1910,6 +1956,15 @@ export function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Phase 1G Outreach Workspace & History Drawer */}
+      {outreachEngagement && (
+        <OutreachWorkspaceDrawer
+          engagement={outreachEngagement}
+          onClose={() => setOutreachEngagement(null)}
+          onRefresh={handleRefreshOutreachWorkspace}
+        />
       )}
 
       {/* Ground Truth Profile Card */}

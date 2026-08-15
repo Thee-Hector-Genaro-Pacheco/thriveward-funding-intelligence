@@ -166,6 +166,7 @@ model FundingOpportunity {
   partnerMatches          OpportunityPartnerMatch[]
   readinessPlans          OpportunityReadinessPlan[]
   grantCalendarItems      GrantCalendarItem[]
+  engagements             OutreachEngagement[]
 
   @@unique([sourceSystem, externalOpportunityId])
   @@index([candidateRoutingStatus])
@@ -593,6 +594,7 @@ model StrategicPartnerCandidate {
   opportunityMatches OpportunityPartnerMatch[]
   contactChannels    PartnerContactChannel[]
   workflowHistory    PartnerWorkflowHistory[]
+  engagements        OutreachEngagement[]
 }
 
 model PartnerContactChannel {
@@ -752,4 +754,196 @@ model GrantCalendarItem {
   notes                     String?
   createdAt                 DateTime             @default(now())
   updatedAt                 DateTime             @updatedAt
+}
+
+// --- Phase 1G: Human-Controlled Outreach & Response Tracking Models ---
+
+model OutreachEngagement {
+  id                          String                    @id @default(uuid())
+  strategicPartnerCandidateId String
+  strategicPartnerCandidate   StrategicPartnerCandidate @relation(fields: [strategicPartnerCandidateId], references: [id], onDelete: Cascade)
+  fundingOpportunityId        String?
+  fundingOpportunity          FundingOpportunity?       @relation(fields: [fundingOpportunityId], references: [id], onDelete: SetNull)
+  opportunityPartnerMatchId   String?
+  inquiryPurpose              String                    @default("GRANT_COMPETITION") // GRANT_COMPETITION, GOVERNANCE_MEMBERSHIP, CES_INTEGRATION, GENERAL
+  currentStatus               PartnerMatchStatus        @default(RESEARCH_REQUIRED)
+  dataOrigin                  String                    @default("OFFICIAL_LIVE") // OFFICIAL_LIVE, DEMO
+  createdAt                   DateTime                  @default(now())
+  updatedAt                   DateTime                  @updatedAt
+
+  draftVersions     OutreachDraftVersion[]
+  evidenceSnapshots ContactEvidenceSnapshot[]
+  humanApprovals    OutreachHumanApproval[]
+  deliveryRecords   OutreachDeliveryRecord[]
+  workflowHistory   OutreachWorkflowHistory[]
+  responses         OutreachResponseRecord[]
+  followUps         OutreachFollowUp[]
+  discoveryCalls    OutreachDiscoveryCall[]
+  mouChecklistItems MouChecklistItem[]
+  attachmentRefs    OutreachAttachmentRef[]
+
+  @@unique([strategicPartnerCandidateId, fundingOpportunityId, inquiryPurpose])
+}
+
+model OutreachDraftVersion {
+  id                     String             @id @default(uuid())
+  engagementId           String
+  engagement             OutreachEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  versionNumber          Int
+  subject                String
+  body                   String
+  recipient              String
+  inquiryPurpose         String
+  creatorType            String             @default("AI_GENERATED") // AI_GENERATED, HUMAN_EDITED
+  contentHash            String
+  contactEvidenceRef     String?
+  orgProfileVersion      String             @default("1.3.0-phase1f")
+  orgProfileHash         String?
+  opportunityAnalysisRef String?
+  creatorActorName       String             @default("Bridge AI Agent")
+  createdAt              DateTime           @default(now())
+
+  approvals OutreachHumanApproval[]
+}
+
+model ContactEvidenceSnapshot {
+  id                 String             @id @default(uuid())
+  engagementId       String
+  engagement         OutreachEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  recipientEmail     String
+  inquiryPurpose     String
+  sourceUrl          String
+  requestedUrl       String?
+  finalUrl           String?
+  httpStatus         Int?
+  contentType        String?
+  retrievedByteCount Int?
+  retrievalTimestamp DateTime           @default(now())
+  responseSha256     String?
+  quotedCitation     String
+  evidenceMode       String             @default("LIVE_HTTP")
+  snapshotHash       String
+
+  approvals OutreachHumanApproval[]
+}
+
+model OutreachHumanApproval {
+  id                  String                   @id @default(uuid())
+  engagementId        String
+  engagement          OutreachEngagement       @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  draftVersionId      String
+  draftVersion        OutreachDraftVersion     @relation(fields: [draftVersionId], references: [id], onDelete: Cascade)
+  evidenceSnapshotId  String?
+  evidenceSnapshot    ContactEvidenceSnapshot? @relation(fields: [evidenceSnapshotId], references: [id], onDelete: SetNull)
+  humanReviewerName   String
+  approvalTimestamp   DateTime                 @default(now())
+  approvalReason      String
+  approvedContentHash String
+  zeroTransmissionAck Boolean                  @default(true)
+}
+
+model OutreachDeliveryRecord {
+  id                     String             @id @default(uuid())
+  engagementId           String
+  engagement             OutreachEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  approvedDraftVersionId String?
+  actualRecipient        String
+  channel                String             @default("EMAIL")
+  sentTimestamp          DateTime
+  humanActorName         String
+  exactSubject           String
+  exactBodyHash          String
+  notes                  String?
+  idempotencyKey         String             @unique
+  createdAt              DateTime           @default(now())
+
+  responses OutreachResponseRecord[]
+}
+
+model OutreachWorkflowHistory {
+  id              String             @id @default(uuid())
+  engagementId    String
+  engagement      OutreachEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  previousStatus  String
+  newStatus       String
+  humanActorName  String
+  timestamp       DateTime           @default(now())
+  reason          String
+  relatedRecordId String?
+  eventHash       String
+}
+
+model OutreachResponseRecord {
+  id                String                  @id @default(uuid())
+  engagementId      String
+  engagement        OutreachEngagement      @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  deliveryRecordId  String?
+  deliveryRecord    OutreachDeliveryRecord? @relation(fields: [deliveryRecordId], references: [id], onDelete: SetNull)
+  receivedTimestamp DateTime
+  senderIdentity    String
+  outcome           String // INTERESTED, NEEDS_MORE_INFORMATION, REFERRED_TO_ANOTHER_CONTACT, WRONG_CONTACT, FUTURE_CYCLE, DECLINED, NO_RESPONSE, OTHER
+  summary           String
+  quotedExcerpt     String?
+  nextAction        String?
+  humanRecorderName String
+  idempotencyKey    String?                 @unique
+  createdAt         DateTime                @default(now())
+}
+
+model OutreachFollowUp {
+  id                 String             @id @default(uuid())
+  engagementId       String
+  engagement         OutreachEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  dueDateTime        DateTime
+  timeZone           String             @default("America/Los_Angeles")
+  reason             String
+  status             String             @default("PENDING") // PENDING, COMPLETED, CANCELED, OVERDUE
+  completedTimestamp DateTime?
+  notes              String?
+  humanActorName     String
+  idempotencyKey     String?            @unique
+  createdAt          DateTime           @default(now())
+}
+
+model OutreachDiscoveryCall {
+  id                String             @id @default(uuid())
+  engagementId      String
+  engagement        OutreachEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  callState         String             @default("SCHEDULED") // SCHEDULED, COMPLETED
+  callDateTime      DateTime
+  timeZone          String             @default("America/Los_Angeles")
+  participants      String[]           @default([])
+  meetingMethod     String             @default("VIDEO_CONFERENCE")
+  notes             String
+  outcome           String
+  nextAction        String
+  humanRecorderName String
+  createdAt         DateTime           @default(now())
+}
+
+model MouChecklistItem {
+  id                 String             @id @default(uuid())
+  engagementId       String
+  engagement         OutreachEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  label              String
+  status             String             @default("NOT_STARTED") // NOT_STARTED, IN_PROGRESS, COMPLETED, WAITING_ON_PARTNER
+  responsibleParty   String
+  dueDate            DateTime?
+  evidenceRef        String?
+  completedTimestamp DateTime?
+  humanActorName     String
+  createdAt          DateTime           @default(now())
+}
+
+model OutreachAttachmentRef {
+  id           String             @id @default(uuid())
+  engagementId String
+  engagement   OutreachEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  filename     String
+  mediaType    String
+  byteSize     Int?
+  sha256Hash   String?
+  storageRef   String
+  description  String?
+  createdAt    DateTime           @default(now())
 }

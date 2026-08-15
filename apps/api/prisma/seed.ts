@@ -644,20 +644,66 @@ async function main() {
     },
   });
 
-  await prisma.grantCalendarItem.upsert({
-    where: { id: 'calendar-item-cwdb-2027' },
+  // Seed DEMO Strategic Partner Candidate for Phase 1G Human-Controlled Workflow Testing
+  const demoPartner = await prisma.strategicPartnerCandidate.upsert({
+    where: { id: 'demo-strategic-partner-ca-demo' },
+    update: {
+      name: '[DEMO WORKFLOW] Southern California Regional CoC Alliance (DEMO ONLY)',
+      status: 'RESEARCH_REQUIRED',
+      countiesServed: ['Orange County', 'Los Angeles County'],
+    },
+    create: {
+      id: 'demo-strategic-partner-ca-demo',
+      name: '[DEMO WORKFLOW] Southern California Regional CoC Alliance (DEMO ONLY)',
+      legalOrganizationName: 'Demo Regional CoC Alliance',
+      organizationType: 'CONTINUUM_OF_CARE',
+      cocNumber: 'CA-DEMO',
+      websiteUrl: 'https://ceo.oc.gov/office-care-coordination',
+      officialDirectoryUrl: 'https://www.hudexchange.info/grantees/contacts/coc-ca-602',
+      geography: 'Orange County and Los Angeles County, California',
+      countiesServed: ['Orange County', 'Los Angeles County'],
+      collaborativeApplicantOrg: 'Demo Regional CoC Alliance',
+      leadAgency: 'Demo Lead Agency',
+      verifiedOfficialRole: 'CONFIRMED_COLLABORATIVE_APPLICANT',
+      applicationCoordinatedEntryRole: 'CoC Collaborative Applicant (Demo)',
+      currentCycleParticipationInfo: 'Phase 1G End-to-End Workflow Acceptance Demonstration Candidate',
+      mission: 'Demonstration partner record for Phase 1G human-controlled workflow testing.',
+      servicesOffered: ['CoC Competition Administration', 'Regional Coordinated Entry'],
+      collaborationFocus: 'End-to-end Phase 1G human-controlled workflow testing.',
+      contactChannel: 'CareCoordination@ceo.oc.gov',
+      verificationStatus: 'VERIFIED_HUMAN_REVIEWED',
+      isFixture: true,
+      hasLiveVerification: true,
+      status: 'RESEARCH_REQUIRED',
+    },
+  });
+
+  await prisma.partnerContactChannel.upsert({
+    where: { id: 'demo-contact-channel-ca-demo' },
     update: {},
     create: {
-      id: 'calendar-item-cwdb-2027',
-      opportunityTitle: 'California CWDB Reentry Pathways & High Road Training Partnership',
-      agency: 'California Labor & Workforce Development Agency / CWDB',
-      forecastedPostDate: new Date('2027-03-01T00:00:00Z'),
-      deadline: new Date('2027-05-01T00:00:00Z'),
-      priorCycleDates: ['2025-04-15', '2026-04-30'],
-      recurrenceConfidence: 'CONFIRMED_FORECAST',
-      expectedNextCyclePrepDate: new Date('2026-12-01T00:00:00Z'),
-      recurrenceEvidenceSource: 'https://cwdb.ca.gov/initiatives/hrtp/',
-      notes: 'Statewide California workforce initiative funding community-based reentry and trades education.',
+      id: 'demo-contact-channel-ca-demo',
+      strategicPartnerCandidateId: demoPartner.id,
+      contactValue: 'CareCoordination@ceo.oc.gov',
+      contactType: 'EMAIL',
+      purpose: 'CoC NOFO competition questions, application inquiries, and project submissions',
+      purposeCategory: 'GRANT_COMPETITION',
+      sourceUrl: 'https://ceo.oc.gov/fy2026cocnofo',
+      quotedCitation: '[DEMO VERIFIED CITATION] For questions related to the CoC NOFO, email CareCoordination@ceo.oc.gov.',
+      verificationStatus: 'VERIFIED_HUMAN_REVIEWED',
+    },
+  });
+
+  await prisma.outreachEngagement.upsert({
+    where: { id: 'demo-engagement-ca-demo-001' },
+    update: {},
+    create: {
+      id: 'demo-engagement-ca-demo-001',
+      strategicPartnerCandidateId: demoPartner.id,
+      fundingOpportunityId: opp1.id,
+      inquiryPurpose: 'GRANT_COMPETITION',
+      currentStatus: 'RESEARCH_REQUIRED',
+      dataOrigin: 'DEMO',
     },
   });
 
