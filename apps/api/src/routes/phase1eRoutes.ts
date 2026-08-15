@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { SponsorMatchStatus, PlanTaskStatus } from '@prisma/client';
 import { FiscalSponsorService } from '../services/fiscalSponsorService';
 import { StrategicPartnerService } from '../services/strategicPartnerService';
 import { ReadinessPlanService } from '../services/readinessPlanService';
@@ -7,9 +8,17 @@ import { OutreachBriefingService } from '../services/outreachBriefingService';
 import { SponsorDiscoveryService } from '../services/sponsorDiscoveryService';
 import { OutreachTrackingService } from '../services/outreachTrackingService';
 import { calculateSopMatchRequirement } from '../services/sopMatchCalculator';
-import { SponsorMatchStatus, RecurrenceConfidence, PlanTaskStatus } from '@prisma/client';
+import { requireRole } from '../middleware/authMiddleware';
 
 export const phase1eRouter = Router();
+
+// Enforce OPERATOR/ADMIN role on all mutating operations
+phase1eRouter.use((req, res, next) => {
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
+    return requireRole('OPERATOR', 'ADMIN')(req, res, next);
+  }
+  next();
+});
 
 // --- Phase 1G: Human-Controlled Outreach & Response Tracking ---
 
@@ -54,17 +63,17 @@ phase1eRouter.get('/outreach/timeline/:engagementId', async (req: Request, res: 
 // POST /api/outreach/drafts
 phase1eRouter.post('/outreach/drafts', async (req: Request, res: Response) => {
   try {
-    const draft = await OutreachTrackingService.saveDraftVersion(req.body);
+    const draft = await OutreachTrackingService.saveDraftVersion({ ...req.body, authenticatedUser: req.user });
     res.status(201).json({ success: true, data: draft });
   } catch (err: any) {
-    res.status(400).json({ success: false, error: err.message });
+    res.status(err.statusCode || 400).json({ success: false, error: err.message, code: err.code });
   }
 });
 
 // POST /api/outreach/approvals
 phase1eRouter.post('/outreach/approvals', async (req: Request, res: Response) => {
   try {
-    const approval = await OutreachTrackingService.approveAndFreezeDraft(req.body);
+    const approval = await OutreachTrackingService.approveAndFreezeDraft({ ...req.body, authenticatedUser: req.user });
     res.status(201).json({ success: true, data: approval });
   } catch (err: any) {
     res.status(err.statusCode || 400).json({
@@ -78,60 +87,60 @@ phase1eRouter.post('/outreach/approvals', async (req: Request, res: Response) =>
 // POST /api/outreach/sent
 phase1eRouter.post('/outreach/sent', async (req: Request, res: Response) => {
   try {
-    const delivery = await OutreachTrackingService.markOutreachAsSent(req.body);
+    const delivery = await OutreachTrackingService.markOutreachAsSent({ ...req.body, authenticatedUser: req.user });
     res.status(201).json({ success: true, data: delivery });
   } catch (err: any) {
-    res.status(err.statusCode || 400).json({ success: false, error: err.message });
+    res.status(err.statusCode || 400).json({ success: false, error: err.message, code: err.code });
   }
 });
 
 // POST /api/outreach/responses
 phase1eRouter.post('/outreach/responses', async (req: Request, res: Response) => {
   try {
-    const responseRecord = await OutreachTrackingService.recordResponse(req.body);
+    const responseRecord = await OutreachTrackingService.recordResponse({ ...req.body, authenticatedUser: req.user });
     res.status(201).json({ success: true, data: responseRecord });
   } catch (err: any) {
-    res.status(err.statusCode || 400).json({ success: false, error: err.message });
+    res.status(err.statusCode || 400).json({ success: false, error: err.message, code: err.code });
   }
 });
 
 // POST /api/outreach/follow-ups
 phase1eRouter.post('/outreach/follow-ups', async (req: Request, res: Response) => {
   try {
-    const followUp = await OutreachTrackingService.createOrUpdateFollowUp(req.body);
+    const followUp = await OutreachTrackingService.createOrUpdateFollowUp({ ...req.body, authenticatedUser: req.user });
     res.status(201).json({ success: true, data: followUp });
   } catch (err: any) {
-    res.status(400).json({ success: false, error: err.message });
+    res.status(err.statusCode || 400).json({ success: false, error: err.message, code: err.code });
   }
 });
 
 // POST /api/outreach/discovery-calls
 phase1eRouter.post('/outreach/discovery-calls', async (req: Request, res: Response) => {
   try {
-    const call = await OutreachTrackingService.recordDiscoveryCall(req.body);
+    const call = await OutreachTrackingService.recordDiscoveryCall({ ...req.body, authenticatedUser: req.user });
     res.status(201).json({ success: true, data: call });
   } catch (err: any) {
-    res.status(400).json({ success: false, error: err.message });
+    res.status(err.statusCode || 400).json({ success: false, error: err.message, code: err.code });
   }
 });
 
 // POST /api/outreach/mou-checklist
 phase1eRouter.post('/outreach/mou-checklist', async (req: Request, res: Response) => {
   try {
-    const item = await OutreachTrackingService.createOrUpdateMouChecklistItem(req.body);
+    const item = await OutreachTrackingService.createOrUpdateMouChecklistItem({ ...req.body, authenticatedUser: req.user });
     res.status(201).json({ success: true, data: item });
   } catch (err: any) {
-    res.status(400).json({ success: false, error: err.message });
+    res.status(err.statusCode || 400).json({ success: false, error: err.message, code: err.code });
   }
 });
 
 // POST /api/outreach/transitions
 phase1eRouter.post('/outreach/transitions', async (req: Request, res: Response) => {
   try {
-    const transition = await OutreachTrackingService.transitionWorkflowStatus(req.body);
+    const transition = await OutreachTrackingService.transitionWorkflowStatus({ ...req.body, authenticatedUser: req.user });
     res.json({ success: true, data: transition });
   } catch (err: any) {
-    res.status(err.statusCode || 400).json({ success: false, error: err.message });
+    res.status(err.statusCode || 400).json({ success: false, error: err.message, code: err.code });
   }
 });
 

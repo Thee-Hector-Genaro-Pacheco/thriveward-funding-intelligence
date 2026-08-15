@@ -4,17 +4,19 @@ interface OutreachWorkspaceDrawerProps {
   engagement: any;
   onClose: () => void;
   onRefresh: () => void;
+  currentUser?: { displayName: string; role: 'ADMIN' | 'OPERATOR' | 'VIEWER' } | null;
 }
 
 export const OutreachWorkspaceDrawer: React.FC<OutreachWorkspaceDrawerProps> = ({
   engagement,
   onClose,
   onRefresh,
+  currentUser,
 }) => {
   const [activeTab, setActiveTab] = useState<'DRAFTS' | 'EVIDENCE' | 'RESPONSES' | 'DISCOVERY_MOU' | 'HISTORY'>('DRAFTS');
 
-  // Human Attribution & Forms State
-  const [humanActorName, setHumanActorName] = useState<string>('Hector Pacheco (Operator)');
+  // Human Attribution & Forms State (Server-authoritative authenticated user)
+  const humanActorName = currentUser?.displayName || 'Hector Pacheco';
 
   // Draft Creation Form
   const [newDraftSubject, setNewDraftSubject] = useState<string>(engagement.draftVersions?.[0]?.subject || '');
@@ -369,16 +371,13 @@ export const OutreachWorkspaceDrawer: React.FC<OutreachWorkspaceDrawerProps> = (
           </div>
         )}
 
-        {/* Human Attribution Input Bar */}
+        {/* Human Attribution Read-Only Verified Bar */}
         <div style={{ padding: '0.75rem 1.5rem', background: 'rgba(30, 41, 59, 0.6)', borderBottom: '1px solid rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
-          <label style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 600 }}>👤 Operator Attribution:</label>
-          <input
-            type="text"
-            value={humanActorName}
-            onChange={(e) => setHumanActorName(e.target.value)}
-            placeholder="Your Name (Human Operator)"
-            style={{ background: '#0f172a', border: '1px solid var(--border-color)', color: '#f8fafc', padding: '0.35rem 0.65rem', borderRadius: '0.35rem', fontSize: '0.85rem', flex: 1, minWidth: '220px' }}
-          />
+          <label style={{ fontSize: '0.8rem', color: '#94a3b8', fontWeight: 600 }}>👤 Authenticated Human Operator:</label>
+          <div style={{ background: '#0f172a', border: '1px solid #334155', color: '#38bdf8', padding: '0.35rem 0.75rem', borderRadius: '0.35rem', fontSize: '0.85rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            <span>🔒</span>
+            <span>{humanActorName} ({currentUser?.role || 'OPERATOR'})</span>
+          </div>
         </div>
 
         {/* Server-Authoritative Status Progression Banner */}

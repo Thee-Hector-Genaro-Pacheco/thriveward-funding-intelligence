@@ -67,6 +67,7 @@ describe('Phase 1D — Runtime Contract, Proxy & Migration Audit Suite', () => {
   // --- Suite 3: Non-Actionable Qualification & Lock Action Guards ---
   describe('3. Non-Actionable Qualification & Lock Guards', () => {
     it('returns HTTP 400 when attempting to mark a non-actionable (DISMISSED/routed) opportunity as QUALIFIED', async () => {
+      await prisma.fundingOpportunity.deleteMany({ where: { externalOpportunityId: 'test-runtime-guard-001' } });
       const opp = await prisma.fundingOpportunity.create({
         data: {
           fundingOpportunityNumber: 'TEST-RUNTIME-GUARD-001',

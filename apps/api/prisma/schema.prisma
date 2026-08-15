@@ -785,6 +785,53 @@ model OutreachEngagement {
   @@unique([strategicPartnerCandidateId, fundingOpportunityId, inquiryPurpose])
 }
 
+// --- Phase 1H: Closed Internal Authentication, RBAC, and Security Audit Models ---
+
+model User {
+  id                 String    @id @default(uuid())
+  email              String    @unique
+  displayName        String
+  passwordHash       String
+  role               String    @default("OPERATOR") // ADMIN, OPERATOR, VIEWER
+  accountState       String    @default("ACTIVE") // ACTIVE, DISABLED
+  mustChangePassword Boolean   @default(false)
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  lastLoginAt        DateTime?
+
+  sessions               UserSession[]
+  securityEvents         SecurityAuditEvent[]
+  outreachDraftVersions  OutreachDraftVersion[]
+  outreachHumanApprovals OutreachHumanApproval[]
+  outreachDeliveries     OutreachDeliveryRecord[]
+  outreachHistories      OutreachWorkflowHistory[]
+  outreachResponses      OutreachResponseRecord[]
+  outreachFollowUps      OutreachFollowUp[]
+  mouChecklistItems      MouChecklistItem[]
+}
+
+model UserSession {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionHash String    @unique
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime
+  lastSeenAt  DateTime  @default(now())
+  revokedAt   DateTime?
+}
+
+model SecurityAuditEvent {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  eventType String // LOGIN_SUCCESS, LOGIN_FAILURE, LOGOUT, PASSWORD_CHANGE, USER_CREATION, ROLE_CHANGE, USER_STATE_CHANGE, SESSION_REVOCATION
+  ipAddress String?
+  userAgent String?
+  details   String? // JSON string (NO secrets/passwords/tokens!)
+  timestamp DateTime @default(now())
+}
+
 model OutreachDraftVersion {
   id                     String             @id @default(uuid())
   engagementId           String
@@ -801,6 +848,8 @@ model OutreachDraftVersion {
   orgProfileHash         String?
   opportunityAnalysisRef String?
   creatorActorName       String             @default("Bridge AI Agent")
+  creatorUserId          String?
+  creatorUser            User?              @relation(fields: [creatorUserId], references: [id], onDelete: SetNull)
   createdAt              DateTime           @default(now())
 
   approvals OutreachHumanApproval[]
@@ -836,6 +885,8 @@ model OutreachHumanApproval {
   evidenceSnapshotId  String?
   evidenceSnapshot    ContactEvidenceSnapshot? @relation(fields: [evidenceSnapshotId], references: [id], onDelete: SetNull)
   humanReviewerName   String
+  authenticatedUserId String?
+  authenticatedUser   User?                    @relation(fields: [authenticatedUserId], references: [id], onDelete: SetNull)
   approvalTimestamp   DateTime                 @default(now())
   approvalReason      String
   approvedContentHash String
@@ -851,6 +902,8 @@ model OutreachDeliveryRecord {
   channel                String             @default("EMAIL")
   sentTimestamp          DateTime
   humanActorName         String
+  authenticatedUserId    String?
+  authenticatedUser      User?              @relation(fields: [authenticatedUserId], references: [id], onDelete: SetNull)
   exactSubject           String
   exactBodyHash          String
   notes                  String?
@@ -861,50 +914,57 @@ model OutreachDeliveryRecord {
 }
 
 model OutreachWorkflowHistory {
-  id              String             @id @default(uuid())
-  engagementId    String
-  engagement      OutreachEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
-  previousStatus  String
-  newStatus       String
-  actorType       String             @default("HUMAN")
-  humanActorName  String
-  eventType       String             @default("WORKFLOW_TRANSITION")
-  timestamp       DateTime           @default(now())
-  reason          String
-  relatedRecordId String?
-  eventHash       String
+  id                  String             @id @default(uuid())
+  engagementId        String
+  engagement          OutreachEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  previousStatus      String
+  newStatus           String
+  actorType           String             @default("HUMAN")
+  humanActorName      String
+  authenticatedUserId String?
+  authenticatedUser   User?              @relation(fields: [authenticatedUserId], references: [id], onDelete: SetNull)
+  actorRole           String?
+  eventType           String             @default("WORKFLOW_TRANSITION")
+  timestamp           DateTime           @default(now())
+  reason              String
+  relatedRecordId     String?
+  eventHash           String
 }
 
 model OutreachResponseRecord {
-  id                String                  @id @default(uuid())
-  engagementId      String
-  engagement        OutreachEngagement      @relation(fields: [engagementId], references: [id], onDelete: Cascade)
-  deliveryRecordId  String?
-  deliveryRecord    OutreachDeliveryRecord? @relation(fields: [deliveryRecordId], references: [id], onDelete: SetNull)
-  receivedTimestamp DateTime
-  senderIdentity    String
-  outcome           String // INTERESTED, NEEDS_MORE_INFORMATION, REFERRED_TO_ANOTHER_CONTACT, WRONG_CONTACT, FUTURE_CYCLE, DECLINED, NO_RESPONSE, OTHER
-  summary           String
-  quotedExcerpt     String?
-  nextAction        String?
-  humanRecorderName String
-  idempotencyKey    String?                 @unique
-  createdAt         DateTime                @default(now())
+  id                  String                  @id @default(uuid())
+  engagementId        String
+  engagement          OutreachEngagement      @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  deliveryRecordId    String?
+  deliveryRecord      OutreachDeliveryRecord? @relation(fields: [deliveryRecordId], references: [id], onDelete: SetNull)
+  receivedTimestamp   DateTime
+  senderIdentity      String
+  outcome             String // INTERESTED, NEEDS_MORE_INFORMATION, REFERRED_TO_ANOTHER_CONTACT, WRONG_CONTACT, FUTURE_CYCLE, DECLINED, NO_RESPONSE, OTHER
+  summary             String
+  quotedExcerpt       String?
+  nextAction          String?
+  humanRecorderName   String
+  humanRecorderUserId String?
+  humanRecorderUser   User?                   @relation(fields: [humanRecorderUserId], references: [id], onDelete: SetNull)
+  idempotencyKey      String?                 @unique
+  createdAt           DateTime                @default(now())
 }
 
 model OutreachFollowUp {
-  id                 String             @id @default(uuid())
-  engagementId       String
-  engagement         OutreachEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
-  dueDateTime        DateTime
-  timeZone           String             @default("America/Los_Angeles")
-  reason             String
-  status             String             @default("PENDING") // PENDING, COMPLETED, CANCELED, OVERDUE
-  completedTimestamp DateTime?
-  notes              String?
-  humanActorName     String
-  idempotencyKey     String?            @unique
-  createdAt          DateTime           @default(now())
+  id                  String             @id @default(uuid())
+  engagementId        String
+  engagement          OutreachEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  dueDateTime         DateTime
+  timeZone            String             @default("America/Los_Angeles")
+  reason              String
+  status              String             @default("PENDING") // PENDING, COMPLETED, CANCELED, OVERDUE
+  completedTimestamp  DateTime?
+  notes               String?
+  humanActorName      String
+  authenticatedUserId String?
+  authenticatedUser   User?              @relation(fields: [authenticatedUserId], references: [id], onDelete: SetNull)
+  idempotencyKey      String?            @unique
+  createdAt           DateTime           @default(now())
 }
 
 model OutreachDiscoveryCall {
@@ -924,17 +984,19 @@ model OutreachDiscoveryCall {
 }
 
 model MouChecklistItem {
-  id                 String             @id @default(uuid())
-  engagementId       String
-  engagement         OutreachEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
-  label              String
-  status             String             @default("NOT_STARTED") // NOT_STARTED, IN_PROGRESS, COMPLETED, WAITING_ON_PARTNER
-  responsibleParty   String
-  dueDate            DateTime?
-  evidenceRef        String?
-  completedTimestamp DateTime?
-  humanActorName     String
-  createdAt          DateTime           @default(now())
+  id                  String             @id @default(uuid())
+  engagementId        String
+  engagement          OutreachEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
+  label               String
+  status              String             @default("NOT_STARTED") // NOT_STARTED, IN_PROGRESS, COMPLETED, WAITING_ON_PARTNER
+  responsibleParty    String
+  dueDate             DateTime?
+  evidenceRef         String?
+  completedTimestamp  DateTime?
+  humanActorName      String
+  authenticatedUserId String?
+  authenticatedUser   User?              @relation(fields: [authenticatedUserId], references: [id], onDelete: SetNull)
+  createdAt           DateTime           @default(now())
 }
 
 model OutreachAttachmentRef {

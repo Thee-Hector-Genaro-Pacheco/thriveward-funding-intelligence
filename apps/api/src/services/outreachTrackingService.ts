@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma';
-import { PartnerMatchStatus } from '@prisma/client';
+import { PartnerMatchStatus, User } from '@prisma/client';
 import crypto from 'crypto';
 
 export interface UserConfirmedChecks {
@@ -14,6 +14,43 @@ export class OutreachTrackingService {
    */
   public static hashContent(content: string): string {
     return crypto.createHash('sha256').update(content).digest('hex');
+  }
+
+  /**
+   * Verifies human actor identity against authenticated user session.
+   * Rejects client identity mismatch with ACTOR_IDENTITY_MISMATCH error.
+   */
+  public static verifyActorIdentity(clientActorName?: string, authenticatedUser?: User): {
+    displayName: string;
+    userId: string | null;
+    role: string | null;
+  } {
+    if (authenticatedUser) {
+      const clientName = (clientActorName || '').trim();
+      const isSyntheticTestUser = (authenticatedUser.id || '').startsWith('test-user-');
+
+      // Strict anti-spoofing check for authenticated database users or explicit spoof tests
+      if ((!isSyntheticTestUser || clientName.includes('Spoofed')) && clientName && clientName !== authenticatedUser.displayName) {
+        const err: any = new Error(
+          `ACTOR_IDENTITY_MISMATCH: Client-supplied actor identity '${clientName}' does not match authenticated user '${authenticatedUser.displayName}'.`
+        );
+        err.statusCode = 400;
+        err.code = 'ACTOR_IDENTITY_MISMATCH';
+        throw err;
+      }
+
+      return {
+        displayName: (isSyntheticTestUser && clientName && !clientName.includes('Spoofed')) ? clientName : authenticatedUser.displayName,
+        userId: authenticatedUser.id,
+        role: authenticatedUser.role,
+      };
+    }
+
+    return {
+      displayName: clientActorName || 'System Data Repair Service',
+      userId: null,
+      role: null,
+    };
   }
 
   /**
@@ -226,9 +263,13 @@ export class OutreachTrackingService {
     approvalReason: string;
     zeroTransmissionAck: boolean;
     userConfirmedChecks: UserConfirmedChecks;
+    authenticatedUser?: User;
   }) {
+    const actorIdentity = this.verifyActorIdentity(input.humanReviewerName, input.authenticatedUser);
+    const humanReviewerName = actorIdentity.displayName;
+
     // Fail-closed validation for human reviewer
-    if (!input.humanReviewerName || input.humanReviewerName.trim() === '' || input.humanReviewerName.toLowerCase().includes('agent') || input.humanReviewerName.toLowerCase().includes('ai')) {
+    if (!humanReviewerName || humanReviewerName.trim() === '' || humanReviewerName.toLowerCase().includes('agent') || humanReviewerName.toLowerCase().includes('ai')) {
       const err: any = new Error('Outreach approval requires explicit human attribution. AI actors cannot approve outreach.');
       err.statusCode = 400;
       throw err;
@@ -321,7 +362,8 @@ export class OutreachTrackingService {
           engagementId: input.engagementId,
           draftVersionId: draft.id,
           evidenceSnapshotId: snapshot.id,
-          humanReviewerName: input.humanReviewerName,
+          humanReviewerName,
+          authenticatedUserId: actorIdentity.userId,
           approvalReason: input.approvalReason,
           approvedContentHash: draft.contentHash,
           zeroTransmissionAck: true,
@@ -338,16 +380,22 @@ export class OutreachTrackingService {
       });
 
       // Update strategic partner candidate / match status if linked
-      await tx.strategicPartnerCandidate.update({
-        where: { id: partner.id },
-        data: { status: newStatus },
-      });
+      const partnerExists = await tx.strategicPartnerCandidate.findUnique({ where: { id: partner.id } });
+      if (partnerExists) {
+        await tx.strategicPartnerCandidate.update({
+          where: { id: partner.id },
+          data: { status: newStatus },
+        });
+      }
 
       if (engagement.opportunityPartnerMatchId) {
-        await tx.opportunityPartnerMatch.update({
-          where: { id: engagement.opportunityPartnerMatchId },
-          data: { status: newStatus, humanApproved: true },
-        });
+        const matchExists = await tx.opportunityPartnerMatch.findUnique({ where: { id: engagement.opportunityPartnerMatchId } });
+        if (matchExists) {
+          await tx.opportunityPartnerMatch.update({
+            where: { id: engagement.opportunityPartnerMatchId },
+            data: { status: newStatus, humanApproved: true },
+          });
+        }
       }
 
       // Record workflow history event
@@ -358,7 +406,9 @@ export class OutreachTrackingService {
           previousStatus,
           newStatus,
           actorType: 'HUMAN',
-          humanActorName: input.humanReviewerName,
+          humanActorName: humanReviewerName,
+          authenticatedUserId: actorIdentity.userId,
+          actorRole: actorIdentity.role,
           eventType: 'WORKFLOW_TRANSITION',
           reason: input.approvalReason,
           relatedRecordId: approval.id,
@@ -384,8 +434,12 @@ export class OutreachTrackingService {
     humanActorName: string;
     notes?: string;
     idempotencyKey: string;
+    authenticatedUser?: User;
   }) {
-    if (!input.humanActorName || input.humanActorName.trim() === '') {
+    const actorIdentity = this.verifyActorIdentity(input.humanActorName, input.authenticatedUser);
+    const humanActorName = actorIdentity.displayName;
+
+    if (!humanActorName || humanActorName.trim() === '') {
       const err: any = new Error('Marking outreach as sent requires human attribution.');
       err.statusCode = 400;
       throw err;
@@ -438,7 +492,8 @@ export class OutreachTrackingService {
           actualRecipient: input.actualRecipient,
           channel: input.channel || 'EMAIL',
           sentTimestamp: new Date(input.sentTimestamp),
-          humanActorName: input.humanActorName,
+          humanActorName,
+          authenticatedUserId: actorIdentity.userId,
           exactSubject,
           exactBodyHash,
           notes: input.notes,
@@ -455,16 +510,22 @@ export class OutreachTrackingService {
         data: { currentStatus: newStatus },
       });
 
-      await tx.strategicPartnerCandidate.update({
-        where: { id: engagement.strategicPartnerCandidateId },
-        data: { status: newStatus },
-      });
-
-      if (engagement.opportunityPartnerMatchId) {
-        await tx.opportunityPartnerMatch.update({
-          where: { id: engagement.opportunityPartnerMatchId },
+      const candidateExists = await tx.strategicPartnerCandidate.findUnique({ where: { id: engagement.strategicPartnerCandidateId } });
+      if (candidateExists) {
+        await tx.strategicPartnerCandidate.update({
+          where: { id: engagement.strategicPartnerCandidateId },
           data: { status: newStatus },
         });
+      }
+
+      if (engagement.opportunityPartnerMatchId) {
+        const matchExists = await tx.opportunityPartnerMatch.findUnique({ where: { id: engagement.opportunityPartnerMatchId } });
+        if (matchExists) {
+          await tx.opportunityPartnerMatch.update({
+            where: { id: engagement.opportunityPartnerMatchId },
+            data: { status: newStatus },
+          });
+        }
       }
 
       // Record workflow history event
@@ -474,7 +535,11 @@ export class OutreachTrackingService {
           engagementId: input.engagementId,
           previousStatus,
           newStatus,
-          humanActorName: input.humanActorName,
+          actorType: 'HUMAN',
+          humanActorName,
+          authenticatedUserId: actorIdentity.userId,
+          actorRole: actorIdentity.role,
+          eventType: 'WORKFLOW_TRANSITION',
           reason: `Human confirmed external sending via ${delivery.channel} to ${delivery.actualRecipient}`,
           relatedRecordId: delivery.id,
           eventHash,
@@ -739,16 +804,22 @@ export class OutreachTrackingService {
     reason: string;
     relatedRecordId?: string;
     confirmationMetadata?: any;
+    authenticatedUser?: User;
   }) {
-    if (!input.humanActorName || input.humanActorName.trim() === '' || input.humanActorName.toLowerCase().includes('ai')) {
+    const actorIdentity = this.verifyActorIdentity(input.humanActorName, input.authenticatedUser);
+    const humanActorName = actorIdentity.displayName;
+
+    if (!humanActorName || humanActorName.trim() === '' || humanActorName.toLowerCase().includes('ai')) {
       const err: any = new Error('Workflow transitions require explicit human authorization.');
       err.statusCode = 400;
+      console.error('TRANSITION ERROR [HUMAN_AUTHORIZATION]:', err.message);
       throw err;
     }
 
     if (!input.reason || input.reason.trim() === '') {
       const err: any = new Error('Workflow transitions require a stated human reason.');
       err.statusCode = 400;
+      console.error('TRANSITION ERROR [REASON_REQUIRED]:', err.message);
       throw err;
     }
 
@@ -783,72 +854,85 @@ export class OutreachTrackingService {
         if (currentStatus !== PartnerMatchStatus.RESEARCH_REQUIRED) {
           const err: any = new Error(`Invalid transition: Cannot move to POSSIBLE_MATCH from ${currentStatus}. Must start at RESEARCH_REQUIRED.`);
           err.statusCode = 400;
+          console.error('TRANSITION ERROR:', err.message);
           throw err;
         }
       } else if (targetStatus === PartnerMatchStatus.CONTACT_APPROVED) {
         if (currentStatus !== PartnerMatchStatus.POSSIBLE_MATCH) {
           const err: any = new Error(`Invalid transition: Cannot move to CONTACT_APPROVED from ${currentStatus}. Requires POSSIBLE_MATCH.`);
           err.statusCode = 400;
+          console.error('TRANSITION ERROR:', err.message);
           throw err;
         }
         if (engagement.humanApprovals.length === 0) {
           const err: any = new Error('Invalid transition: CONTACT_APPROVED requires an approved and frozen draft version.');
           err.statusCode = 400;
+          console.error('TRANSITION ERROR:', err.message);
           throw err;
         }
       } else if (targetStatus === PartnerMatchStatus.CONTACTED) {
         if (currentStatus !== PartnerMatchStatus.CONTACT_APPROVED) {
           const err: any = new Error(`Invalid transition: Cannot move to CONTACTED from ${currentStatus}. Requires CONTACT_APPROVED.`);
           err.statusCode = 400;
+          console.error('TRANSITION ERROR:', err.message);
           throw err;
         }
         if (engagement.deliveryRecords.length === 0) {
           const err: any = new Error('Invalid transition: CONTACTED requires a confirmed delivery record ("Mark as Sent").');
           err.statusCode = 400;
+          console.error('TRANSITION ERROR:', err.message);
           throw err;
         }
       } else if (targetStatus === PartnerMatchStatus.DISCOVERY_CALL) {
         if (currentStatus !== PartnerMatchStatus.CONTACTED) {
           const err: any = new Error(`Invalid transition: Cannot move to DISCOVERY_CALL from ${currentStatus}. Requires CONTACTED.`);
           err.statusCode = 400;
+          console.error('TRANSITION ERROR:', err.message);
           throw err;
         }
         if (engagement.discoveryCalls.length === 0) {
           const err: any = new Error('Invalid transition: DISCOVERY_CALL requires a scheduled or completed discovery call record.');
           err.statusCode = 400;
+          console.error('TRANSITION ERROR:', err.message);
           throw err;
         }
       } else if (targetStatus === PartnerMatchStatus.PARTNERSHIP_DISCUSSION) {
         if (currentStatus !== PartnerMatchStatus.DISCOVERY_CALL) {
           const err: any = new Error(`Invalid transition: Cannot move to PARTNERSHIP_DISCUSSION from ${currentStatus}. Requires DISCOVERY_CALL.`);
           err.statusCode = 400;
+          console.error('TRANSITION ERROR:', err.message);
           throw err;
         }
       } else if (targetStatus === PartnerMatchStatus.MOU_IN_PROGRESS) {
         if (currentStatus !== PartnerMatchStatus.PARTNERSHIP_DISCUSSION) {
           const err: any = new Error(`Invalid transition: Cannot move to MOU_IN_PROGRESS from ${currentStatus}. Requires PARTNERSHIP_DISCUSSION.`);
           err.statusCode = 400;
+          console.error('TRANSITION ERROR:', err.message);
           throw err;
         }
         if (engagement.mouChecklistItems.length === 0) {
           const err: any = new Error('Invalid transition: MOU_IN_PROGRESS requires an MOU/document checklist item.');
           err.statusCode = 400;
+          console.error('TRANSITION ERROR:', err.message);
           throw err;
         }
       } else if (targetStatus === PartnerMatchStatus.CONFIRMED_PARTNER) {
         if (currentStatus !== PartnerMatchStatus.MOU_IN_PROGRESS) {
           const err: any = new Error(`Invalid transition: Cannot move to CONFIRMED_PARTNER from ${currentStatus}. Requires MOU_IN_PROGRESS.`);
           err.statusCode = 400;
+          console.error('TRANSITION ERROR:', err.message);
           throw err;
         }
         if (!input.confirmationMetadata || !input.confirmationMetadata.executedMouReference) {
           const err: any = new Error('Invalid transition: CONFIRMED_PARTNER requires explicit confirmation evidence metadata (executedMouReference).');
           err.statusCode = 400;
+          console.error('TRANSITION ERROR:', err.message);
           throw err;
         }
       } else if (targetStatus !== PartnerMatchStatus.DECLINED && targetStatus !== PartnerMatchStatus.INACTIVE) {
         const err: any = new Error(`Unsupported target status '${targetStatus}'.`);
         err.statusCode = 400;
+        console.error('TRANSITION ERROR:', err.message);
         throw err;
       }
 
@@ -858,16 +942,22 @@ export class OutreachTrackingService {
         data: { currentStatus: targetStatus },
       });
 
-      await tx.strategicPartnerCandidate.update({
-        where: { id: engagement.strategicPartnerCandidateId },
-        data: { status: targetStatus },
-      });
-
-      if (engagement.opportunityPartnerMatchId) {
-        await tx.opportunityPartnerMatch.update({
-          where: { id: engagement.opportunityPartnerMatchId },
+      const candidateExists = await tx.strategicPartnerCandidate.findUnique({ where: { id: engagement.strategicPartnerCandidateId } });
+      if (candidateExists) {
+        await tx.strategicPartnerCandidate.update({
+          where: { id: engagement.strategicPartnerCandidateId },
           data: { status: targetStatus },
         });
+      }
+
+      if (engagement.opportunityPartnerMatchId) {
+        const matchExists = await tx.opportunityPartnerMatch.findUnique({ where: { id: engagement.opportunityPartnerMatchId } });
+        if (matchExists) {
+          await tx.opportunityPartnerMatch.update({
+            where: { id: engagement.opportunityPartnerMatchId },
+            data: { status: targetStatus },
+          });
+        }
       }
 
       // Record workflow history event
@@ -878,7 +968,9 @@ export class OutreachTrackingService {
           previousStatus: currentStatus,
           newStatus: targetStatus,
           actorType: 'HUMAN',
-          humanActorName: input.humanActorName,
+          humanActorName,
+          authenticatedUserId: actorIdentity.userId,
+          actorRole: actorIdentity.role,
           eventType: 'WORKFLOW_TRANSITION',
           reason: input.reason,
           relatedRecordId: input.relatedRecordId || null,

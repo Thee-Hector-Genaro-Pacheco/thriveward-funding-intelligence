@@ -2,6 +2,10 @@ import React, { useState, useEffect } from 'react';
 import './index.css';
 import { BRIDGE_FORWARD_PROFILE, formatRelevanceStatusLabel } from '@bridge-ai/shared';
 import { OutreachWorkspaceDrawer } from './components/OutreachWorkspaceDrawer';
+import { LoginModal } from './components/LoginModal';
+import { UserHeaderBadge } from './components/UserHeaderBadge';
+import { ChangePasswordModal } from './components/ChangePasswordModal';
+import { AdminUserManagementModal } from './components/AdminUserManagementModal';
 
 const formatEligibilityText = (val: string | undefined | null) => {
   if (!val) return 'UNKNOWN';
@@ -242,6 +246,50 @@ function cleanReason(reason?: string | null): string {
 }
 
 export function App() {
+  // Authentication State
+  const [currentUser, setCurrentUser] = useState<any | null>(null);
+  const [authChecked, setAuthChecked] = useState<boolean>(false);
+  const [showChangePasswordModal, setShowChangePasswordModal] = useState<boolean>(false);
+  const [showAdminUsersModal, setShowAdminUsersModal] = useState<boolean>(false);
+
+  const fetchCurrentUser = async () => {
+    try {
+      const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.user) {
+          setCurrentUser(data.user);
+        } else {
+          setCurrentUser(null);
+        }
+      } else {
+        setCurrentUser(null);
+      }
+    } catch (err) {
+      setCurrentUser(null);
+    } finally {
+      setAuthChecked(true);
+    }
+  };
+
+  useEffect(() => {
+    fetchCurrentUser();
+  }, []);
+
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: { 'X-Bridge-CSRF': '1' },
+        credentials: 'same-origin',
+      });
+    } catch (err) {
+      console.error('Logout error:', err);
+    } finally {
+      setCurrentUser(null);
+    }
+  };
+
   const [activePrimaryTab, setActivePrimaryTab] = useState<'OPPORTUNITIES' | 'SPONSORS' | 'PARTNERS' | 'READINESS' | 'CALENDAR'>('OPPORTUNITIES');
 
   const [opportunities, setOpportunities] = useState<FundingOpportunity[]>([]);
@@ -740,12 +788,22 @@ export function App() {
   return (
     <div className="container">
       {/* Header */}
-      <header>
-        <div className="header-badge">Phase 1E • Fiscal Sponsor, Strategic Partner Discovery & Funding Readiness Active</div>
-        <h1 className="brand-title">Bridge AI</h1>
-        <p className="brand-subtitle">
-          Funding Intelligence & Grant Readiness Platform for Project Thriveward
-        </p>
+      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
+        <div>
+          <div className="header-badge">Phase 1H • Secure Authentication, RBAC & Verified Human Attribution</div>
+          <h1 className="brand-title">Bridge AI</h1>
+          <p className="brand-subtitle">
+            Funding Intelligence & Grant Readiness Platform for Project Thriveward
+          </p>
+        </div>
+        {currentUser && (
+          <UserHeaderBadge
+            user={currentUser}
+            onLogout={handleLogout}
+            onChangePassword={() => setShowChangePasswordModal(true)}
+            onOpenAdminUsers={() => setShowAdminUsersModal(true)}
+          />
+        )}
       </header>
 
       {/* Core Principle Banner */}
@@ -1984,7 +2042,30 @@ export function App() {
         </div>
       )}
 
-      {/* Phase 1G Outreach Workspace & History Drawer */}
+      {/* Unauthenticated Login Screen Modal */}
+      {authChecked && !currentUser && (
+        <LoginModal onLoginSuccess={(user) => {
+          setCurrentUser(user);
+        }} />
+      )}
+
+      {/* Change Password Modal */}
+      {showChangePasswordModal && (
+        <ChangePasswordModal
+          onClose={() => setShowChangePasswordModal(false)}
+          onSuccess={() => {
+            setShowChangePasswordModal(false);
+            setActionMessage('Password changed successfully.');
+          }}
+        />
+      )}
+
+      {/* Admin User Management Modal */}
+      {showAdminUsersModal && (
+        <AdminUserManagementModal onClose={() => setShowAdminUsersModal(false)} />
+      )}
+
+      {/* Phase 1G Outreach Workspace Drawer */}
       {outreachEngagement && (
         <OutreachWorkspaceDrawer
           engagement={outreachEngagement}

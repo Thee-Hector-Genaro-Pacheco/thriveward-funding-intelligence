@@ -46,6 +46,10 @@ describe('Phase 1G — Human-Controlled Outreach & Response Tracking Complete Su
     await prisma.mouChecklistItem.deleteMany({ where: { engagementId: demoEngagementId } });
     await prisma.outreachWorkflowHistory.deleteMany({ where: { engagementId: demoEngagementId } });
     await prisma.outreachDraftVersion.deleteMany({ where: { engagementId: demoEngagementId } });
+    await prisma.strategicPartnerCandidate.update({
+      where: { id: demoPartnerId },
+      data: { status: PartnerMatchStatus.RESEARCH_REQUIRED },
+    });
     await prisma.outreachEngagement.update({
       where: { id: demoEngagementId },
       data: { currentStatus: PartnerMatchStatus.RESEARCH_REQUIRED },
@@ -107,8 +111,13 @@ describe('Phase 1G — Human-Controlled Outreach & Response Tracking Complete Su
           targetStatus: 'POSSIBLE_MATCH',
           humanActorName: 'Hector Pacheco',
           reason: 'Verified regional CoC partnership candidacy.',
-        })
-        .expect(200);
+        });
+
+      if (res.status !== 200) {
+        throw new Error(`TEST 4 FAILED WITH STATUS ${res.status}: ${JSON.stringify(res.body)}`);
+      }
+
+      expect(res.body.success).toBe(true);
 
       expect(res.body.success).toBe(true);
       expect(res.body.data.currentStatus).toBe(PartnerMatchStatus.POSSIBLE_MATCH);
@@ -211,8 +220,11 @@ describe('Phase 1G — Human-Controlled Outreach & Response Tracking Complete Su
           approvalReason: 'Verified recipient and approved positioning.',
           zeroTransmissionAck: true,
           userConfirmedChecks: { recipientReviewed: true, contentReviewed: true, evidenceVerified: true },
-        })
-        .expect(201);
+        });
+
+      if (res.status !== 201) {
+        throw new Error(`APPROVAL FAILED WITH STATUS ${res.status}: ${JSON.stringify(res.body)}`);
+      }
 
       expect(res.body.success).toBe(true);
       expect(res.body.data.approvedContentHash).toBeDefined();

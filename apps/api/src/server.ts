@@ -1,11 +1,15 @@
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
+import cookieParser from 'cookie-parser';
 import dotenv from 'dotenv';
 import { execSync } from 'child_process';
 import path from 'path';
 import { healthRouter } from './routes/health';
 import { opportunitiesRouter } from './routes/opportunities';
 import { phase1eRouter } from './routes/phase1eRoutes';
+import { authRouter } from './routes/authRoutes';
+import { adminUserRouter } from './routes/adminUserRoutes';
+import { requireAuth, csrfProtection } from './middleware/authMiddleware';
 import { BRIDGE_FORWARD_PROFILE } from '@bridge-ai/shared';
 
 dotenv.config();
@@ -13,17 +17,28 @@ dotenv.config();
 const app: Express = express();
 const PORT = process.env.PORT || 4000;
 
-app.use(cors());
+app.use(cors({
+  credentials: true,
+  origin: true,
+}));
+app.use(cookieParser());
 app.use(express.json());
 
-// Routes
+// Anti-CSRF protection for mutating requests
+app.use(csrfProtection);
+
+// Public Routes (No Auth Required)
 app.use('/health', healthRouter);
 app.use('/api/health', healthRouter);
-app.use('/api/opportunities', opportunitiesRouter);
-app.use('/api', phase1eRouter);
+app.use('/api/auth', authRouter);
 
-// Organization profile route
-app.get('/api/profile', (req: Request, res: Response) => {
+// Protected Routes (Require Valid Authenticated Session)
+app.use('/api/admin/users', adminUserRouter);
+app.use('/api/opportunities', requireAuth, opportunitiesRouter);
+app.use('/api', requireAuth, phase1eRouter);
+
+// Organization profile route (Protected)
+app.get('/api/profile', requireAuth, (req: Request, res: Response) => {
   res.json(BRIDGE_FORWARD_PROFILE);
 });
 
