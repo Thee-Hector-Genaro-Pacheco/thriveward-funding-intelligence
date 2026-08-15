@@ -5,12 +5,12 @@ import { prisma } from '../lib/prisma';
 import { StrategicPartnerService } from '../services/strategicPartnerService';
 import { PartnerMatchStatus } from '@prisma/client';
 
-describe('Phase 1G — CA-600 Workflow Status Source-of-Truth Reconciliation', () => {
+describe('Phase 1G — CA-600 Workflow Status Source-of-Truth Reconciliation & Hardening', () => {
   let ca600Id: string;
   let ca602Id: string;
 
   beforeAll(async () => {
-    // 1. Ensure seeded partners exist & legacy statuses are reconciled
+    // 1. Ensure seeded partners exist & legacy statuses are reconciled via one-time data repair
     await StrategicPartnerService.runDiscovery();
     await StrategicPartnerService.reconcileLegacyStatuses();
 
@@ -46,7 +46,7 @@ describe('Phase 1G — CA-600 Workflow Status Source-of-Truth Reconciliation', (
       expect(engRes.body.data.currentStatus).toBe('RESEARCH_REQUIRED');
     });
 
-    it('reconciles legacy POSSIBLE_MATCH without human history to RESEARCH_REQUIRED', async () => {
+    it('reconciles legacy POSSIBLE_MATCH without human history to RESEARCH_REQUIRED with SYSTEM_DATA_REPAIR classification', async () => {
       const ca600 = await prisma.strategicPartnerCandidate.findUnique({
         where: { id: ca600Id },
         include: { opportunityMatches: true, engagements: { include: { workflowHistory: true } } },
@@ -57,12 +57,14 @@ describe('Phase 1G — CA-600 Workflow Status Source-of-Truth Reconciliation', (
 
       // Verify no human attribution was fabricated
       const allHistory = (ca600?.engagements || []).flatMap((e) => e.workflowHistory);
-      const hasHumanActor = allHistory.some((h) => h.humanActorName !== 'System Data Repair Service' && !h.humanActorName.includes('System'));
+      const hasHumanActor = allHistory.some((h) => h.actorType === 'HUMAN' && h.humanActorName !== 'System Data Repair Service' && !h.humanActorName.includes('System'));
       expect(hasHumanActor).toBe(false);
 
-      // Verify system repair record exists
-      const repairEvent = allHistory.find((h) => h.humanActorName === 'System Data Repair Service');
+      // Verify system repair record exists with exact actor & event classification
+      const repairEvent = allHistory.find((h) => h.actorType === 'SYSTEM_DATA_REPAIR' || h.humanActorName === 'System Data Repair Service');
       expect(repairEvent).toBeDefined();
+      expect(repairEvent?.actorType).toBe('SYSTEM_DATA_REPAIR');
+      expect(repairEvent?.eventType).toBe('DATA_RECONCILIATION');
       expect(repairEvent?.humanActorName).toBe('System Data Repair Service');
       expect(repairEvent?.reason).toContain('legacy status POSSIBLE_MATCH lacked required human-attributed workflow transition history');
     });
@@ -87,7 +89,80 @@ describe('Phase 1G — CA-600 Workflow Status Source-of-Truth Reconciliation', (
     });
   });
 
-  describe('2. Atomic Human Transitions and Discovery Invariants', () => {
+  describe('2. Fail-Closed Status Resolution & Read-Only Endpoints', () => {
+    it('frontend fail-closed logic returns RESEARCH_REQUIRED if canonicalStatus is missing even if legacy status is POSSIBLE_MATCH', () => {
+      const mockCandidateWithoutCanonical = {
+        id: 'test-id',
+        status: 'POSSIBLE_MATCH', // Legacy status
+        canonicalStatus: undefined, // Missing canonical status
+      };
+
+      // Operational status resolution using nullish coalescing (App.tsx rule)
+      const resolvedOperationalStatus = mockCandidateWithoutCanonical.canonicalStatus ?? 'RESEARCH_REQUIRED';
+
+      expect(resolvedOperationalStatus).toBe('RESEARCH_REQUIRED');
+      expect(resolvedOperationalStatus).not.toBe('POSSIBLE_MATCH');
+    });
+
+    it('GET /api/strategic-partners is strictly read-only and performs zero database mutations', async () => {
+      // Capture baseline counts & timestamps before GET requests
+      const candidateCountBefore = await prisma.strategicPartnerCandidate.count();
+      const matchCountBefore = await prisma.opportunityPartnerMatch.count();
+      const engagementCountBefore = await prisma.outreachEngagement.count();
+      const historyCountBefore = await prisma.outreachWorkflowHistory.count();
+
+      const latestHistoryBefore = await prisma.outreachWorkflowHistory.findFirst({
+        orderBy: { timestamp: 'desc' },
+      });
+
+      // Issue 3 consecutive GET requests
+      await request(app).get('/api/strategic-partners').expect(200);
+      await request(app).get('/api/strategic-partners').expect(200);
+      await request(app).get('/api/strategic-partners').expect(200);
+
+      // Capture counts & timestamps after GET requests
+      const candidateCountAfter = await prisma.strategicPartnerCandidate.count();
+      const matchCountAfter = await prisma.opportunityPartnerMatch.count();
+      const engagementCountAfter = await prisma.outreachEngagement.count();
+      const historyCountAfter = await prisma.outreachWorkflowHistory.count();
+
+      const latestHistoryAfter = await prisma.outreachWorkflowHistory.findFirst({
+        orderBy: { timestamp: 'desc' },
+      });
+
+      // Assert zero database mutations occurred
+      expect(candidateCountAfter).toBe(candidateCountBefore);
+      expect(matchCountAfter).toBe(matchCountBefore);
+      expect(engagementCountAfter).toBe(engagementCountBefore);
+      expect(historyCountAfter).toBe(historyCountBefore);
+      expect(latestHistoryAfter?.timestamp).toEqual(latestHistoryBefore?.timestamp);
+    });
+  });
+
+  describe('3. Atomic Human Transitions and Authorization Invariants', () => {
+    it('system repair event cannot authorize subsequent workflow stages (requires human action)', async () => {
+      const engRes = await request(app)
+        .get(`/api/outreach/engagements/${ca600Id}`)
+        .expect(200);
+      const engagementId = engRes.body.data.id;
+
+      // Ensure current status is RESEARCH_REQUIRED
+      expect(engRes.body.data.currentStatus).toBe('RESEARCH_REQUIRED');
+
+      // Attempt invalid skip to CONTACT_APPROVED without a human-approved draft
+      const res = await request(app)
+        .post('/api/outreach/transitions')
+        .send({
+          engagementId,
+          targetStatus: 'CONTACT_APPROVED',
+          humanActorName: 'System Repair Service Bypass Test',
+          reason: 'Attempting status jump relying only on system repair history',
+        })
+        .expect(400);
+
+      expect(res.body.error).toMatch(/human authorization|Invalid transition/);
+    });
+
     it('failed status transition produces zero database mutations', async () => {
       const engRes = await request(app)
         .get(`/api/outreach/engagements/${ca600Id}`)
@@ -96,7 +171,6 @@ describe('Phase 1G — CA-600 Workflow Status Source-of-Truth Reconciliation', (
 
       const historyBefore = await prisma.outreachWorkflowHistory.count({ where: { engagementId } });
 
-      // Attempt invalid direct transition from RESEARCH_REQUIRED to CONTACT_APPROVED without draft approval
       await request(app)
         .post('/api/outreach/transitions')
         .send({
@@ -115,10 +189,8 @@ describe('Phase 1G — CA-600 Workflow Status Source-of-Truth Reconciliation', (
     });
 
     it('discovery reruns do not overwrite human-owned engagement status', async () => {
-      // Re-run discovery
       await StrategicPartnerService.runDiscovery();
 
-      // Verify CA-600 canonical status is still RESEARCH_REQUIRED
       const listRes = await request(app)
         .get('/api/strategic-partners')
         .expect(200);

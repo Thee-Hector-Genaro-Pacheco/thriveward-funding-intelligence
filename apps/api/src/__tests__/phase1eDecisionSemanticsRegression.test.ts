@@ -2,6 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { AnalysisService } from '../services/analysisService';
 import { OutreachBriefingService } from '../services/outreachBriefingService';
 import { FiscalSponsorService } from '../services/fiscalSponsorService';
+import { SponsorDiscoveryService } from '../services/sponsorDiscoveryService';
 import { prisma } from '../lib/prisma';
 
 describe('Phase 1E Decision-Semantics & Pathway-Routing Regression Suite', () => {
@@ -10,6 +11,9 @@ describe('Phase 1E Decision-Semantics & Pathway-Routing Regression Suite', () =>
   let sponsorId: string;
 
   beforeAll(async () => {
+    await SponsorDiscoveryService.runDiscovery();
+    await FiscalSponsorService.repairExistingDatabaseProvenance();
+
     // Find or create exact opportunity records
     let cocOpp = await prisma.fundingOpportunity.findFirst({
       where: { fundingOpportunityNumber: 'CPD-2600-DC-0025' },

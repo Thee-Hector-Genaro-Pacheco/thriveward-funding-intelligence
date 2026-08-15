@@ -845,7 +845,7 @@ export const OutreachWorkspaceDrawer: React.FC<OutreachWorkspaceDrawerProps> = (
               </h3>
 
               {engagement.workflowHistory?.map((h: any) => {
-                const isSystemRepair = h.actorType === 'SYSTEM_DATA_REPAIR' || (h.actorName && h.actorName.includes('System'));
+                const isSystemRepair = h.actorType === 'SYSTEM_DATA_REPAIR' || h.eventType === 'DATA_RECONCILIATION' || h.humanActorName === 'System Data Repair Service' || (h.humanActorName && h.humanActorName.includes('System'));
                 return (
                   <div key={h.id} style={{ background: isSystemRepair ? 'rgba(120, 53, 15, 0.25)' : 'rgba(15, 23, 42, 0.7)', border: isSystemRepair ? '1px solid #78350f' : '1px solid var(--border-color)', borderRadius: '0.5rem', padding: '0.85rem' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.35rem', flexWrap: 'wrap', gap: '0.5rem' }}>
@@ -854,7 +854,7 @@ export const OutreachWorkspaceDrawer: React.FC<OutreachWorkspaceDrawerProps> = (
                       </span>
                       {isSystemRepair && (
                         <span className="badge badge-amber" style={{ background: '#78350f', color: '#fde68a', fontSize: '0.7rem' }}>
-                          🛠️ SYSTEM DATA REPAIR
+                          🛠️ SYSTEM DATA RECONCILIATION
                         </span>
                       )}
                       <span style={{ fontSize: '0.75rem', color: '#94a3b8' }}>

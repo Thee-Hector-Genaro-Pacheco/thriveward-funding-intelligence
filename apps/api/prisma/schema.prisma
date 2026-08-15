@@ -866,7 +866,9 @@ model OutreachWorkflowHistory {
   engagement      OutreachEngagement @relation(fields: [engagementId], references: [id], onDelete: Cascade)
   previousStatus  String
   newStatus       String
+  actorType       String             @default("HUMAN")
   humanActorName  String
+  eventType       String             @default("WORKFLOW_TRANSITION")
   timestamp       DateTime           @default(now())
   reason          String
   relatedRecordId String?

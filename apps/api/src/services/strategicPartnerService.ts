@@ -349,7 +349,7 @@ export class StrategicPartnerService {
     for (const candidate of candidates) {
       const primaryEng = candidate.engagements?.[0];
       const hasHumanHistory = primaryEng?.workflowHistory?.some(
-        (h) => h.humanActorName && h.humanActorName !== 'System Data Repair Service' && !h.humanActorName.includes('System')
+        (h) => h.actorType === 'HUMAN' && h.humanActorName && h.humanActorName !== 'System Data Repair Service' && !h.humanActorName.includes('System')
       );
 
       const hasLegacyPossibleMatch =
@@ -386,7 +386,7 @@ export class StrategicPartnerService {
           });
         }
 
-        const hasRepairEvent = eng.workflowHistory.some((h) => h.humanActorName === 'System Data Repair Service' || (h.reason || '').includes('reconciliation'));
+        const hasRepairEvent = eng.workflowHistory.some((h) => h.actorType === 'SYSTEM_DATA_REPAIR' || h.humanActorName === 'System Data Repair Service' || (h.reason || '').includes('reconciliation'));
         if (!hasRepairEvent) {
           const eventContent = `REPAIR:${eng.id}:${PartnerMatchStatus.POSSIBLE_MATCH}:${PartnerMatchStatus.RESEARCH_REQUIRED}:${Date.now()}`;
           const eventHash = crypto.createHash('sha256').update(eventContent).digest('hex');
@@ -396,7 +396,9 @@ export class StrategicPartnerService {
               engagementId: eng.id,
               previousStatus: PartnerMatchStatus.POSSIBLE_MATCH,
               newStatus: PartnerMatchStatus.RESEARCH_REQUIRED,
+              actorType: 'SYSTEM_DATA_REPAIR',
               humanActorName: 'System Data Repair Service',
+              eventType: 'DATA_RECONCILIATION',
               reason: 'System data reconciliation: legacy status POSSIBLE_MATCH lacked required human-attributed workflow transition history. Reconciled to canonical status RESEARCH_REQUIRED.',
               eventHash,
             },
@@ -414,6 +416,7 @@ export class StrategicPartnerService {
    * 3. Must overlap Bridge Forward's 2 active launch counties (Orange County and Los Angeles County).
    * 4. Excludes DEMO candidates (CA-DEMO) by default unless includeDemo=true is explicitly allowed in non-production.
    * 5. Returns canonical server-authoritative status from OutreachEngagement.
+   * STRICTLY READ-ONLY: Performs zero database mutations.
    */
   public static async listPartners(filters?: ListPartnerFilters) {
     if (filters?.includeDemo && process.env.NODE_ENV === 'production') {
@@ -423,10 +426,6 @@ export class StrategicPartnerService {
     }
 
     const allowDemo = filters?.includeDemo === true && process.env.NODE_ENV !== 'production';
-
-    // Ensure authoritative CoCs exist in DB & reconcile legacy unverified statuses
-    await this.ensureSeededPartners();
-    await this.reconcileLegacyStatuses();
 
     const allPartners = await prisma.strategicPartnerCandidate.findMany({
       include: {
@@ -505,7 +504,7 @@ export class StrategicPartnerService {
     return filtered.map((p) => {
       const primaryEng = p.engagements?.[0];
       const hasHumanHistory = primaryEng?.workflowHistory?.some(
-        (h: any) => h.actorType === 'HUMAN' || (h.actorName && !h.actorName.includes('System') && !h.actorName.includes('SYSTEM'))
+        (h: any) => h.actorType === 'HUMAN' && h.humanActorName && h.humanActorName !== 'System Data Repair Service' && !h.humanActorName.includes('System')
       );
 
       const canonicalStatus = (primaryEng && (primaryEng.currentStatus === PartnerMatchStatus.RESEARCH_REQUIRED || hasHumanHistory))

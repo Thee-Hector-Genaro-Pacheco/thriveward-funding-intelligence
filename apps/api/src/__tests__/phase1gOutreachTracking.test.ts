@@ -4,6 +4,8 @@ import { app } from '../server';
 import { prisma } from '../lib/prisma';
 import { PartnerMatchStatus } from '@prisma/client';
 
+import { StrategicPartnerService } from '../services/strategicPartnerService';
+
 describe('Phase 1G — Human-Controlled Outreach & Response Tracking Complete Suite', () => {
   let demoPartnerId: string;
   let demoOppId: string;
@@ -11,6 +13,9 @@ describe('Phase 1G — Human-Controlled Outreach & Response Tracking Complete Su
   let realCa602PartnerId: string;
 
   beforeAll(async () => {
+    // 0. Ensure seeded partners exist
+    await StrategicPartnerService.runDiscovery();
+
     // 1. Fetch or create demo strategic partner
     const demoPartner = await prisma.strategicPartnerCandidate.findFirst({
       where: { cocNumber: 'CA-DEMO' },

@@ -13,6 +13,9 @@ describe('Phase 1E — Candidate Seed & Discovery Provenance Test Suite', () => 
       process.env.DATABASE_URL ||
       'postgresql://bridge_admin:bridge_secure_pass_2026@localhost:5432/bridge_ai_db?schema=public';
     process.env.BRIDGE_REVIEW_TOKEN = REVIEW_TOKEN;
+
+    await SponsorDiscoveryService.runDiscovery();
+    await FiscalSponsorService.repairExistingDatabaseProvenance();
   });
 
   it('1. Seed does not create historical production aliases in fresh/seeded state', async () => {
