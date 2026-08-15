@@ -197,6 +197,27 @@ export class OutreachTrackingService {
    * Requires status POSSIBLE_MATCH and verified recipient.
    * Transition: POSSIBLE_MATCH -> CONTACT_APPROVED.
    */
+  public static containsUnresolvedPlaceholder(text: string | null | undefined): { hasPlaceholder: boolean; matchedPlaceholder?: string } {
+    if (!text) return { hasPlaceholder: false };
+    const patterns = [
+      /\[ADD\b[^\]]*\]/i,
+      /\[VERIFY\b[^\]]*\]/i,
+      /\[INSERT\b[^\]]*\]/i,
+      /\[REPLACE\b[^\]]*\]/i,
+      /\[TODO\b[^\]]*\]/i,
+      /\[DO NOT SEND\]/i,
+      /\[ADD\s+VERIFIED\s+PROJECT\s+THRIVEWARD\s+EMAIL\]/i,
+    ];
+
+    for (const pattern of patterns) {
+      const match = text.match(pattern);
+      if (match) {
+        return { hasPlaceholder: true, matchedPlaceholder: match[0] };
+      }
+    }
+    return { hasPlaceholder: false };
+  }
+
   public static async approveAndFreezeDraft(input: {
     engagementId: string;
     draftVersionId: string;
@@ -252,11 +273,20 @@ export class OutreachTrackingService {
         throw err;
       }
 
-      // Fail-closed validation for recipient
+      // Fail-closed validation for unresolved placeholders in draft subject, body, recipient, or inquiryPurpose
+      const checkSubject = this.containsUnresolvedPlaceholder(draft.subject);
+      const checkBody = this.containsUnresolvedPlaceholder(draft.body);
+      const checkRecipient = this.containsUnresolvedPlaceholder(draft.recipient);
+      const checkPurpose = this.containsUnresolvedPlaceholder(draft.inquiryPurpose);
+
+      const matchedPlaceholder = checkSubject.matchedPlaceholder || checkBody.matchedPlaceholder || checkRecipient.matchedPlaceholder || checkPurpose.matchedPlaceholder;
+
       const recipient = (draft.recipient || '').trim();
-      if (!recipient || recipient.includes('[VERIFY') || recipient === 'UNKNOWN' || !recipient.includes('@')) {
-        const err: any = new Error(`Cannot approve outreach to unverified or placeholder recipient '${recipient}'.`);
+      if (matchedPlaceholder || !recipient || recipient.includes('[VERIFY') || recipient === 'UNKNOWN' || !recipient.includes('@')) {
+        const placeholderText = matchedPlaceholder || recipient;
+        const err: any = new Error(`Cannot approve draft containing unresolved system placeholder '${placeholderText}'. Please replace all placeholder brackets before requesting human approval.`);
         err.statusCode = 400;
+        err.code = 'UNRESOLVED_PLACEHOLDER';
         throw err;
       }
 
@@ -859,12 +889,21 @@ export class OutreachTrackingService {
    * Follow-Up Dashboard Query.
    * Groups follow-ups and engagements into compact dashboard statistics.
    */
-  public static async getFollowUpDashboard() {
+  public static async getFollowUpDashboard(includeDemo = false) {
+    if (includeDemo && process.env.NODE_ENV === 'production') {
+      const err: any = new Error('Production environment cannot expose demo data (includeDemo is prohibited in production).');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const allowDemo = includeDemo && process.env.NODE_ENV !== 'production';
+
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const endOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
 
     const followUps = await prisma.outreachFollowUp.findMany({
+      where: allowDemo ? undefined : { engagement: { dataOrigin: { not: 'DEMO' } } },
       include: {
         engagement: {
           include: {
@@ -887,6 +926,7 @@ export class OutreachTrackingService {
     );
 
     const engagements = await prisma.outreachEngagement.findMany({
+      where: allowDemo ? undefined : { dataOrigin: { not: 'DEMO' } },
       include: {
         strategicPartnerCandidate: true,
         fundingOpportunity: true,

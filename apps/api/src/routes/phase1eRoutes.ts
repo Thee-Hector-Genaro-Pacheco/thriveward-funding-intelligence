@@ -14,12 +14,13 @@ export const phase1eRouter = Router();
 // --- Phase 1G: Human-Controlled Outreach & Response Tracking ---
 
 // GET /api/outreach/dashboard
-phase1eRouter.get('/outreach/dashboard', async (_req: Request, res: Response) => {
+phase1eRouter.get('/outreach/dashboard', async (req: Request, res: Response) => {
   try {
-    const data = await OutreachTrackingService.getFollowUpDashboard();
+    const includeDemo = req.query.includeDemo === 'true' || req.query.includeDemo === '1';
+    const data = await OutreachTrackingService.getFollowUpDashboard(includeDemo);
     res.json({ success: true, data });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(err.statusCode || 500).json({ success: false, error: err.message });
   }
 });
 
@@ -65,7 +66,11 @@ phase1eRouter.post('/outreach/approvals', async (req: Request, res: Response) =>
     const approval = await OutreachTrackingService.approveAndFreezeDraft(req.body);
     res.status(201).json({ success: true, data: approval });
   } catch (err: any) {
-    res.status(err.statusCode || 400).json({ success: false, error: err.message });
+    res.status(err.statusCode || 400).json({
+      success: false,
+      error: err.message,
+      code: err.code || 'APPROVAL_REJECTED',
+    });
   }
 });
 
@@ -253,16 +258,17 @@ phase1eRouter.post('/strategic-partners/discovery', async (_req: Request, res: R
 // GET /api/strategic-partners
 phase1eRouter.get('/strategic-partners', async (req: Request, res: Response) => {
   try {
-    const { organizationType, verificationStatus, opportunityId, targetCounty } = req.query;
+    const { organizationType, verificationStatus, opportunityId, targetCounty, includeDemo } = req.query;
     const partners = await StrategicPartnerService.listPartners({
       organizationType: organizationType as string,
       verificationStatus: verificationStatus as string,
       opportunityId: opportunityId as string,
       targetCounty: targetCounty as string,
+      includeDemo: includeDemo === 'true' || includeDemo === '1',
     });
     res.json({ success: true, count: partners.length, data: partners });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(err.statusCode || 500).json({ success: false, error: err.message });
   }
 });
 

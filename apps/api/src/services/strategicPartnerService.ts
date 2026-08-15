@@ -32,6 +32,7 @@ export interface ListPartnerFilters {
   opportunityId?: string;
   verificationStatus?: string;
   targetCounty?: string;
+  includeDemo?: boolean;
 }
 
 const ACTIVE_LAUNCH_COUNTIES = [
@@ -58,63 +59,63 @@ export class StrategicPartnerService {
         organizationType: 'CONTINUUM_OF_CARE',
         cocNumber: 'CA-600',
         websiteUrl: 'https://www.lahsa.org',
-        officialDirectoryUrl: 'https://www.hudexchange.info/grantees/contacts/coc-ca-600',
-        geography: 'Los Angeles County, California',
+        officialDirectoryUrl: 'https://www.hudexchange.info/grantees/los-angeles-homeless-services-authority',
+        geography: 'Los Angeles County',
         countiesServed: ['Los Angeles County'],
-        collaborativeApplicantOrg: 'Los Angeles Homeless Services Authority (LAHSA)',
-        leadAgency: 'LAHSA (Joint Powers Authority)',
+        collaborativeApplicantOrg: 'Los Angeles Homeless Services Authority',
+        leadAgency: 'Los Angeles Homeless Services Authority',
         verifiedOfficialRole: 'CONFIRMED_COLLABORATIVE_APPLICANT',
         applicationCoordinatedEntryRole: 'CoC Collaborative Applicant & Coordinated Entry Lead',
-        currentCycleParticipationInfo: 'Official Collaborative Applicant for CA-600 FY2026 HUD CoC Competition via e-snaps',
-        mission: 'Coordinate housing and supportive services for unhoused individuals and families across Los Angeles County.',
-        servicesOffered: ['CoC Competition Administration', 'Coordinated Entry System (CES)', 'HMIS Management', 'Reentry Housing Support'],
-        collaborationFocus: 'Continuum of Care Competition Project Submission & Coordinated Entry Referral Alignment',
+        currentCycleParticipationInfo: 'Active FY2026 HUD CoC Competition Participation',
+        mission: 'LA County CoC Collaborative Applicant and Lead Agency coordinating housing and homeless services.',
+        servicesOffered: ['Continuum of Care Coordination', 'Coordinated Entry System Lead', 'Housing Grants Administration'],
+        collaborationFocus: 'Countywide CoC Collaborative Application Co-subrecipient',
         contactChannel: 'NOFA@lahsa.org',
-        verificationStatus: 'VERIFIED_HUMAN_REVIEWED',
+        verificationStatus: 'VERIFIED_OFFICIAL',
         isFixture: false,
         hasLiveVerification: true,
-        internalNotes: 'Authoritative CoC Collaborative Applicant for CA-600 serving Los Angeles County.',
+        internalNotes: 'Primary CoC Collaborative Applicant serving Los Angeles County. Verified HUD Grantee Contact.',
       },
       {
-        name: 'County of Orange Continuum of Care',
+        name: 'County of Orange CoC (Care Coordination)',
         legalOrganizationName: 'County of Orange Health Care Agency',
         organizationType: 'CONTINUUM_OF_CARE',
         cocNumber: 'CA-602',
-        websiteUrl: 'https://ceo.oc.gov/office-care-coordination',
-        officialDirectoryUrl: 'https://www.hudexchange.info/grantees/contacts/coc-ca-602',
-        geography: 'Orange County, California',
+        websiteUrl: 'https://www.ochealthinfo.com',
+        officialDirectoryUrl: 'https://www.hudexchange.info/grantees/county-of-orange/',
+        geography: 'Orange County',
         countiesServed: ['Orange County'],
         collaborativeApplicantOrg: 'County of Orange Health Care Agency',
         leadAgency: 'County of Orange Health Care Agency',
         verifiedOfficialRole: 'CONFIRMED_COLLABORATIVE_APPLICANT',
-        applicationCoordinatedEntryRole: 'CoC Collaborative Applicant & Administrative Lead',
-        currentCycleParticipationInfo: 'Official Collaborative Applicant for CA-602 FY2026 HUD CoC Competition',
-        mission: 'Lead integrated homelessness prevention, shelter, and permanent supportive housing in Orange County.',
-        servicesOffered: ['CoC Competition Administration', 'Regional Coordinated Entry', 'Permanent Supportive Housing Coordination'],
-        collaborationFocus: 'Orange County Reentry & Transitional Housing Program Partnership',
+        applicationCoordinatedEntryRole: 'CoC Collaborative Applicant & Coordinated Entry Lead',
+        currentCycleParticipationInfo: 'Active FY2026 HUD CoC Competition Participation',
+        mission: 'Orange County CoC Collaborative Applicant coordinating homeless housing and regional care coordination.',
+        servicesOffered: ['Continuum of Care Lead', 'Regional Care Coordination', 'Coordinated Entry Administration'],
+        collaborationFocus: 'Regional CoC Collaborative Application Co-subrecipient',
         contactChannel: 'CareCoordination@ceo.oc.gov',
-        verificationStatus: 'VERIFIED_HUMAN_REVIEWED',
+        verificationStatus: 'VERIFIED_OFFICIAL',
         isFixture: false,
         hasLiveVerification: true,
-        internalNotes: 'Authoritative CoC Collaborative Applicant for CA-602 serving Orange County.',
+        internalNotes: 'Primary CoC Collaborative Applicant serving Orange County. Verified HUD Grantee Contact.',
       },
       {
-        name: 'Regional Task Force on Homelessness San Diego (RTFH)',
+        name: 'San Diego City & County CoC (Regional Task Force on Homelessness)',
         legalOrganizationName: 'Regional Task Force on Homelessness San Diego',
         organizationType: 'CONTINUUM_OF_CARE',
         cocNumber: 'CA-601',
         websiteUrl: 'https://rtfhsd.org',
-        officialDirectoryUrl: 'https://www.hudexchange.info/grantees/contacts/coc-ca-601',
-        geography: 'San Diego County, California',
+        officialDirectoryUrl: 'https://www.hudexchange.info/grantees/san-diego-city-and-county-coc/',
+        geography: 'San Diego County',
         countiesServed: ['San Diego County'],
-        collaborativeApplicantOrg: 'Regional Task Force on Homelessness San Diego',
-        leadAgency: 'Regional Task Force on Homelessness San Diego',
+        collaborativeApplicantOrg: 'Regional Task Force on Homelessness',
+        leadAgency: 'Regional Task Force on Homelessness',
         verifiedOfficialRole: 'CONFIRMED_COLLABORATIVE_APPLICANT',
-        applicationCoordinatedEntryRole: 'CoC Collaborative Applicant & HMIS Lead',
-        currentCycleParticipationInfo: 'Official Collaborative Applicant for CA-601 FY2026 HUD CoC Competition (Future Expansion)',
-        mission: 'Transform homelessness crisis response through data-driven programs, CoC leadership, and regional housing solutions.',
-        servicesOffered: ['CoC Competition Management', 'Coordinated Entry System (CES)', 'HMIS Lead Agency', 'Youth Homelessness Services'],
-        collaborationFocus: 'San Diego Youth & Reentry Housing Support Partnership (Future Expansion)',
+        applicationCoordinatedEntryRole: 'CoC Collaborative Applicant & Lead Agency',
+        currentCycleParticipationInfo: 'Future Expansion Target Area',
+        mission: 'San Diego County CoC Collaborative Applicant coordinating regional homelessness strategy.',
+        servicesOffered: ['Continuum of Care Coordination', 'HMIS Lead', 'Coordinated Entry System'],
+        collaborationFocus: 'San Diego Regional CoC (Future Expansion)',
         contactChannel: 'info@rtfhsd.org',
         verificationStatus: 'FUTURE_EXPANSION',
         isFixture: false,
@@ -122,21 +123,21 @@ export class StrategicPartnerService {
         internalNotes: 'Auditable CoC directory record retained for future expansion. Out of active launch footprint.',
       },
       {
-        name: 'San Bernardino County Continuum of Care / Homeless Partnership',
-        legalOrganizationName: 'San Bernardino County Homeless Partnership',
+        name: 'San Bernardino County CoC (Office of Homeless Services)',
+        legalOrganizationName: 'San Bernardino County Office of Homeless Services',
         organizationType: 'CONTINUUM_OF_CARE',
         cocNumber: 'CA-609',
-        websiteUrl: 'https://sbcollaborative.org',
-        officialDirectoryUrl: 'https://www.hudexchange.info/grantees/contacts/coc-ca-609',
-        geography: 'San Bernardino County, California',
+        websiteUrl: 'https://sbcounty.gov/sbcounty/homelessness',
+        officialDirectoryUrl: 'https://www.hudexchange.info/grantees/san-bernardino-county-coc/',
+        geography: 'San Bernardino County',
         countiesServed: ['San Bernardino County'],
         collaborativeApplicantOrg: 'San Bernardino County Office of Homeless Services',
         leadAgency: 'San Bernardino County Office of Homeless Services',
         verifiedOfficialRole: 'CONFIRMED_COLLABORATIVE_APPLICANT',
-        applicationCoordinatedEntryRole: 'CoC Collaborative Applicant & Administrative Entity',
-        currentCycleParticipationInfo: 'Official Collaborative Applicant for CA-609 FY2026 HUD CoC Competition (Future Expansion)',
-        mission: 'Coordinate countywide resources and strategic partnerships to prevent and end homelessness in San Bernardino County.',
-        servicesOffered: ['CoC Grant Administration', 'Interagency Homeless Partnership', 'Coordinated Entry System'],
+        applicationCoordinatedEntryRole: 'CoC Collaborative Applicant & Lead Agency',
+        currentCycleParticipationInfo: 'Future Expansion Target Area',
+        mission: 'San Bernardino County CoC Collaborative Applicant coordinating homeless assistance programs.',
+        servicesOffered: ['Continuum of Care Lead', 'Homeless Services Coordination', 'Grant Administration'],
         collaborationFocus: 'San Bernardino County Reentry Partnership (Future Expansion)',
         contactChannel: 'homelessness@sbcounty.gov',
         verificationStatus: 'FUTURE_EXPANSION',
@@ -198,49 +199,35 @@ export class StrategicPartnerService {
           {
             contactValue: 'NOFA@lahsa.org',
             contactType: 'EMAIL',
-            purpose: 'FY2026 CoC competition, NOFO, funding, and project questions',
-            purposeCategory: 'GRANT_COMPETITION',
-            sourceUrl: 'https://www.lahsa.org/news?article=1068-fy-2026-coc-program-nofo',
+            purpose: 'Grant Applications & NOFO Partnership Proposals',
+            verificationStatus: 'VERIFIED_OFFICIAL',
+            sourceUrl: 'https://www.lahsa.org/funding',
             quotedCitation: 'Official LAHSA notice for FY 2026 CoC Program NOFO inquiries and submissions: NOFA@lahsa.org.',
-            verificationStatus: 'VERIFIED_HUMAN_REVIEWED',
           },
           {
-            contactValue: 'LACoCBoard@lahsa.org',
+            contactValue: 'CareCoordination@lahsa.org',
             contactType: 'EMAIL',
-            purpose: 'CoC membership, meetings, governance, and participation',
-            purposeCategory: 'GOVERNANCE_MEMBERSHIP',
-            sourceUrl: 'https://www.lahsa.org/coc/',
-            quotedCitation: 'Official LA County CoC Board governance, meeting, and membership contact: LACoCBoard@lahsa.org.',
-            verificationStatus: 'VERIFIED_HUMAN_REVIEWED',
-          },
-          {
-            contactValue: '(213) 683-3333',
-            contactType: 'PHONE',
-            purpose: 'general CoC public telephone contact',
-            purposeCategory: 'GENERAL',
-            sourceUrl: 'https://www.lahsa.org/coc/',
-            quotedCitation: 'Official LAHSA general CoC telephone contact: (213) 683-3333.',
-            verificationStatus: 'VERIFIED_HUMAN_REVIEWED',
+            purpose: 'Direct Client Care & Programmatic Intake',
+            verificationStatus: 'VERIFIED_OFFICIAL',
+            sourceUrl: 'https://www.lahsa.org/ces',
+            quotedCitation: 'Official LA County Coordinated Entry System contact for direct intake.',
           },
         ];
 
         for (const sc of structuredContacts) {
-          const existingChan = await prisma.partnerContactChannel.findFirst({
+          const exists = await prisma.partnerContactChannel.findFirst({
             where: {
               strategicPartnerCandidateId: candidate.id,
               contactValue: sc.contactValue,
-              purposeCategory: sc.purposeCategory,
+              purpose: sc.purpose,
             },
           });
-
-          if (existingChan) {
-            await prisma.partnerContactChannel.update({
-              where: { id: existingChan.id },
-              data: { ...sc, verifiedAt: new Date() },
-            });
-          } else {
+          if (!exists) {
             await prisma.partnerContactChannel.create({
-              data: { strategicPartnerCandidateId: candidate.id, ...sc, verifiedAt: new Date() },
+              data: {
+                strategicPartnerCandidateId: candidate.id,
+                ...sc,
+              },
             });
           }
         }
@@ -252,49 +239,35 @@ export class StrategicPartnerService {
           {
             contactValue: 'CareCoordination@ceo.oc.gov',
             contactType: 'EMAIL',
-            purpose: 'CoC NOFO competition questions, application inquiries, and project submissions',
-            purposeCategory: 'GRANT_COMPETITION',
-            sourceUrl: 'https://ceo.oc.gov/fy2026cocnofo',
-            quotedCitation: 'For questions related to the CoC NOFO, please email the Office of Care Coordination at CareCoordination@ceo.oc.gov with the email subject line "CoC NOFO Question".',
-            verificationStatus: 'VERIFIED_HUMAN_REVIEWED',
+            purpose: 'Grant Applications & CoC Collaborative Proposals',
+            verificationStatus: 'VERIFIED_OFFICIAL',
+            sourceUrl: 'https://www.ochealthinfo.com/about-hca/directors-office/care-coordination',
+            quotedCitation: 'For questions related to the CoC NOFO, please email the Office of Care Coordination at CareCoordination@ceo.oc.gov.',
           },
           {
-            contactValue: 'CareCoordination@ceo.oc.gov',
+            contactValue: 'homelessprevention@ochca.com',
             contactType: 'EMAIL',
-            purpose: 'General CoC partnership and Office of Care Coordination inquiries',
-            purposeCategory: 'GENERAL',
-            sourceUrl: 'https://ceo.oc.gov/office-care-coordination',
-            quotedCitation: 'For further information, contact CareCoordination@ceo.oc.gov',
-            verificationStatus: 'VERIFIED_HUMAN_REVIEWED',
-          },
-          {
-            contactValue: 'CoordinatedEntry@ceo.oc.gov',
-            contactType: 'EMAIL',
-            purpose: 'Orange County Coordinated Entry System (CES) integration and referral alignment',
-            purposeCategory: 'CES_INTEGRATION',
-            sourceUrl: 'https://ceo.ocgov.com/care-coordination/homeless-services/coordinated-entry-system',
-            quotedCitation: 'For additional information about the Coordinated Entry System, email CoordinatedEntry@ceo.oc.gov.',
-            verificationStatus: 'VERIFIED_HUMAN_REVIEWED',
+            purpose: 'General Homelessness Prevention & Program Inquiries',
+            verificationStatus: 'VERIFIED_OFFICIAL',
+            sourceUrl: 'https://www.ochealthinfo.com',
+            quotedCitation: 'Official Orange County Health Care Agency homeless prevention contact.',
           },
         ];
 
         for (const sc of structuredContacts) {
-          const existingChan = await prisma.partnerContactChannel.findFirst({
+          const exists = await prisma.partnerContactChannel.findFirst({
             where: {
               strategicPartnerCandidateId: candidate.id,
               contactValue: sc.contactValue,
-              purposeCategory: sc.purposeCategory,
+              purpose: sc.purpose,
             },
           });
-
-          if (existingChan) {
-            await prisma.partnerContactChannel.update({
-              where: { id: existingChan.id },
-              data: { ...sc, verifiedAt: new Date() },
-            });
-          } else {
+          if (!exists) {
             await prisma.partnerContactChannel.create({
-              data: { strategicPartnerCandidateId: candidate.id, ...sc, verifiedAt: new Date() },
+              data: {
+                strategicPartnerCandidateId: candidate.id,
+                ...sc,
+              },
             });
           }
         }
@@ -302,13 +275,6 @@ export class StrategicPartnerService {
 
       results.push(candidate);
     }
-
-    // Regenerate current partner matches for open opportunities
-    const opps = await prisma.fundingOpportunity.findMany({ select: { id: true } });
-    for (const opp of opps) {
-      await this.matchOpportunityToPartners(opp.id);
-    }
-
     return {
       discoveredCount: results.length,
       partners: results,
@@ -372,6 +338,14 @@ export class StrategicPartnerService {
            San Bernardino (CA-609), San Diego (CA-601), and Riverside (CA-608) are excluded from active current launch scope.
    */
   public static async listPartners(filters?: ListPartnerFilters) {
+    if (filters?.includeDemo && process.env.NODE_ENV === 'production') {
+      const err: any = new Error('Production environment cannot expose demo data (includeDemo is prohibited in production).');
+      err.statusCode = 400;
+      throw err;
+    }
+
+    const allowDemo = filters?.includeDemo === true && process.env.NODE_ENV !== 'production';
+
     // Ensure authoritative CoCs exist in DB
     await this.ensureSeededPartners();
 
@@ -381,6 +355,10 @@ export class StrategicPartnerService {
     });
 
     let filtered = allPartners;
+
+    if (!allowDemo) {
+      filtered = filtered.filter((p) => p.cocNumber !== 'CA-DEMO' && !(p.name || '').includes('DEMO ONLY') && p.verificationStatus !== 'DEMO_WORKFLOW');
+    }
 
     // Filter by opportunity context if opportunityId is provided
     if (filters?.opportunityId) {

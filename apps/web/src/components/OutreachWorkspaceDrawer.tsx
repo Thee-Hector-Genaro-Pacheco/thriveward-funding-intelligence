@@ -404,6 +404,17 @@ export const OutreachWorkspaceDrawer: React.FC<OutreachWorkspaceDrawerProps> = (
                   🛡️ Mandatory Human Approval Required to Advance to CONTACT_APPROVED:
                 </div>
 
+                {latestDraft && (
+                  Boolean((latestDraft.subject || '').match(/\[(ADD|VERIFY|INSERT|REPLACE|TODO|DO NOT SEND)\b/i)) ||
+                  Boolean((latestDraft.body || '').match(/\[(ADD|VERIFY|INSERT|REPLACE|TODO|DO NOT SEND)\b/i)) ||
+                  Boolean((latestDraft.recipient || '').match(/\[(ADD|VERIFY|INSERT|REPLACE|TODO|DO NOT SEND)\b/i)) ||
+                  Boolean((latestDraft.recipient || '').includes('[VERIFY'))
+                ) && (
+                  <div style={{ background: 'rgba(239, 68, 68, 0.2)', border: '1px solid #ef4444', color: '#fca5a5', padding: '0.65rem 0.85rem', borderRadius: '0.4rem', fontSize: '0.8rem', fontWeight: 600 }}>
+                    ⚠️ <strong>UNRESOLVED PLACEHOLDER DETECTED:</strong> Draft contains unresolved system placeholders (e.g. <code>[ADD ...]</code> or <code>[VERIFY ...]</code>). You must fill in all placeholders before approving.
+                  </div>
+                )}
+
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.4rem', fontSize: '0.8rem', color: '#cbd5e1' }}>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
                     <input type="checkbox" checked={recipientReviewed} onChange={(e) => setRecipientReviewed(e.target.checked)} />

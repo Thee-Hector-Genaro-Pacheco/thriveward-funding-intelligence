@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import './index.css';
-import { BRIDGE_FORWARD_PROFILE } from '@bridge-ai/shared';
+import { BRIDGE_FORWARD_PROFILE, formatRelevanceStatusLabel } from '@bridge-ai/shared';
 import { OutreachWorkspaceDrawer } from './components/OutreachWorkspaceDrawer';
+
+const formatEligibilityText = (val: string | undefined | null) => {
+  if (!val) return 'UNKNOWN';
+  if (val === 'NOT_ELIGIBLE') return 'NOT_CURRENTLY_ELIGIBLE';
+  return val;
+};
 
 export interface FundingOpportunity {
   id: string;
@@ -268,14 +274,12 @@ export function App() {
   const [briefingPacket, setBriefingPacket] = useState<SponsorBriefingPacket | null>(null);
   const [editableSubject, setEditableSubject] = useState<string>('');
   const [editableBodyText, setEditableBodyText] = useState<string>('');
-  const [copiedEmail, setCopiedEmail] = useState<boolean>(false);
 
   // Strategic Partner Context & Briefing State
   const [selectedOppForPartnerView, setSelectedOppForPartnerView] = useState<FundingOpportunity | null>(null);
   const [partnerBriefingPacket, setPartnerBriefingPacket] = useState<any | null>(null);
   const [partnerEditableSubject, setPartnerEditableSubject] = useState<string>('');
   const [partnerEditableBodyText, setPartnerEditableBodyText] = useState<string>('');
-  const [partnerCopiedEmail, setPartnerCopiedEmail] = useState<boolean>(false);
   const [partnerDiscoveryLoading, setPartnerDiscoveryLoading] = useState<boolean>(false);
 
   // Phase 1G Outreach Workspace & Dashboard State
@@ -467,7 +471,6 @@ export function App() {
         setPartnerBriefingPacket(briefing);
         setPartnerEditableSubject(briefing.draftInquiryEmail?.subject || '');
         setPartnerEditableBodyText(briefing.draftInquiryEmail?.bodyText || '');
-        setPartnerCopiedEmail(false);
       } else {
         const err = await res.json();
         alert(err.error || 'Error generating briefing packet');
@@ -478,6 +481,56 @@ export function App() {
   };
 
 
+
+  const handleSaveWorkingDraft = async (
+    partnerId: string,
+    opportunityId: string | undefined,
+    subject: string,
+    body: string,
+    recipient: string,
+    inquiryPurpose: string,
+    isDemo = false
+  ) => {
+    try {
+      const engRes = await fetch(
+        `/api/outreach/engagements/${partnerId}?opportunityId=${opportunityId || ''}&inquiryPurpose=${inquiryPurpose}&dataOrigin=${isDemo ? 'DEMO' : 'OFFICIAL_LIVE'}`
+      );
+      const engData = await engRes.json();
+      if (!engData.success) {
+        alert(engData.error || 'Failed to fetch engagement');
+        return;
+      }
+      const engagement = engData.data;
+
+      const draftRes = await fetch('/api/outreach/drafts', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          engagementId: engagement.id,
+          subject,
+          body,
+          recipient,
+          inquiryPurpose,
+          creatorType: 'HUMAN_EDITED',
+          creatorIdentity: 'Authorized Human Operator',
+        }),
+      });
+      const draftData = await draftRes.json();
+
+      if (draftData.success) {
+        setActionMessage(`✓ Saved Working Draft v${draftData.data.versionNumber} to Outreach Workspace!`);
+        const timelineRes = await fetch(`/api/outreach/timeline/${engagement.id}`);
+        const timelineData = await timelineRes.json();
+        setOutreachEngagement(timelineData.data || engagement);
+        setBriefingPacket(null);
+        setPartnerBriefingPacket(null);
+      } else {
+        alert(draftData.error || 'Failed to save working draft.');
+      }
+    } catch (e: any) {
+      alert(e.message || 'Error saving working draft.');
+    }
+  };
 
   const handleNavigateToOpportunityPartners = (opp: FundingOpportunity, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -664,17 +717,9 @@ export function App() {
       setBriefingPacket(json.data);
       setEditableSubject(json.data.draftInquiryEmail.subject);
       setEditableBodyText(json.data.draftInquiryEmail.bodyText);
-      setCopiedEmail(false);
     } catch (err: any) {
       alert(`Failed to fetch briefing packet: ${err.message}`);
     }
-  };
-
-  const handleCopyEmail = () => {
-    const fullText = `To: ${briefingPacket?.draftInquiryEmail.to}\nSubject: ${editableSubject}\n\n${editableBodyText}`;
-    navigator.clipboard.writeText(fullText);
-    setCopiedEmail(true);
-    setTimeout(() => setCopiedEmail(false), 3000);
   };
 
   const handleToggleTask = async (taskId: string, currentStatus: string) => {
@@ -955,10 +1000,10 @@ export function App() {
                     {analysis ? (
                       <div style={{ marginTop: '0.85rem', padding: '0.75rem 0.9rem', background: 'rgba(30, 41, 59, 0.65)', borderRadius: '0.5rem', border: '1px solid rgba(59, 130, 246, 0.2)', fontSize: '0.825rem', color: '#cbd5e1' }}>
                         <div style={{ display: 'flex', gap: '1.2rem', flexWrap: 'wrap', fontWeight: 600 }}>
-                          <div>🎯 Mission Relevance: <strong style={{ color: '#60a5fa' }}>{relevance?.relevanceScore ?? 95}% (Strong)</strong></div>
+                          <div>🎯 Mission Relevance: <strong style={{ color: '#60a5fa' }}>{relevance?.relevanceScore ?? 95}% ({formatRelevanceStatusLabel(relevance?.relevanceScore ?? 95)})</strong></div>
                           <div>📊 Org Fit Score: <strong style={{ color: '#34d399' }}>{analysis.overallFitScore}%</strong></div>
                           <div>📋 Evidence Coverage: <strong style={{ color: '#c084fc' }}>{analysis.evidenceCoverage}%</strong></div>
-                          <div>⚖️ Direct Eligibility: <strong style={{ color: '#f87171' }}>{analysis.eligibilityDecision}</strong></div>
+                          <div>⚖️ Direct Eligibility: <strong style={{ color: '#f87171' }}>{formatEligibilityText(analysis.eligibilityDecision)}</strong></div>
                         </div>
                         {analysis.updatedAt && (
                           <div style={{ fontSize: '0.75rem', color: '#94a3b8', marginTop: '0.3rem' }}>
@@ -1303,7 +1348,7 @@ export function App() {
             <div>
               <h2 className="section-title" style={{ margin: 0 }}>🏛️ Strategic Program Partners Directory & CoC Alignment</h2>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.925rem', marginTop: '0.25rem' }}>
-                Verified Continuum of Care (CoC) Collaborative Applicants serving Orange, Los Angeles, San Bernardino, and San Diego Counties.
+                Verified Continuum of Care (CoC) Collaborative Applicants aligned with Project Thriveward’s planned launch counties: Orange County and Los Angeles County.
               </p>
             </div>
             <button
@@ -1811,9 +1856,18 @@ export function App() {
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
               <button
-                onClick={handleCopyEmail}
+                onClick={() =>
+                  handleSaveWorkingDraft(
+                    briefingPacket.candidateId,
+                    briefingPacket.opportunityId,
+                    editableSubject,
+                    editableBodyText,
+                    briefingPacket.draftInquiryEmail?.to || '',
+                    'GRANT_COMPETITION'
+                  )
+                }
                 style={{
-                  background: copiedEmail ? '#10b981' : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                  background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
                   border: 'none',
                   color: '#fff',
                   padding: '0.55rem 1.25rem',
@@ -1824,7 +1878,7 @@ export function App() {
                   boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)',
                 }}
               >
-                {copiedEmail ? '✓ Copied to Clipboard!' : '📋 Copy Email to Clipboard'}
+                💾 Save Working Draft to Outreach Workspace
               </button>
               <button onClick={() => setBriefingPacket(null)} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid var(--border-color)', color: '#fff', padding: '0.55rem 1.25rem', borderRadius: '0.4rem', fontWeight: 700, cursor: 'pointer' }}>
                 Close Briefing
@@ -1848,74 +1902,41 @@ export function App() {
                   📄 CoC Partnership Inquiry Briefing — {partnerBriefingPacket.partnerName}
                 </h2>
               </div>
-              <button onClick={() => setPartnerBriefingPacket(null)} style={{ background: 'transparent', border: 'none', color: '#fff', fontSize: '1.2rem', cursor: 'pointer' }}>✕</button>
+              <button onClick={() => setPartnerBriefingPacket(null)} style={{ background: 'transparent', border: 'none', color: '#94a3b8', fontSize: '1.5rem', cursor: 'pointer' }}>×</button>
             </div>
 
-            <div style={{ background: 'rgba(239, 68, 68, 0.15)', border: '1px solid #ef4444', color: '#fca5a5', padding: '0.75rem', borderRadius: '0.5rem', fontSize: '0.85rem', marginBottom: '1rem' }}>
-              {partnerBriefingPacket.safeguardNotice}
-            </div>
-
-            {/* Selected Opportunity Breakdown */}
-            <div style={{ background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(59, 130, 246, 0.3)', padding: '0.85rem 1rem', borderRadius: '0.5rem', marginBottom: '1.25rem', fontSize: '0.85rem', color: '#cbd5e1' }}>
-              <div style={{ fontWeight: 700, color: '#60a5fa', marginBottom: '0.35rem' }}>
-                📋 Opportunity Context: {partnerBriefingPacket.opportunityTitle} (Notice #{partnerBriefingPacket.opportunityNumber})
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.4rem', fontSize: '0.8rem' }}>
-                <div><strong>Funding Agency:</strong> {partnerBriefingPacket.agency}</div>
-                <div><strong>Application Deadline:</strong> {partnerBriefingPacket.deadline}</div>
-                <div><strong>Required Pathway:</strong> {partnerBriefingPacket.requiredPathway}</div>
-                <div><strong>Project Thriveward Footprint:</strong> Orange County and Los Angeles County</div>
+            <div style={{ background: 'rgba(30, 41, 59, 0.5)', borderRadius: '0.5rem', padding: '1rem', marginBottom: '1.25rem', border: '1px solid var(--border-color)' }}>
+              <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#60a5fa', marginBottom: '0.5rem' }}>🎯 CoC Target Contact Evidence & Alignment</h3>
+              <div style={{ fontSize: '0.85rem', color: '#cbd5e1', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+                <div><strong>CoC Number:</strong> {partnerBriefingPacket.cocNumber || 'CA-600'}</div>
+                <div><strong>Verified Contact Channel:</strong> {partnerBriefingPacket.verifiedContactEmail}</div>
+                <div><strong>Primary Lead Agency:</strong> {partnerBriefingPacket.collaborativeApplicantOrg}</div>
+                <div><strong>Active Launch Footprint:</strong> Orange County & LA County</div>
               </div>
             </div>
 
-            {/* Opportunity-Specific Positioning Read-Only Panel */}
-            {partnerBriefingPacket.selectedNarrativeLenses && (
-              <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: '1px solid rgba(147, 197, 253, 0.3)', padding: '0.85rem 1rem', borderRadius: '0.5rem', marginBottom: '1.25rem', fontSize: '0.825rem' }}>
-                <div style={{ fontWeight: 700, color: '#60a5fa', marginBottom: '0.4rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  🎯 Opportunity-Specific Positioning
-                </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.5rem' }}>
-                  {partnerBriefingPacket.selectedNarrativeLenses.map((lens: string, idx: number) => (
-                    <span key={idx} className="badge badge-purple" style={{ fontSize: '0.725rem' }}>Lens: {lens}</span>
-                  ))}
-                </div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.4rem', color: '#cbd5e1', fontSize: '0.78rem' }}>
-                  <div><strong>Primary Population:</strong> Justice-involved & system-impacted youth & young adults</div>
-                  <div><strong>Selected Partner Geography:</strong> {partnerBriefingPacket.geography || 'Southern California'}</div>
-                  <div><strong>Legal-Stage Safeguard:</strong> Emerging nonprofit initiative (PRE_INCORPORATION)</div>
-                  <div><strong>Current-Cycle Safeguard:</strong> Information-seeking guidance (Evaluating status)</div>
-                </div>
-              </div>
-            )}
-
-            {/* Editable Subject & Body Text Section */}
-            <div style={{ marginBottom: '1.25rem' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-                <h3 style={{ fontSize: '1rem', fontWeight: 700, color: '#93c5fd' }}>
-                  ✉️ Editable Draft Inquiry Email ({partnerBriefingPacket.inquiryPurpose || 'GRANT_COMPETITION'})
-                </h3>
-                <span style={{ fontSize: '0.8rem', padding: '0.3rem 0.6rem', borderRadius: '0.35rem', background: partnerBriefingPacket.draftInquiryEmail?.to?.includes('[VERIFY') ? 'rgba(239, 68, 68, 0.2)' : 'rgba(59, 130, 246, 0.2)', border: partnerBriefingPacket.draftInquiryEmail?.to?.includes('[VERIFY') ? '1px solid #ef4444' : '1px solid #3b82f6', color: partnerBriefingPacket.draftInquiryEmail?.to?.includes('[VERIFY') ? '#fca5a5' : '#93c5fd', fontWeight: 700 }}>
-                  To: {partnerBriefingPacket.draftInquiryEmail?.to}
-                </span>
+            <div style={{ background: 'rgba(15, 23, 42, 0.8)', border: '1px solid #3b82f6', borderRadius: '0.5rem', padding: '1.25rem', marginBottom: '1.25rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+                <h3 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#38bdf8', margin: 0 }}>✉️ Positioned Outreach Initial Inquiry Draft</h3>
+                <span className="badge badge-blue">EDITABLE HUMAN WORKING DRAFT</span>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', color: '#94a3b8', marginBottom: '0.2rem', fontWeight: 600 }}>Subject Line:</label>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', marginBottom: '0.25rem' }}>SUBJECT LINE:</label>
                   <input
                     type="text"
                     value={partnerEditableSubject}
                     onChange={(e) => setPartnerEditableSubject(e.target.value)}
-                    style={{ width: '100%', background: '#1e293b', border: '1px solid var(--border-color)', color: '#f8fafc', padding: '0.5rem 0.75rem', borderRadius: '0.4rem', fontSize: '0.85rem', fontWeight: 600 }}
+                    style={{ width: '100%', background: '#1e293b', border: '1px solid var(--border-color)', color: '#f8fafc', padding: '0.5rem', borderRadius: '0.35rem', fontSize: '0.85rem', fontWeight: 600 }}
                   />
                 </div>
-
                 <div>
-                  <label style={{ display: 'block', fontSize: '0.78rem', color: '#94a3b8', marginBottom: '0.2rem', fontWeight: 600 }}>Email Body:</label>
+                  <label style={{ display: 'block', fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', marginBottom: '0.25rem' }}>INQUIRY BODY TEXT:</label>
                   <textarea
                     value={partnerEditableBodyText}
                     onChange={(e) => setPartnerEditableBodyText(e.target.value)}
-                    rows={14}
+                    rows={12}
                     style={{ width: '100%', background: '#1e293b', border: '1px solid var(--border-color)', color: '#cbd5e1', padding: '0.75rem', borderRadius: '0.4rem', fontSize: '0.85rem', fontFamily: 'monospace', lineHeight: 1.5 }}
                   />
                 </div>
@@ -1931,13 +1952,18 @@ export function App() {
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px solid var(--border-color)', paddingTop: '1rem' }}>
               <button
-                onClick={() => {
-                  navigator.clipboard.writeText(`Subject: ${partnerEditableSubject}\n\n${partnerEditableBodyText}`);
-                  setPartnerCopiedEmail(true);
-                  setTimeout(() => setPartnerCopiedEmail(false), 3000);
-                }}
+                onClick={() =>
+                  handleSaveWorkingDraft(
+                    partnerBriefingPacket.strategicPartnerId,
+                    partnerBriefingPacket.opportunityId,
+                    partnerEditableSubject,
+                    partnerEditableBodyText,
+                    partnerBriefingPacket.verifiedContactEmail,
+                    'GRANT_COMPETITION'
+                  )
+                }
                 style={{
-                  background: partnerCopiedEmail ? '#10b981' : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                  background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
                   border: 'none',
                   color: '#fff',
                   padding: '0.55rem 1.25rem',
@@ -1948,7 +1974,7 @@ export function App() {
                   boxShadow: '0 4px 12px rgba(37, 99, 235, 0.3)',
                 }}
               >
-                {partnerCopiedEmail ? '✓ Copied to Clipboard!' : '📋 Copy Email to Clipboard'}
+                💾 Save Working Draft to Outreach Workspace
               </button>
               <button onClick={() => setPartnerBriefingPacket(null)} style={{ background: 'rgba(255,255,255,0.08)', border: '1px solid var(--border-color)', color: '#fff', padding: '0.55rem 1.25rem', borderRadius: '0.4rem', fontWeight: 700, cursor: 'pointer' }}>
                 Close Briefing
