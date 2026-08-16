@@ -33,6 +33,12 @@ services:
       PORT: 4000
       DATABASE_URL: postgresql://${POSTGRES_USER:-bridge_admin}:${POSTGRES_PASSWORD:-bridge_secure_pass_2026}@postgres:5432/${POSTGRES_DB:-bridge_ai_db}?schema=public
       FUNDING_AGENT_URL: http://funding-agent:8000
+      AI_FUNDING_ANALYST_ENABLED: ${AI_FUNDING_ANALYST_ENABLED:-false}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.6-luna}
+      OPENAI_TIMEOUT_MS: ${OPENAI_TIMEOUT_MS:-30000}
+      OPENAI_MAX_OUTPUT_TOKENS: ${OPENAI_MAX_OUTPUT_TOKENS:-2500}
+      AI_EVALUATION_RATE_LIMIT_PER_HOUR: ${AI_EVALUATION_RATE_LIMIT_PER_HOUR:-5}
     depends_on:
       postgres:
         condition: service_healthy

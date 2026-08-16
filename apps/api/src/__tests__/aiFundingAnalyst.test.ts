@@ -1,3 +1,5 @@
+import fs from 'fs';
+import path from 'path';
 import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import { app } from '../server';
@@ -110,6 +112,20 @@ describe('AI-1 — Structured AI Funding Analyst Complete Test Suite', () => {
       if (process.env.AI_FUNDING_ANALYST_ENABLED !== 'true' || !process.env.OPENAI_API_KEY) {
         expect(prodProvider.isConfigured()).toBe(false);
       }
+    });
+
+    it('verifies docker-compose.yml forwards required AI analyst variables without hardcoded secrets', () => {
+      const composePath = path.resolve(__dirname, '../../../../docker-compose.yml');
+      const composeContent = fs.readFileSync(composePath, 'utf8');
+
+      expect(composeContent).toContain('AI_FUNDING_ANALYST_ENABLED: ${AI_FUNDING_ANALYST_ENABLED:-false}');
+      expect(composeContent).toContain('OPENAI_API_KEY: ${OPENAI_API_KEY:-}');
+      expect(composeContent).toContain('OPENAI_MODEL: ${OPENAI_MODEL:-gpt-5.6-luna}');
+      expect(composeContent).toContain('OPENAI_TIMEOUT_MS: ${OPENAI_TIMEOUT_MS:-30000}');
+      expect(composeContent).toContain('OPENAI_MAX_OUTPUT_TOKENS: ${OPENAI_MAX_OUTPUT_TOKENS:-2500}');
+      expect(composeContent).toContain('AI_EVALUATION_RATE_LIMIT_PER_HOUR: ${AI_EVALUATION_RATE_LIMIT_PER_HOUR:-5}');
+
+      expect(composeContent).not.toMatch(/sk-[A-Za-z0-9_-]{16,}/);
     });
   });
 
