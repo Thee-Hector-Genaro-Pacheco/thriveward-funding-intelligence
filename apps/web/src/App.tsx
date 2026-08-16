@@ -237,7 +237,14 @@ export interface SystemHealth {
     model: string;
     promptVersion: string;
   };
+  documentIngestion?: {
+    enabled: boolean;
+    maxFileBytes: number;
+    maxPages: number;
+    extractionVersion: string;
+  };
 }
+
 
 function sanitizeHtmlToText(html?: string | null): string {
   if (!html) return '';
@@ -1932,7 +1939,9 @@ export function App() {
                   opportunityId={selectedOppForDrawer.id}
                   currentUser={currentUser}
                   apiFetch={apiFetch}
+                  isIngestionEnabled={Boolean(health.documentIngestion?.enabled)}
                 />
+
 
 
                 {/* Dynamic Routing Navigation Action (Partnership vs Sponsor) */}

@@ -42,15 +42,18 @@ export interface ExtractedPage {
 }
 
 interface OfficialFundingDocumentsProps {
+
   opportunityId: string;
   currentUser: any;
   apiFetch: (url: string, options?: RequestInit) => Promise<Response>;
+  isIngestionEnabled?: boolean;
 }
 
 export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> = ({
   opportunityId,
   currentUser,
   apiFetch,
+  isIngestionEnabled = false,
 }) => {
   const [documents, setDocuments] = useState<FundingDocumentData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -71,6 +74,7 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
   const [loadingPages, setLoadingPages] = useState<boolean>(false);
 
   const isViewer = currentUser?.role === 'VIEWER';
+  const isIngestionDisabled = isIngestionEnabled === false || Boolean(error && (error.includes('DOCUMENT_INGESTION_NOT_CONFIGURED') || error.includes('FEATURE_DISABLED')));
 
   const fetchDocuments = async () => {
     setLoading(true);
@@ -99,6 +103,13 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
 
   const handleUploadSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isIngestionDisabled || !isIngestionEnabled) {
+      setError('Official notice ingestion is currently disabled. Enable server-side document ingestion before uploading a PDF.');
+      return;
+    }
+
+
     if (!selectedFile) {
       setError('Please select a PDF file to upload');
       return;
@@ -206,14 +217,13 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
   };
 
   const selectedPage = pages.find((p) => p.pageNumber === selectedPageNum) || null;
-  const isIngestionDisabled = Boolean(error && (error.includes('DOCUMENT_INGESTION_NOT_CONFIGURED') || error.includes('FEATURE_DISABLED')));
 
   return (
     <div className="card" style={{ marginTop: '1.5rem', background: 'rgba(15, 23, 42, 0.75)', border: '1px solid var(--border-color)', borderRadius: '0.75rem', padding: '1.25rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
         <div>
           <span style={{ background: '#0284c7', color: '#e0f2fe', fontWeight: 800, fontSize: '0.75rem', padding: '0.2rem 0.5rem', borderRadius: '0.25rem', letterSpacing: '0.05em' }}>
-            AI-2A CITATION FOUNDATION
+            AI-2A • OFFICIAL NOTICE INGESTION & CITATION FOUNDATION
           </span>
           <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#f8fafc', marginTop: '0.35rem' }}>
             📄 Official Funding Documents
@@ -225,9 +235,9 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
         <div style={{ background: 'rgba(234, 179, 8, 0.1)', border: '1px solid #eab308', borderRadius: '0.5rem', padding: '0.85rem 1rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
           <span style={{ fontSize: '1.2rem' }}>⚠️</span>
           <div>
-            <div style={{ color: '#fef08a', fontWeight: 700, fontSize: '0.875rem' }}>Document Ingestion Offline</div>
+            <div style={{ color: '#fef08a', fontWeight: 700, fontSize: '0.875rem' }}>Document Ingestion Disabled</div>
             <div style={{ color: '#fef9c3', fontSize: '0.8rem', marginTop: '0.25rem', lineHeight: 1.4 }}>
-              Document ingestion is currently disabled on this server (`DOCUMENT_INGESTION_ENABLED=false`). Upload controls remain inactive until enabled by an administrator.
+              Official notice ingestion is currently disabled. Enable server-side document ingestion before uploading a PDF.
             </div>
           </div>
         </div>
@@ -244,7 +254,6 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
         </div>
       )}
 
-
       {successMessage && (
         <div style={{ padding: '0.75rem', marginBottom: '1rem', background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: '0.375rem', color: '#86efac', fontSize: '0.85rem' }}>
           {successMessage}
@@ -253,7 +262,7 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
 
       {/* Upload Form (Disabled for VIEWER) */}
       {!isViewer && (
-        <form onSubmit={handleUploadSubmit} style={{ background: '#1e293b', padding: '1rem', borderRadius: '0.5rem', border: '1px solid var(--border-color)', marginBottom: '1.5rem' }}>
+        <form onSubmit={handleUploadSubmit} style={{ background: '#1e293b', padding: '1rem', borderRadius: '0.5rem', border: '1px solid var(--border-color)', marginBottom: '1.5rem', opacity: isIngestionDisabled ? 0.7 : 1 }}>
           <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#e2e8f0', marginBottom: '0.75rem' }}>
             📤 Upload Official Notice PDF
           </h4>
@@ -263,8 +272,20 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
               <select
                 value={documentType}
                 disabled={isIngestionDisabled}
+                aria-disabled={isIngestionDisabled}
                 onChange={(e) => setDocumentType(e.target.value)}
-                style={{ width: '100%', background: '#0f172a', color: '#f8fafc', border: '1px solid var(--border-color)', padding: '0.45rem', borderRadius: '0.375rem', fontSize: '0.8rem', opacity: isIngestionDisabled ? 0.6 : 1 }}
+                style={{
+                  width: '100%',
+                  background: '#0f172a',
+                  color: '#f8fafc',
+                  border: '1px solid var(--border-color)',
+                  padding: '0.45rem',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.8rem',
+                  opacity: isIngestionDisabled ? 0.6 : 1,
+                  cursor: isIngestionDisabled ? 'not-allowed' : 'pointer',
+                  pointerEvents: isIngestionDisabled ? 'none' : 'auto',
+                }}
               >
                 <option value="OFFICIAL_NOTICE">Official Notice / FOA / NOFO</option>
                 <option value="AMENDMENT">Official Amendment</option>
@@ -279,9 +300,21 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
                 placeholder="e.g. Official Solicitation Notice & Guidelines"
                 value={title}
                 disabled={isIngestionDisabled}
+                aria-disabled={isIngestionDisabled}
                 onChange={(e) => setTitle(e.target.value)}
                 required
-                style={{ width: '100%', background: '#0f172a', color: '#f8fafc', border: '1px solid var(--border-color)', padding: '0.45rem', borderRadius: '0.375rem', fontSize: '0.8rem', opacity: isIngestionDisabled ? 0.6 : 1 }}
+                style={{
+                  width: '100%',
+                  background: '#0f172a',
+                  color: '#f8fafc',
+                  border: '1px solid var(--border-color)',
+                  padding: '0.45rem',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.8rem',
+                  opacity: isIngestionDisabled ? 0.6 : 1,
+                  cursor: isIngestionDisabled ? 'not-allowed' : 'text',
+                  pointerEvents: isIngestionDisabled ? 'none' : 'auto',
+                }}
               />
             </div>
             <div>
@@ -291,8 +324,20 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
                 placeholder="https://www.grants.gov/search-results-detail/..."
                 value={officialSourceUrl}
                 disabled={isIngestionDisabled}
+                aria-disabled={isIngestionDisabled}
                 onChange={(e) => setOfficialSourceUrl(e.target.value)}
-                style={{ width: '100%', background: '#0f172a', color: '#f8fafc', border: '1px solid var(--border-color)', padding: '0.45rem', borderRadius: '0.375rem', fontSize: '0.8rem', opacity: isIngestionDisabled ? 0.6 : 1 }}
+                style={{
+                  width: '100%',
+                  background: '#0f172a',
+                  color: '#f8fafc',
+                  border: '1px solid var(--border-color)',
+                  padding: '0.45rem',
+                  borderRadius: '0.375rem',
+                  fontSize: '0.8rem',
+                  opacity: isIngestionDisabled ? 0.6 : 1,
+                  cursor: isIngestionDisabled ? 'not-allowed' : 'text',
+                  pointerEvents: isIngestionDisabled ? 'none' : 'auto',
+                }}
               />
             </div>
           </div>
@@ -302,12 +347,20 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
               type="file"
               accept="application/pdf,.pdf"
               disabled={isIngestionDisabled}
+              aria-disabled={isIngestionDisabled}
               onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-              style={{ fontSize: '0.8rem', color: '#cbd5e1', opacity: isIngestionDisabled ? 0.6 : 1 }}
+              style={{
+                fontSize: '0.8rem',
+                color: '#cbd5e1',
+                opacity: isIngestionDisabled ? 0.6 : 1,
+                cursor: isIngestionDisabled ? 'not-allowed' : 'pointer',
+                pointerEvents: isIngestionDisabled ? 'none' : 'auto',
+              }}
             />
             <button
               type="submit"
               disabled={uploading || !selectedFile || !title.trim() || isIngestionDisabled}
+              aria-disabled={uploading || !selectedFile || !title.trim() || isIngestionDisabled}
               style={{
                 background: (uploading || isIngestionDisabled) ? '#475569' : 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
                 color: '#ffffff',
@@ -318,14 +371,15 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
                 fontSize: '0.85rem',
                 cursor: (uploading || isIngestionDisabled) ? 'not-allowed' : 'pointer',
                 opacity: isIngestionDisabled ? 0.6 : 1,
+                pointerEvents: isIngestionDisabled ? 'none' : 'auto',
               }}
             >
               {isIngestionDisabled ? '🔒 Ingestion Offline' : uploading ? '⏳ Extracting PDF...' : '📤 Upload & Process Notice'}
             </button>
-
           </div>
         </form>
       )}
+
 
 
       {/* Document List */}

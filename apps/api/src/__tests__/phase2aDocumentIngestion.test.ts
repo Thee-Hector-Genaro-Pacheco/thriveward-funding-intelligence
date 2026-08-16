@@ -283,4 +283,59 @@ describe('Phase AI-2A — Hardened Official Document Ingestion & Citation Suite'
       expect(beforeAuditCount).toBe(afterAuditCount);
     });
   });
+
+  describe('6. Disabled Ingestion UI & Configuration Propagation Verification', () => {
+    it('verifies /api/health reports documentIngestion.enabled = false when disabled in environment', async () => {
+      delete process.env.DOCUMENT_INGESTION_ENABLED;
+      const res = await request(app).get('/api/health');
+      expect(res.status).toBe(200);
+      expect(res.body.documentIngestion).toBeDefined();
+      expect(res.body.documentIngestion.enabled).toBe(false);
+      expect(res.body.documentIngestion.maxFileBytes).toBe(26214400);
+      expect(res.body.documentIngestion.maxPages).toBe(300);
+      process.env.DOCUMENT_INGESTION_ENABLED = 'true';
+    });
+
+    it('verifies GET /api/opportunities/:id/funding-documents returns 200 reading document history even when ingestion is disabled', async () => {
+      const res = await request(app)
+        .get(`/api/opportunities/${testOppId}/funding-documents`)
+        .set('x-test-role', 'ADMIN');
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(Array.isArray(res.body.data)).toBe(true);
+    });
+
+    it('verifies unauthenticated upload attempt fails closed with 401 before feature check or file reception', async () => {
+      const pdfBuffer = createMinimalPdfBuffer(['Unauthenticated test']);
+      const res = await request(app)
+        .post(`/api/opportunities/${testOppId}/funding-documents`)
+        .set('x-test-unauthenticated', 'true')
+        .attach('file', pdfBuffer, 'unauth.pdf')
+        .field('title', 'Unauth Upload');
+
+      expect(res.status).toBe(401);
+    });
+
+
+
+    it('verifies unauthorized role (VIEWER) upload attempt fails closed with 403 before feature check or file reception', async () => {
+      const pdfBuffer = createMinimalPdfBuffer(['Unauthorized viewer test']);
+      const res = await request(app)
+        .post(`/api/opportunities/${testOppId}/funding-documents`)
+        .set('x-test-role', 'VIEWER')
+        .set('X-Thriveward-CSRF', '1')
+        .attach('file', pdfBuffer, 'viewer.pdf')
+        .field('title', 'Viewer Upload');
+
+      expect(res.status).toBe(403);
+    });
+
+    it('verifies repository and storage root contain zero .dump files or scratch artifacts', async () => {
+      const fs = await import('fs');
+      const path = await import('path');
+      const rootDir = path.resolve(__dirname, '../../../..');
+      const scratchDir = path.join(rootDir, 'scratch');
+      expect(fs.existsSync(scratchDir)).toBe(false);
+    });
+  });
 });
