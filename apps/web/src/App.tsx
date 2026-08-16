@@ -245,52 +245,14 @@ function cleanReason(reason?: string | null): string {
     .trim();
 }
 
+export type AuthStatus = 'CHECKING_SESSION' | 'AUTHENTICATED' | 'UNAUTHENTICATED';
+
 export function App() {
-  // Authentication State
+  // Explicit Authentication Lifecycle State
+  const [authStatus, setAuthStatus] = useState<AuthStatus>('CHECKING_SESSION');
   const [currentUser, setCurrentUser] = useState<any | null>(null);
-  const [authChecked, setAuthChecked] = useState<boolean>(false);
   const [showChangePasswordModal, setShowChangePasswordModal] = useState<boolean>(false);
   const [showAdminUsersModal, setShowAdminUsersModal] = useState<boolean>(false);
-
-  const fetchCurrentUser = async () => {
-    try {
-      const res = await fetch('/api/auth/me', { credentials: 'same-origin' });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success && data.user) {
-          setCurrentUser(data.user);
-        } else {
-          setCurrentUser(null);
-        }
-      } else {
-        setCurrentUser(null);
-      }
-    } catch (err) {
-      setCurrentUser(null);
-    } finally {
-      setAuthChecked(true);
-    }
-  };
-
-  useEffect(() => {
-    fetchCurrentUser();
-  }, []);
-
-  const handleLogout = async () => {
-    try {
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        headers: { 'X-Thriveward-CSRF': '1' },
-        credentials: 'same-origin',
-      });
-    } catch (err) {
-      console.error('Logout error:', err);
-    } finally {
-      setCurrentUser(null);
-    }
-  };
-
-  const [activePrimaryTab, setActivePrimaryTab] = useState<'OPPORTUNITIES' | 'SPONSORS' | 'PARTNERS' | 'READINESS' | 'CALENDAR'>('OPPORTUNITIES');
 
   const [opportunities, setOpportunities] = useState<FundingOpportunity[]>([]);
   const [sponsors, setSponsors] = useState<FiscalSponsorCandidate[]>([]);
@@ -301,6 +263,95 @@ export function App() {
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Clear all protected state when session is unauthenticated
+  const handleUnauthenticatedSession = () => {
+    setCurrentUser(null);
+    setAuthStatus('UNAUTHENTICATED');
+    setOpportunities([]);
+    setSponsors([]);
+    setPartners([]);
+    setReadinessPlans([]);
+    setCalendarItems([]);
+    setOutreachDashboard(null);
+    setOutreachEngagement(null);
+    setLoading(false);
+  };
+
+  // Unified Protected API Fetch Helper with Credentials and Anti-CSRF
+  const apiFetch = async (url: string, options: RequestInit = {}) => {
+    const headers = {
+      'X-Thriveward-CSRF': '1',
+      'X-Bridge-CSRF': '1',
+      ...(options.headers || {}),
+    };
+
+    const config: RequestInit = {
+      ...options,
+      credentials: 'include',
+      headers,
+    };
+
+    const res = await fetch(url, config);
+
+    if (res.status === 401) {
+      if (authStatus === 'AUTHENTICATED') {
+        handleUnauthenticatedSession();
+      }
+      throw new Error('Authentication required. Please log in.');
+    }
+
+    return res;
+  };
+
+  // 1. Initial Mount: Restore Session first before any protected endpoints
+  const restoreSession = async () => {
+    setAuthStatus('CHECKING_SESSION');
+    try {
+      const res = await fetch('/api/auth/me', {
+        credentials: 'include',
+        headers: {
+          'X-Thriveward-CSRF': '1',
+          'X-Bridge-CSRF': '1',
+        },
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.user) {
+          setCurrentUser(data.user);
+          setAuthStatus('AUTHENTICATED');
+          setError(null); // Clear transient startup errors
+          return;
+        }
+      }
+    } catch (err) {
+      console.error('Session restoration failed:', err);
+    }
+    setCurrentUser(null);
+    setAuthStatus('UNAUTHENTICATED');
+  };
+
+  useEffect(() => {
+    fetchHealth();
+    restoreSession();
+  }, []);
+
+  const handleLoginSuccess = (user: any) => {
+    setCurrentUser(user);
+    setAuthStatus('AUTHENTICATED');
+    setError(null);
+  };
+
+  const handleLogout = async () => {
+    try {
+      await apiFetch('/api/auth/logout', { method: 'POST' });
+    } catch (err) {
+      console.error('Logout error:', err);
+    } finally {
+      handleUnauthenticatedSession();
+    }
+  };
+
+  const [activePrimaryTab, setActivePrimaryTab] = useState<'OPPORTUNITIES' | 'SPONSORS' | 'PARTNERS' | 'READINESS' | 'CALENDAR'>('OPPORTUNITIES');
   const [activeFilter, setActiveFilter] = useState<string>('POTENTIAL_PATHWAYS');
   const [pathwaysSubFilter, setPathwaysSubFilter] = useState<'all' | 'fiscal' | 'partnership' | 'future'>('all');
 
@@ -335,8 +386,9 @@ export function App() {
   const [outreachDashboard, setOutreachDashboard] = useState<any | null>(null);
 
   const fetchOutreachDashboard = async () => {
+    if (authStatus !== 'AUTHENTICATED') return;
     try {
-      const res = await fetch('/api/outreach/dashboard');
+      const res = await apiFetch('/api/outreach/dashboard');
       if (res.ok) {
         const data = await res.json();
         setOutreachDashboard(data.data || null);
@@ -351,19 +403,21 @@ export function App() {
       const query = new URLSearchParams();
       if (opportunityId) query.append('opportunityId', opportunityId);
       if (inquiryPurpose) query.append('inquiryPurpose', inquiryPurpose);
-      const res = await fetch(`/api/outreach/engagements/${partnerId}?${query.toString()}`);
+      const res = await apiFetch(`/api/outreach/engagements/${partnerId}?${query.toString()}`);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       setOutreachEngagement(data.data);
     } catch (err: any) {
-      setError(`Failed to open outreach workspace: ${err.message}`);
+      if (authStatus === 'AUTHENTICATED') {
+        setError(`Failed to open outreach workspace: ${err.message}`);
+      }
     }
   };
 
   const handleRefreshOutreachWorkspace = async () => {
     if (outreachEngagement?.id) {
       try {
-        const res = await fetch(`/api/outreach/timeline/${outreachEngagement.id}`);
+        const res = await apiFetch(`/api/outreach/timeline/${outreachEngagement.id}`);
         if (res.ok) {
           const data = await res.json();
           setOutreachEngagement(data.data);
@@ -419,6 +473,7 @@ export function App() {
   };
 
   const fetchOpportunities = async () => {
+    if (authStatus !== 'AUTHENTICATED') return;
     setLoading(true);
     setError(null);
     try {
@@ -443,46 +498,50 @@ export function App() {
         queryParams = '?pursuitStage=LOCKED';
       }
 
-      const res = await fetch(`/api/opportunities${queryParams}`);
+      const res = await apiFetch(`/api/opportunities${queryParams}`);
       if (!res.ok) throw new Error(`API response error: HTTP ${res.status}`);
       const json = await res.json();
       setOpportunities(json.data || []);
     } catch (err: any) {
-      setError(err.message || 'Failed to connect to REST API');
+      if (authStatus === 'AUTHENTICATED') {
+        setError(err.message || 'Failed to connect to REST API');
+      }
     } finally {
       setLoading(false);
     }
   };
 
   const fetchSponsors = async () => {
+    if (authStatus !== 'AUTHENTICATED') return;
     setLoading(true);
     try {
-      const res = await fetch('/api/fiscal-sponsors');
+      const res = await apiFetch('/api/fiscal-sponsors');
       if (res.ok) {
         const json = await res.json();
         setSponsors(json.data || []);
       }
     } catch (err: any) {
-      setError(err.message);
+      if (authStatus === 'AUTHENTICATED') setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
   const fetchPartners = async (opportunityId?: string) => {
+    if (authStatus !== 'AUTHENTICATED') return;
     setLoading(true);
     try {
       const targetOppId = opportunityId || selectedOppForPartnerView?.id;
       const url = targetOppId
         ? `/api/strategic-partners?opportunityId=${targetOppId}`
         : '/api/strategic-partners';
-      const res = await fetch(url);
+      const res = await apiFetch(url);
       if (res.ok) {
         const json = await res.json();
         setPartners(json.data || []);
       }
     } catch (err: any) {
-      setError(err.message);
+      if (authStatus === 'AUTHENTICATED') setError(err.message);
     } finally {
       setLoading(false);
     }
@@ -493,7 +552,7 @@ export function App() {
   const handleTriggerPartnerDiscovery = async () => {
     setPartnerDiscoveryLoading(true);
     try {
-      const res = await fetch('/api/strategic-partners/discovery', { method: 'POST' });
+      const res = await apiFetch('/api/strategic-partners/discovery', { method: 'POST' });
       if (res.ok) {
         setHasRunPartnerDiscovery(true);
         setActionMessage('✓ CoC Collaborative Applicant Discovery completed. Verified CoC structures for Southern California.');
@@ -512,7 +571,7 @@ export function App() {
       const url = targetOppId
         ? `/api/strategic-partners/${partnerId}/briefing?opportunityId=${targetOppId}&inquiryPurpose=${inquiryPurpose}`
         : `/api/strategic-partners/${partnerId}/briefing?inquiryPurpose=${inquiryPurpose}`;
-      const res = await fetch(url);
+      const res = await apiFetch(url);
       if (res.ok) {
         const json = await res.json();
         const briefing = json.data;
@@ -528,8 +587,6 @@ export function App() {
     }
   };
 
-
-
   const handleSaveWorkingDraft = async (
     partnerId: string,
     opportunityId: string | undefined,
@@ -540,7 +597,7 @@ export function App() {
     isDemo = false
   ) => {
     try {
-      const engRes = await fetch(
+      const engRes = await apiFetch(
         `/api/outreach/engagements/${partnerId}?opportunityId=${opportunityId || ''}&inquiryPurpose=${inquiryPurpose}&dataOrigin=${isDemo ? 'DEMO' : 'OFFICIAL_LIVE'}`
       );
       const engData = await engRes.json();
@@ -550,7 +607,7 @@ export function App() {
       }
       const engagement = engData.data;
 
-      const draftRes = await fetch('/api/outreach/drafts', {
+      const draftRes = await apiFetch('/api/outreach/drafts', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -567,7 +624,7 @@ export function App() {
 
       if (draftData.success) {
         setActionMessage(`✓ Saved Working Draft v${draftData.data.versionNumber} to Outreach Workspace!`);
-        const timelineRes = await fetch(`/api/outreach/timeline/${engagement.id}`);
+        const timelineRes = await apiFetch(`/api/outreach/timeline/${engagement.id}`);
         const timelineData = await timelineRes.json();
         setOutreachEngagement(timelineData.data || engagement);
         setBriefingPacket(null);
@@ -588,37 +645,43 @@ export function App() {
   };
 
   const fetchReadinessPlans = async () => {
+    if (authStatus !== 'AUTHENTICATED') return;
     setLoading(true);
     try {
-      const res = await fetch('/api/readiness-plans');
+      const res = await apiFetch('/api/readiness-plans');
       if (res.ok) {
         const json = await res.json();
         setReadinessPlans(json.data || []);
       }
     } catch (err: any) {
-      setError(err.message);
+      if (authStatus === 'AUTHENTICATED') setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
   const fetchCalendarItems = async () => {
+    if (authStatus !== 'AUTHENTICATED') return;
     setLoading(true);
     try {
-      const res = await fetch('/api/grant-calendar');
+      const res = await apiFetch('/api/grant-calendar');
       if (res.ok) {
         const json = await res.json();
         setCalendarItems(json.data || []);
       }
     } catch (err: any) {
-      setError(err.message);
+      if (authStatus === 'AUTHENTICATED') setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
+  // STRICT REQUIREMENT: Only invoke protected data requests when AUTHENTICATED
   useEffect(() => {
-    fetchHealth();
+    if (authStatus !== 'AUTHENTICATED') {
+      return;
+    }
+
     if (activePrimaryTab === 'OPPORTUNITIES') {
       fetchOpportunities();
     } else if (activePrimaryTab === 'SPONSORS') {
@@ -631,7 +694,7 @@ export function App() {
     } else if (activePrimaryTab === 'CALENDAR') {
       fetchCalendarItems();
     }
-  }, [activePrimaryTab, activeFilter, pathwaysSubFilter]);
+  }, [authStatus, activePrimaryTab, activeFilter, pathwaysSubFilter]);
 
   // Handle Analyze & Score Action with Immediate State Refresh
   const handleAnalyze = async (id: string, e: React.MouseEvent) => {
@@ -2043,10 +2106,8 @@ export function App() {
       )}
 
       {/* Unauthenticated Login Screen Modal */}
-      {authChecked && !currentUser && (
-        <LoginModal onLoginSuccess={(user) => {
-          setCurrentUser(user);
-        }} />
+      {authStatus === 'UNAUTHENTICATED' && (
+        <LoginModal onLoginSuccess={handleLoginSuccess} />
       )}
 
       {/* Change Password Modal */}

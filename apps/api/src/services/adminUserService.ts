@@ -33,7 +33,7 @@ export class AdminUserService {
     password: string;
     role?: UserRole;
     mustChangePassword?: boolean;
-    adminUserId: string;
+    adminUserId?: string;
     ipAddress?: string;
     userAgent?: string;
   }): Promise<UserSummary> {
