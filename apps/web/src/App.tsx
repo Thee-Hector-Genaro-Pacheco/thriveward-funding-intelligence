@@ -7,6 +7,8 @@ import { UserHeaderBadge } from './components/UserHeaderBadge';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { AdminUserManagementModal } from './components/AdminUserManagementModal';
 import { AiEvaluationPanel, AiEvaluationData } from './components/AiEvaluationPanel';
+import { OfficialFundingDocuments } from './components/OfficialFundingDocuments';
+
 
 const formatEligibilityText = (val: string | undefined | null) => {
   if (!val) return 'UNKNOWN';
@@ -928,8 +930,9 @@ export function App() {
       {/* Header */}
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
         <div>
-          <div className="header-badge">AI-1 • Structured AI Funding Analyst</div>
+          <div className="header-badge">AI-2A • Official Notice Ingestion & Citation Foundation</div>
           <h1 className="brand-title">Thriveward Funding Intelligence</h1>
+
           <p className="brand-subtitle">
             Human-led funding, readiness, and partnership intelligence for Project Thriveward
           </p>
@@ -1924,6 +1927,14 @@ export function App() {
                   error={aiError}
                 />
 
+                {/* AI-2A Official Funding Documents & Citation Foundation Panel */}
+                <OfficialFundingDocuments
+                  opportunityId={selectedOppForDrawer.id}
+                  currentUser={currentUser}
+                  apiFetch={apiFetch}
+                />
+
+
                 {/* Dynamic Routing Navigation Action (Partnership vs Sponsor) */}
                 {selectedOppForDrawer.candidateRoutingStatus === 'PARTNERSHIP_REQUIRED' || selectedOppForDrawer.fundingOpportunityNumber?.includes('CPD-2600-DC-0025') ? (
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(59, 130, 246, 0.12)', border: '1px solid #3b82f6', padding: '1rem', borderRadius: '0.65rem' }}>
@@ -2233,8 +2244,9 @@ export function App() {
       </div>
 
       <footer>
-        <p>Thriveward Funding Intelligence Platform • AI-1 • Structured AI Funding Analyst • Project Thriveward</p>
+        <p>Thriveward Funding Intelligence Platform • AI-2A • Official Notice Ingestion & Citation Foundation • Project Thriveward</p>
       </footer>
+
     </div>
   );
 }

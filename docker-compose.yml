@@ -39,6 +39,14 @@ services:
       OPENAI_TIMEOUT_MS: ${OPENAI_TIMEOUT_MS:-30000}
       OPENAI_MAX_OUTPUT_TOKENS: ${OPENAI_MAX_OUTPUT_TOKENS:-2500}
       AI_EVALUATION_RATE_LIMIT_PER_HOUR: ${AI_EVALUATION_RATE_LIMIT_PER_HOUR:-5}
+      DOCUMENT_INGESTION_ENABLED: ${DOCUMENT_INGESTION_ENABLED:-false}
+      DOCUMENT_STORAGE_ROOT: ${DOCUMENT_STORAGE_ROOT:-/data/funding-documents}
+      DOCUMENT_MAX_FILE_BYTES: ${DOCUMENT_MAX_FILE_BYTES:-26214400}
+      DOCUMENT_MAX_PAGES: ${DOCUMENT_MAX_PAGES:-300}
+      DOCUMENT_EXTRACTION_TIMEOUT_MS: ${DOCUMENT_EXTRACTION_TIMEOUT_MS:-30000}
+      DOCUMENT_EXTRACTION_VERSION: ${DOCUMENT_EXTRACTION_VERSION:-pdf-page-text-v1}
+    volumes:
+      - funding_documents:/data/funding-documents
     depends_on:
       postgres:
         condition: service_healthy
@@ -70,3 +78,5 @@ volumes:
   postgres_data:
     external: true
     name: bridgeai_postgres_data
+  funding_documents:
+    name: thriveward_funding_intelligence_documents

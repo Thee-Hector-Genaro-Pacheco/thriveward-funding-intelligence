@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { PrismaClient, AiEligibilityRating } from '@prisma/client';
 import path from 'path';
 import { runOperationalContaminationRepair } from '../scripts/reconcileOperationalContamination';
@@ -14,60 +14,6 @@ describe('Operational Recovery Provenance & Audit Classification Suite', () => {
     if (dbRes[0]?.current_database !== 'bridge_ai_test_db') {
       throw new Error(`[SAFETY_ABORT] Test suite must run against bridge_ai_test_db. Received: ${dbRes[0]?.current_database}`);
     }
-
-    // Seed dummy protected live evaluation records for script dry-run validation in test DB
-    const adminUser = await prisma.user.findFirst({ where: { role: 'ADMIN' } });
-    if (!adminUser) return;
-
-    await prisma.fundingOpportunity.upsert({
-      where: { id: 'e9943e0c-120c-4035-b445-25ff5dfd888a' },
-      update: {},
-      create: {
-        id: 'e9943e0c-120c-4035-b445-25ff5dfd888a',
-        title: 'Street Outreach Program',
-        description: 'Street outreach program for homeless youth.',
-        fundingAgency: 'ACF',
-        fundingOpportunityNumber: 'HHS-2026-ACF-ACYF-YO-0044',
-        sourceSystem: 'GRANTS_GOV',
-        sourceUrl: 'https://www.grants.gov/search-results-detail/362088'
-      }
-    });
-
-    await prisma.fundingOpportunity.upsert({
-      where: { id: '1f975fa8-75c6-4c43-bab8-952dc2367be8' },
-      update: {},
-      create: {
-        id: '1f975fa8-75c6-4c43-bab8-952dc2367be8',
-        title: 'FY2026 Continuum of Care Competition and Youth Homelessness Demonstration Program',
-        description: 'Continuum of care competition.',
-        fundingAgency: 'HUD',
-        fundingOpportunityNumber: 'CPD-2600-DC-0025',
-        sourceSystem: 'GRANTS_GOV',
-        sourceUrl: 'https://www.grants.gov/search-results-detail/350000'
-      }
-    });
-
-    await prisma.aiEvaluation.upsert({
-      where: { id: '536c89cb-4b0c-4cd7-b61a-0f8b762ebec9' },
-      update: {},
-      create: {
-        id: '536c89cb-4b0c-4cd7-b61a-0f8b762ebec9',
-        opportunityId: 'e9943e0c-120c-4035-b445-25ff5dfd888a',
-        alignmentScore: 85,
-        eligibility: AiEligibilityRating.LIKELY_ELIGIBLE,
-        summary: 'Test summary',
-        strengths: [],
-        risks: [],
-        requirements: [],
-        recommendedNextAction: 'Review',
-        confidence: 0.9,
-        limitations: [],
-        evidenceSnapshot: {},
-        inputSnapshot: { opportunityId: '16ad49b0-e869-4420-bbbe-c9cb43563950' },
-        inputHash: '012f021af2498bb1df13cf0a9efb096f90a59da8f445e58d9a2a3ea591803b44',
-        generatedByUserId: adminUser.id
-      }
-    });
   });
 
   it('1. Repair command fails closed if wrong database name is provided', async () => {
@@ -149,7 +95,18 @@ describe('Operational Recovery Provenance & Audit Classification Suite', () => {
       }
     });
 
-    const user = await prisma.user.findFirst();
+    let user = await prisma.user.findFirst();
+    if (!user) {
+      user = await prisma.user.create({
+        data: {
+          email: `unit-user-${Date.now()}@example.org`,
+          displayName: 'Unit User',
+          passwordHash: 'hash',
+          role: 'ADMIN',
+        },
+      });
+    }
+
     const evalRecord = await prisma.aiEvaluation.create({
       data: {
         opportunityId: opp.id,
@@ -165,9 +122,10 @@ describe('Operational Recovery Provenance & Audit Classification Suite', () => {
         evidenceSnapshot: {},
         inputSnapshot: { opportunityId: 'original-dummy-opp-id' },
         inputHash: 'hash123',
-        generatedByUserId: user!.id
-      }
+        generatedByUserId: user.id,
+      },
     });
+
 
     await prisma.aiEvaluationRecoveryRecord.create({
       data: {

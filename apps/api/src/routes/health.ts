@@ -64,5 +64,11 @@ healthRouter.get('/', async (req: Request, res: Response) => {
       autonomousSubmissionsAllowed: false,
     },
     aiAnalyst: AiFundingAnalystService.getConfigurationStatus(),
+    documentIngestion: {
+      enabled: process.env.DOCUMENT_INGESTION_ENABLED === 'true' || process.env.DOCUMENT_INGESTION_ENABLED === '1',
+      maxFileBytes: Number(process.env.DOCUMENT_MAX_FILE_BYTES) || 26214400,
+      maxPages: Number(process.env.DOCUMENT_MAX_PAGES) || 300,
+      extractionVersion: process.env.DOCUMENT_EXTRACTION_VERSION || 'pdf-page-text-v1',
+    },
   });
 });

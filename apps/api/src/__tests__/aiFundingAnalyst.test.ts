@@ -448,8 +448,9 @@ describe('AI-1 — Structured AI Funding Analyst Complete Test Suite', () => {
       const appTsxPath = path.resolve(__dirname, '../../../web/src/App.tsx');
       const appContent = fs.readFileSync(appTsxPath, 'utf8');
 
-      expect(appContent).toContain('AI-1 • Structured AI Funding Analyst');
+      expect(appContent).toContain('AI-2A • Official Notice Ingestion & Citation Foundation');
       expect(appContent).not.toContain('Phase 1H • Secure Authentication, RBAC & Verified Human Attribution');
+
     });
 
     it('verifies frontend AiEvaluationPanel.tsx explicitly displays Model confidence', () => {

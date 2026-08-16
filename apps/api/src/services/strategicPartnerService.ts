@@ -201,6 +201,7 @@ export class StrategicPartnerService {
             contactValue: 'NOFA@lahsa.org',
             contactType: 'EMAIL',
             purpose: 'Grant Applications & NOFO Partnership Proposals',
+            purposeCategory: 'GRANT_COMPETITION',
             verificationStatus: 'VERIFIED_OFFICIAL',
             sourceUrl: 'https://www.lahsa.org/funding',
             quotedCitation: 'Official LAHSA notice for FY 2026 CoC Program NOFO inquiries and submissions: NOFA@lahsa.org.',
@@ -209,10 +210,12 @@ export class StrategicPartnerService {
             contactValue: 'CareCoordination@lahsa.org',
             contactType: 'EMAIL',
             purpose: 'Direct Client Care & Programmatic Intake',
+            purposeCategory: 'CES_INTEGRATION',
             verificationStatus: 'VERIFIED_OFFICIAL',
             sourceUrl: 'https://www.lahsa.org/ces',
             quotedCitation: 'Official LA County Coordinated Entry System contact for direct intake.',
           },
+
         ];
 
         for (const sc of structuredContacts) {
@@ -230,9 +233,15 @@ export class StrategicPartnerService {
                 ...sc,
               },
             });
+          } else if (sc.purposeCategory && exists.purposeCategory !== sc.purposeCategory) {
+            await prisma.partnerContactChannel.update({
+              where: { id: exists.id },
+              data: { purposeCategory: sc.purposeCategory },
+            });
           }
         }
       }
+
 
       // Seed purpose-specific structured contacts for Orange County CA-602
       if (candidate.cocNumber === 'CA-602') {

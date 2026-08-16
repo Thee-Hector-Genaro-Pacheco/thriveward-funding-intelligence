@@ -169,6 +169,7 @@ model FundingOpportunity {
   engagements             OutreachEngagement[]
   aiEvaluations           AiEvaluation[]
   recoveryRecords         FundingOpportunityRecoveryRecord[]
+  fundingDocuments        FundingDocument[]
 
   @@unique([sourceSystem, externalOpportunityId])
   @@index([candidateRoutingStatus])
@@ -801,17 +802,18 @@ model User {
   updatedAt          DateTime  @updatedAt
   lastLoginAt        DateTime?
 
-  sessions               UserSession[]
-  securityEvents         SecurityAuditEvent[]
-  outreachDraftVersions  OutreachDraftVersion[]
-  outreachHumanApprovals OutreachHumanApproval[]
-  outreachDeliveries     OutreachDeliveryRecord[]
-  outreachHistories      OutreachWorkflowHistory[]
-  outreachResponses      OutreachResponseRecord[]
-  outreachFollowUps      OutreachFollowUp[]
-  mouChecklistItems      MouChecklistItem[]
-  generatedAiEvaluations AiEvaluation[]            @relation("GeneratedAiEvaluations")
-  reviewedAiEvaluations  AiEvaluation[]            @relation("ReviewedAiEvaluations")
+  sessions                 UserSession[]
+  securityEvents           SecurityAuditEvent[]
+  outreachDraftVersions    OutreachDraftVersion[]
+  outreachHumanApprovals   OutreachHumanApproval[]
+  outreachDeliveries       OutreachDeliveryRecord[]
+  outreachHistories        OutreachWorkflowHistory[]
+  outreachResponses        OutreachResponseRecord[]
+  outreachFollowUps        OutreachFollowUp[]
+  mouChecklistItems        MouChecklistItem[]
+  generatedAiEvaluations   AiEvaluation[]            @relation("GeneratedAiEvaluations")
+  reviewedAiEvaluations    AiEvaluation[]            @relation("ReviewedAiEvaluations")
+  uploadedDocumentVersions FundingDocumentVersion[]  @relation("UploadedDocumentVersions")
 }
 
 model UserSession {
@@ -1135,4 +1137,82 @@ model AiEvaluationRecoveryRecord {
 
   @@index([aiEvaluationId])
   @@index([originalOpportunityId])
+}
+
+// --- AI-2A: Official Notice Ingestion & Citation Foundation Models ---
+
+enum DocumentType {
+  OFFICIAL_NOTICE
+  AMENDMENT
+  SUPPLEMENTAL
+  OTHER_OFFICIAL_DOCUMENT
+}
+
+enum DocumentVersionStatus {
+  UPLOADED
+  PROCESSING
+  READY
+  OCR_REQUIRED
+  FAILED
+  SUPERSEDED
+}
+
+model FundingDocument {
+  id                   String             @id @default(uuid())
+  fundingOpportunityId String
+  fundingOpportunity   FundingOpportunity @relation(fields: [fundingOpportunityId], references: [id], onDelete: Cascade)
+  documentType         DocumentType       @default(OFFICIAL_NOTICE)
+  title                String
+  officialSourceUrl    String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  versions FundingDocumentVersion[]
+
+  @@index([fundingOpportunityId])
+}
+
+model FundingDocumentVersion {
+  id                String                @id @default(uuid())
+  fundingDocumentId String
+  fundingDocument   FundingDocument       @relation(fields: [fundingDocumentId], references: [id], onDelete: Cascade)
+  version           Int
+  status            DocumentVersionStatus @default(UPLOADED)
+  originalFileName  String
+  mimeType          String
+  sizeBytes         Int
+  sha256            String
+  storageKey        String
+  pageCount         Int                   @default(0)
+  extractionVersion String                @default("pdf-page-text-v1")
+  uploadedByUserId  String
+  uploadedByUser    User                  @relation("UploadedDocumentVersions", fields: [uploadedByUserId], references: [id])
+  createdAt         DateTime              @default(now())
+  processedAt       DateTime?
+  failureCode       String?
+  failureMessage    String?
+
+  pages FundingDocumentPage[]
+
+  @@unique([fundingDocumentId, version])
+  @@unique([fundingDocumentId, sha256])
+  @@index([fundingDocumentId])
+  @@index([uploadedByUserId])
+  @@index([status])
+}
+
+model FundingDocumentPage {
+  id                String                 @id @default(uuid())
+  documentVersionId String
+  documentVersion   FundingDocumentVersion @relation(fields: [documentVersionId], references: [id], onDelete: Cascade)
+  pageNumber        Int
+  text              String
+  textHash          String
+  characterCount    Int
+  citationRef       String
+  createdAt         DateTime               @default(now())
+
+  @@unique([documentVersionId, pageNumber])
+  @@index([documentVersionId])
+  @@index([citationRef])
 }
