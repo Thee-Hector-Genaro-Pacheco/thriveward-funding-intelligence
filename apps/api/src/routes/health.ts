@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { BRIDGE_FORWARD_PROFILE } from '@bridge-ai/shared';
+import { BRIDGE_FORWARD_PROFILE } from '@thriveward/shared';
 import { prisma } from '../lib/prisma';
 
 export const healthRouter = Router();
@@ -39,7 +39,7 @@ healthRouter.get('/', async (req: Request, res: Response) => {
 
   res.status(statusCode).json({
     status: isDbHealthy ? 'UP' : 'DOWN',
-    service: 'Bridge AI Core API',
+    service: 'Thriveward Funding Intelligence Core API',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
     organization: {

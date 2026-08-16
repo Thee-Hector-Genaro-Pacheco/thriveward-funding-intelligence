@@ -1,5 +1,5 @@
 /**
- * Bridge AI — Shared Domain Interfaces & Types
+ * Thriveward Funding Intelligence — Shared Domain Interfaces Bridge AI — Shared Domain Interfaces & Types Types
  */
 
 // 1. Eligibility Classification Status

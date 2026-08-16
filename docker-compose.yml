@@ -1,7 +1,9 @@
+name: bridgeai
+
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: bridge-ai-postgres
+    container_name: thriveward-funding-intelligence-postgres
     restart: always
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-bridge_admin}
@@ -21,8 +23,8 @@ services:
     build:
       context: .
       dockerfile: apps/api/Dockerfile
-    image: bridge-ai-api:latest
-    container_name: bridge-ai-api
+    image: thriveward-funding-intelligence-api:latest
+    container_name: thriveward-funding-intelligence-api
     restart: unless-stopped
     ports:
       - "${PORT:-4000}:4000"
@@ -38,8 +40,8 @@ services:
   funding-agent:
     build:
       context: ./services/funding-agent
-    image: bridge-ai-funding-agent:latest
-    container_name: bridge-ai-funding-agent
+    image: thriveward-funding-intelligence-funding-agent:latest
+    container_name: thriveward-funding-intelligence-funding-agent
     restart: unless-stopped
     ports:
       - "${PYTHON_AGENT_PORT:-8000}:8000"
@@ -50,8 +52,8 @@ services:
     build:
       context: .
       dockerfile: apps/web/Dockerfile
-    image: bridge-ai-web:latest
-    container_name: bridge-ai-web
+    image: thriveward-funding-intelligence-web:latest
+    container_name: thriveward-funding-intelligence-web
     restart: unless-stopped
     ports:
       - "${WEB_PORT:-3000}:80"
@@ -60,3 +62,5 @@ services:
 
 volumes:
   postgres_data:
+    external: true
+    name: bridgeai_postgres_data

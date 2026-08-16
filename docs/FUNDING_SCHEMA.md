@@ -1,11 +1,11 @@
-# Bridge AI — Funding Intelligence Schema Specification
+# Thriveward Funding Intelligence — Funding Intelligence Schema Specification
 
 ## 1. Domain Entities
 
 ### OrganizationProfile
 Represents the organization against which opportunities are evaluated.
 - `id`: Unique identifier
-- `name`: Organization name (`Bridge Forward Foundation`)
+- `name`: Organization name (`Project Thriveward`)
 - `status`: Operational status (`PRE_INCORPORATION`)
 - `taxStatus`: Tax-exempt status (`NOT_OBTAINED`)
 - `primaryPopulations`: Array of strings (`["Justice-involved adults", "System-impacted young adults"]`)

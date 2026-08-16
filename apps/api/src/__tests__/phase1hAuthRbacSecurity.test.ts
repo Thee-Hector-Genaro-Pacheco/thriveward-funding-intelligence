@@ -46,7 +46,7 @@ describe('Phase 1H — Closed Authentication, RBAC, Security & Verified Human At
 
     const adminLoginRes = await request(app)
       .post('/api/auth/login')
-      .set('X-Bridge-CSRF', '1')
+      .set('X-Thriveward-CSRF', '1')
       .send({ email: adminEmail, password: 'AdminPassword123!' });
     expect(adminLoginRes.status).toBe(200);
     adminSessionToken = adminLoginRes.body.sessionToken;
@@ -68,7 +68,7 @@ describe('Phase 1H — Closed Authentication, RBAC, Security & Verified Human At
 
     const opLoginRes = await request(app)
       .post('/api/auth/login')
-      .set('X-Bridge-CSRF', '1')
+      .set('X-Thriveward-CSRF', '1')
       .send({ email: operatorEmail, password: 'OperatorPassword123!' });
     expect(opLoginRes.status).toBe(200);
     operatorSessionToken = opLoginRes.body.sessionToken;
@@ -90,7 +90,7 @@ describe('Phase 1H — Closed Authentication, RBAC, Security & Verified Human At
 
     const viewerLoginRes = await request(app)
       .post('/api/auth/login')
-      .set('X-Bridge-CSRF', '1')
+      .set('X-Thriveward-CSRF', '1')
       .send({ email: viewerEmail, password: 'ViewerPassword123!' });
     expect(viewerLoginRes.status).toBe(200);
     viewerSessionToken = viewerLoginRes.body.sessionToken;
@@ -116,7 +116,7 @@ describe('Phase 1H — Closed Authentication, RBAC, Security & Verified Human At
   it('2. Invalid login attempts return generic failure without revealing user existence', async () => {
     const res1 = await request(app)
       .post('/api/auth/login')
-      .set('X-Bridge-CSRF', '1')
+      .set('X-Thriveward-CSRF', '1')
       .send({ email: 'nonexistent.user@projectthriveward.org', password: 'Password12345!' });
 
     expect(res1.status).toBe(401);
@@ -124,7 +124,7 @@ describe('Phase 1H — Closed Authentication, RBAC, Security & Verified Human At
 
     const res2 = await request(app)
       .post('/api/auth/login')
-      .set('X-Bridge-CSRF', '1')
+      .set('X-Thriveward-CSRF', '1')
       .send({ email: adminUser.email, password: 'WrongPassword123!' });
 
     expect(res2.status).toBe(401);
@@ -163,7 +163,7 @@ describe('Phase 1H — Closed Authentication, RBAC, Security & Verified Human At
     const res = await request(app)
       .post('/api/outreach/transitions')
       .set('Authorization', `Bearer ${viewerSessionToken}`)
-      .set('X-Bridge-CSRF', '1')
+      .set('X-Thriveward-CSRF', '1')
       .send({
         engagementId: testEngagementId,
         targetStatus: 'POSSIBLE_MATCH',
@@ -198,7 +198,7 @@ describe('Phase 1H — Closed Authentication, RBAC, Security & Verified Human At
     const res = await request(app)
       .post('/api/outreach/transitions')
       .set('Authorization', `Bearer ${operatorSessionToken}`)
-      .set('X-Bridge-CSRF', '1')
+      .set('X-Thriveward-CSRF', '1')
       .send({
         engagementId: testEngagementId,
         targetStatus: 'POSSIBLE_MATCH',
@@ -223,7 +223,7 @@ describe('Phase 1H — Closed Authentication, RBAC, Security & Verified Human At
     const res = await request(app)
       .post('/api/outreach/transitions')
       .set('Authorization', `Bearer ${operatorSessionToken}`)
-      .set('X-Bridge-CSRF', '1')
+      .set('X-Thriveward-CSRF', '1')
       .send({
         engagementId: testEngagementId,
         targetStatus: 'POSSIBLE_MATCH',
@@ -262,7 +262,7 @@ describe('Phase 1H — Closed Authentication, RBAC, Security & Verified Human At
 
     const loginRes = await request(app)
       .post('/api/auth/login')
-      .set('X-Bridge-CSRF', '1')
+      .set('X-Thriveward-CSRF', '1')
       .send({ email: tempEmail, password: 'TempPassword123!' });
     expect(loginRes.status).toBe(200);
     const tempToken = loginRes.body.sessionToken;
@@ -289,7 +289,7 @@ describe('Phase 1H — Closed Authentication, RBAC, Security & Verified Human At
     // Login attempt must fail
     const reLoginRes = await request(app)
       .post('/api/auth/login')
-      .set('X-Bridge-CSRF', '1')
+      .set('X-Thriveward-CSRF', '1')
       .send({ email: tempEmail, password: 'TempPassword123!' });
     expect(reLoginRes.status).toBe(401);
   });
@@ -298,7 +298,7 @@ describe('Phase 1H — Closed Authentication, RBAC, Security & Verified Human At
     const logoutRes = await request(app)
       .post('/api/auth/logout')
       .set('Authorization', `Bearer ${viewerSessionToken}`)
-      .set('X-Bridge-CSRF', '1');
+      .set('X-Thriveward-CSRF', '1');
 
     expect(logoutRes.status).toBe(200);
 

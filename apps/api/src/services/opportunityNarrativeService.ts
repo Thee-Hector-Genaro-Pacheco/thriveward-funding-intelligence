@@ -1,4 +1,4 @@
-import { BRIDGE_FORWARD_PROFILE, BridgeOrganizationProfile } from '@bridge-ai/shared';
+import { BRIDGE_FORWARD_PROFILE, BridgeOrganizationProfile } from '@thriveward/shared';
 
 export type NarrativeLens =
   | 'YOUTH_JUSTICE_REENTRY'

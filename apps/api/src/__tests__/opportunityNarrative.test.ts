@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { OpportunityNarrativeService } from '../services/opportunityNarrativeService';
 import { OutreachBriefingService } from '../services/outreachBriefingService';
 import { StrategicPartnerService } from '../services/strategicPartnerService';
-import { BRIDGE_FORWARD_PROFILE } from '@bridge-ai/shared';
+import { BRIDGE_FORWARD_PROFILE } from '@thriveward/shared';
 import { prisma } from '../lib/prisma';
 import crypto from 'crypto';
 

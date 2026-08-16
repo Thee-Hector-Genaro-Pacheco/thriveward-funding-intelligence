@@ -136,7 +136,7 @@ export class ContactProvenanceVerifier {
         const client = urlObj.protocol === 'https:' ? https : http;
         const req = client.get(
           urlStr,
-          { headers: { 'User-Agent': 'BridgeAI-ContactVerifier/1.0' }, timeout: 5000 },
+          { headers: { 'User-Agent': 'Thriveward-ContactVerifier/1.0' }, timeout: 5000 },
           (res) => {
             let body = '';
             res.on('data', (chunk) => {

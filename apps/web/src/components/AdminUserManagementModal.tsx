@@ -23,7 +23,7 @@ export const AdminUserManagementModal: React.FC<AdminUserManagementModalProps> =
     setError(null);
     try {
       const res = await fetch('/api/admin/users', {
-        headers: { 'X-Bridge-CSRF': '1' },
+        headers: { 'X-Thriveward-CSRF': '1' },
         credentials: 'same-origin',
       });
       const data = await res.json();
@@ -53,7 +53,7 @@ export const AdminUserManagementModal: React.FC<AdminUserManagementModalProps> =
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Bridge-CSRF': '1',
+          'X-Thriveward-CSRF': '1',
         },
         credentials: 'same-origin',
         body: JSON.stringify({
@@ -89,7 +89,7 @@ export const AdminUserManagementModal: React.FC<AdminUserManagementModalProps> =
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'X-Bridge-CSRF': '1',
+          'X-Thriveward-CSRF': '1',
         },
         credentials: 'same-origin',
         body: JSON.stringify({ newRole }),
@@ -113,7 +113,7 @@ export const AdminUserManagementModal: React.FC<AdminUserManagementModalProps> =
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
-          'X-Bridge-CSRF': '1',
+          'X-Thriveward-CSRF': '1',
         },
         credentials: 'same-origin',
         body: JSON.stringify({ newState }),
@@ -135,7 +135,7 @@ export const AdminUserManagementModal: React.FC<AdminUserManagementModalProps> =
     try {
       const res = await fetch(`/api/admin/users/${userId}/revoke-sessions`, {
         method: 'POST',
-        headers: { 'X-Bridge-CSRF': '1' },
+        headers: { 'X-Thriveward-CSRF': '1' },
         credentials: 'same-origin',
       });
       const data = await res.json();

@@ -847,7 +847,7 @@ model OutreachDraftVersion {
   orgProfileVersion      String             @default("1.3.0-phase1f")
   orgProfileHash         String?
   opportunityAnalysisRef String?
-  creatorActorName       String             @default("Bridge AI Agent")
+  creatorActorName       String             @default("Thriveward Funding Intelligence Agent")
   creatorUserId          String?
   creatorUser            User?              @relation(fields: [creatorUserId], references: [id], onDelete: SetNull)
   createdAt              DateTime           @default(now())

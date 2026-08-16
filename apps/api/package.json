@@ -1,5 +1,5 @@
 {
-  "name": "@bridge-ai/api",
+  "name": "@thriveward/api",
   "version": "0.1.0",
   "private": true,
   "main": "./dist/server.js",
@@ -20,7 +20,7 @@
     "seed": "npx tsx prisma/seed.ts"
   },
   "dependencies": {
-    "@bridge-ai/shared": "*",
+    "@thriveward/shared": "*",
     "@prisma/client": "^5.10.2",
     "@types/cookie-parser": "^1.4.10",
     "argon2": "^0.45.1",

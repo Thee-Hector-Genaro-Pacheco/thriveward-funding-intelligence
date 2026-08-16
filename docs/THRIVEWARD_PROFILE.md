@@ -1,4 +1,4 @@
-# Bridge Forward Foundation — Organization Profile
+# Project Thriveward — Organization Profile
 
 **Version**: `1.0.0-phase0`  
 **Last Updated**: `2026-08-11`  
@@ -7,7 +7,7 @@
 
 ## 1. General Profile Information
 
-- **Organization Name**: Bridge Forward Foundation
+- **Organization Name**: Project Thriveward
 - **Current Status**: Pre-incorporation / Planning Stage
 - **Tax-Exempt Status**: 501(c)(3) NOT YET OBTAINED
 - **Jurisdiction**: California, USA
@@ -68,7 +68,7 @@ Potential future instruction and employer partnerships involving painting, const
 
 ## 4. Honest Organizational Limitations (Mandatory Engine Rules)
 
-The Bridge AI matching engine must **strictly** evaluate opportunities against these ground-truth constraints:
+The Thriveward Funding Intelligence matching engine must **strictly** evaluate opportunities against these ground-truth constraints:
 
 > [!WARNING]
 > 1. **Pre-incorporation**: The organization is not yet legally incorporated.
@@ -79,4 +79,4 @@ The Bridge AI matching engine must **strictly** evaluate opportunities against t
 > 6. **Employer Partnerships In Development**: Partnerships are active in development, not finalized contracts.
 > 7. **No Government Contracts**: 0 federal, state, or municipal contracts held.
 
-*Engine Constraint*: Under no circumstances will Bridge AI invent or assume missing organizational credentials.
+*Engine Constraint*: Under no circumstances will Thriveward Funding Intelligence invent or assume missing organizational credentials.

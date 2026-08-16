@@ -1,12 +1,14 @@
-# Bridge AI — Funding Intelligence Platform
+# Thriveward Funding Intelligence
 
-**Bridge AI** is an AI-assisted funding intelligence and nonprofit operations platform developed for **Bridge Forward Foundation**, a planned California nonprofit focused on successful reentry and long-term independence for system-impacted young adults and justice-involved adults.
+**Thriveward Funding Intelligence** is an AI-assisted funding intelligence and nonprofit operations platform developed for **Project Thriveward**, a planned California nonprofit focused on successful reentry and long-term independence for system-impacted young adults and justice-involved adults.
+
+> **Migration Note**: The platform was originally developed under the internal working name “Bridge AI” and was renamed to “Thriveward Funding Intelligence” before public portfolio deployment to establish a distinctive Project Thriveward product identity.
 
 ---
 
 ## Core Product Principle
 
-> **Bridge Forward is human-led and technology-enabled.**
+> **Project Thriveward is human-led and technology-enabled.**
 >
 > AI assists authorized humans with research, analysis, organization, and drafting. AI must **never** autonomously submit grant applications, fabricate organizational facts, fabricate citations, represent uncertain eligibility as confirmed, or make final organizational decisions.
 >
@@ -17,7 +19,7 @@
 ## Workspace Structure
 
 ```
-BridgeAI/
+Thriveward/
 ├── apps/
 │   ├── api/             # Node.js + TypeScript + Express API + Prisma ORM
 │   └── web/             # React + TypeScript + Vite Dashboard Frontend
@@ -28,7 +30,7 @@ BridgeAI/
 ├── docs/                # Architectural & Product Specifications
 │   ├── PRODUCT.md
 │   ├── ARCHITECTURE.md
-│   ├── BRIDGE_PROFILE.md
+│   ├── THRIVEWARD_PROFILE.md
 │   └── FUNDING_SCHEMA.md
 ├── docker-compose.yml
 ├── .env.example
@@ -137,7 +139,7 @@ curl -s http://localhost:4000/api/opportunities/demo-opp-001
 
 ## Documentation Index
 
-- 📘 [PRODUCT.md](file:///Users/hectorpacheco/Desktop/BridgeAI/docs/PRODUCT.md): Vision, Principles, Capabilities & Roadmap.
-- 📐 [ARCHITECTURE.md](file:///Users/hectorpacheco/Desktop/BridgeAI/docs/ARCHITECTURE.md): System Architecture & Provenance Model.
-- 🏢 [BRIDGE_PROFILE.md](file:///Users/hectorpacheco/Desktop/BridgeAI/docs/BRIDGE_PROFILE.md): Versioned Organization Profile & Operational Constraints.
-- 📊 [FUNDING_SCHEMA.md](file:///Users/hectorpacheco/Desktop/BridgeAI/docs/FUNDING_SCHEMA.md): Data Dictionary & Bridge Fit Scoring Model.
+- 📘 [PRODUCT.md](file:///Users/hectorpacheco/Desktop/Thriveward/docs/PRODUCT.md): Vision, Principles, Capabilities & Roadmap.
+- 📐 [ARCHITECTURE.md](file:///Users/hectorpacheco/Desktop/Thriveward/docs/ARCHITECTURE.md): System Architecture & Provenance Model.
+- 🏢 [THRIVEWARD_PROFILE.md](file:///Users/hectorpacheco/Desktop/Thriveward/docs/THRIVEWARD_PROFILE.md): Versioned Organization Profile & Operational Constraints.
+- 📊 [FUNDING_SCHEMA.md](file:///Users/hectorpacheco/Desktop/Thriveward/docs/FUNDING_SCHEMA.md): Data Dictionary & Bridge Fit Scoring Model.

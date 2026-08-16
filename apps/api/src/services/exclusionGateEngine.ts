@@ -1,5 +1,5 @@
 import { MappedOpportunity } from '../integrations/grantsGov/grantsGovMapper';
-import { sanitizeHtmlToText } from '@bridge-ai/shared';
+import { sanitizeHtmlToText } from '@thriveward/shared';
 
 export type ExclusionReason =
   | 'EXCLUDED_FOREIGN_PLACE_OF_PERFORMANCE'

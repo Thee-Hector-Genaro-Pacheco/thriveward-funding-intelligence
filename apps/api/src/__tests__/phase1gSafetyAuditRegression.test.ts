@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import { app } from '../server';
 import { prisma } from '../lib/prisma';
-import { mapScoreToRelevanceStatus, formatRelevanceStatusLabel } from '@bridge-ai/shared';
+import { mapScoreToRelevanceStatus, formatRelevanceStatusLabel } from '@thriveward/shared';
 import { StrategicPartnerService } from '../services/strategicPartnerService';
 import { PartnerMatchStatus, OpportunityStatus, PursuitStage } from '@prisma/client';
 

@@ -356,7 +356,7 @@ export const OutreachWorkspaceDrawer: React.FC<OutreachWorkspaceDrawerProps> = (
 
         {/* Zero-Transmission Safeguard Alert */}
         <div style={{ background: 'rgba(239, 68, 68, 0.15)', borderBottom: '1px solid #ef4444', color: '#fca5a5', padding: '0.65rem 1.5rem', fontSize: '0.8rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-          🔒 <strong>Zero Automated Transmission Safeguard Active:</strong> Bridge AI NEVER transmits email. All outreach text must be human-reviewed, approved, and manually sent outside the system.
+          🔒 <strong>Zero Automated Transmission Safeguard Active:</strong> Thriveward Funding Intelligence NEVER transmits email. All outreach text must be human-reviewed, approved, and manually sent outside the system.
         </div>
 
         {/* Action Error / Success Banners */}
@@ -429,7 +429,7 @@ export const OutreachWorkspaceDrawer: React.FC<OutreachWorkspaceDrawerProps> = (
                   </label>
                   <label style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', gridColumn: '1 / -1', color: '#fca5a5' }}>
                     <input type="checkbox" checked={zeroTransmissionAck} onChange={(e) => setZeroTransmissionAck(e.target.checked)} />
-                    Confirm Bridge AI will NOT send email automatically
+                    Confirm Thriveward Funding Intelligence will NOT send email automatically
                   </label>
                 </div>
 

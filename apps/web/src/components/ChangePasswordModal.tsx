@@ -33,7 +33,7 @@ export const ChangePasswordModal: React.FC<ChangePasswordModalProps> = ({ onClos
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Bridge-CSRF': '1',
+          'X-Thriveward-CSRF': '1',
         },
         credentials: 'same-origin',
         body: JSON.stringify({ currentPassword, newPassword }),

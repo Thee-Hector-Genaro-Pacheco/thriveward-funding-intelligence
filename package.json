@@ -1,8 +1,8 @@
 {
-  "name": "bridge-ai",
+  "name": "thriveward-funding-intelligence",
   "version": "0.1.0",
   "private": true,
-  "description": "AI-assisted funding intelligence and nonprofit operations platform for Bridge Forward Foundation",
+  "description": "Human-led funding, readiness, and partnership intelligence platform for Project Thriveward",
   "workspaces": [
     "apps/*",
     "packages/*"
@@ -16,11 +16,11 @@
     "db:push": "npm run prisma:push --workspace=apps/api"
   },
   "keywords": [
-    "bridge-ai",
+    "thriveward",
     "funding-intelligence",
     "reentry",
     "nonprofit-operations"
   ],
-  "author": "Bridge Forward Foundation",
+  "author": "Project Thriveward",
   "license": "UNLICENSED"
 }

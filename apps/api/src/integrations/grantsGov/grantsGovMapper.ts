@@ -1,5 +1,5 @@
 import { GrantsGovDetailResponse, GrantsGovSearchHit } from './grantsGovTypes';
-import { sanitizeHtmlToText } from '@bridge-ai/shared';
+import { sanitizeHtmlToText } from '@thriveward/shared';
 
 export interface MappedOpportunity {
   sourceSystem: string;

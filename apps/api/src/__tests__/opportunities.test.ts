@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import request from 'supertest';
 import { app } from '../server';
 
-describe('Bridge AI API — Opportunity & Health Read Endpoints', () => {
+describe('Thriveward Funding Intelligence API — Opportunity & Health Read Endpoints', () => {
   beforeAll(() => {
     process.env.DATABASE_URL =
       process.env.DATABASE_URL ||
@@ -17,7 +17,7 @@ describe('Bridge AI API — Opportunity & Health Read Endpoints', () => {
       const res = await request(app).get('/health');
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('UP');
-      expect(res.body.service).toBe('Bridge AI Core API');
+      expect(res.body.service).toBe('Thriveward Funding Intelligence Core API');
       expect(res.body.governance.humanInTheLoopEnforced).toBe(true);
       expect(res.body.governance.autonomousSubmissionsAllowed).toBe(false);
     });

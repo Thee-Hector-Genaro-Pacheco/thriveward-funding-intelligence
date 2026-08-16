@@ -1,8 +1,8 @@
-# Bridge AI — Architecture Specification
+# Thriveward Funding Intelligence — Architecture Specification
 
 ## System Overview
 
-Bridge AI is designed using a **clean monorepo architecture** that isolates domain concerns, separates service boundaries, and maintains strict typing across web interfaces, backend API services, AI extraction agents, and shared domain models.
+Thriveward Funding Intelligence is designed using a **clean monorepo architecture** that isolates domain concerns, separates service boundaries, and maintains strict typing across web interfaces, backend API services, AI extraction agents, and shared domain models.
 
 ```mermaid
 flowchart TD
@@ -62,7 +62,7 @@ flowchart TD
 
 ## Data Provenance & Citation Model
 
-Every extracted fact stored in Bridge AI adheres to strict provenance standards:
+Every extracted fact stored in Thriveward Funding Intelligence adheres to strict provenance standards:
 
 ```typescript
 interface SourceCitation {
@@ -145,7 +145,7 @@ No claim may exist in the system without an associated citation or an explicit t
 ```
 
 ### 1. Grants.gov Integration Layer
-- **Client (`GrantsGovClient`)**: Executes unauthenticated REST POST requests to Grants.gov (`/v1/api/search2`, `/v1/api/fetchOpportunity`). Retries transient 429/5xx failures up to 3 times with exponential delay. Sends custom `User-Agent: BridgeAI-FundingIntelligence/1.0`.
+- **Client (`GrantsGovClient`)**: Executes unauthenticated REST POST requests to Grants.gov (`/v1/api/search2`, `/v1/api/fetchOpportunity`). Retries transient 429/5xx failures up to 3 times with exponential delay. Sends custom `User-Agent: Thriveward-FundingIntelligence/1.0`.
 - **Validation (`grantsGovSchemas`)**: Uses Zod runtime schemas to validate external API responses before processing.
 - **Mapper (`GrantsGovMapper`)**: Normalizes external fields to `FundingOpportunity` schema. Preserves missing/null values as `UNKNOWN` or `null`. Official human-readable URLs are constructed as `https://www.grants.gov/search-results-detail/{opportunityId}`.
 

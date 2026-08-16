@@ -50,8 +50,8 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   // Extract token from HttpOnly cookie or Authorization header
   let token: string | undefined;
 
-  if (req.cookies && req.cookies.bridge_session_token) {
-    token = req.cookies.bridge_session_token;
+  if (req.cookies && req.cookies.thriveward_tfi_session) {
+    token = req.cookies.thriveward_tfi_session;
   } else if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
     token = req.headers.authorization.substring(7).trim();
   }
@@ -108,8 +108,8 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 
   const authResult = await AuthService.authenticateSession(token);
   if (!authResult) {
-    if (req.cookies && req.cookies.bridge_session_token) {
-      res.clearCookie('bridge_session_token', { path: '/' });
+    if (req.cookies && req.cookies.thriveward_tfi_session) {
+      res.clearCookie('thriveward_tfi_session', { path: '/' });
     }
     return res.status(401).json({
       success: false,
@@ -165,12 +165,12 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction) 
   if (isTest && req.headers['x-test-reject-csrf'] === 'true') {
     return res.status(403).json({
       success: false,
-      error: 'CSRF Protection: Missing required X-Bridge-CSRF header or valid origin header.',
+      error: 'CSRF Protection: Missing required X-Thriveward-CSRF header or valid origin header.',
     });
   }
 
   // Verify custom anti-CSRF header or X-Requested-With header
-  const customHeader = req.headers['x-bridge-csrf'] || req.headers['x-requested-with'];
+  const customHeader = req.headers['x-thriveward-csrf'] || req.headers['x-requested-with'];
   const origin = req.headers['origin'] || req.headers['referer'];
 
   if (customHeader || (isTest && req.headers['x-test-reject-csrf'] !== 'true')) {
@@ -186,6 +186,6 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction) 
 
   return res.status(403).json({
     success: false,
-    error: 'CSRF Protection: Missing required X-Bridge-CSRF header or valid origin header.',
+    error: 'CSRF Protection: Missing required X-Thriveward-CSRF header or valid origin header.',
   });
 }

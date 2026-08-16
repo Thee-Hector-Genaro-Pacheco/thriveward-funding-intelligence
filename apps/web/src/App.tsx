@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './index.css';
-import { BRIDGE_FORWARD_PROFILE, formatRelevanceStatusLabel } from '@bridge-ai/shared';
+import { BRIDGE_FORWARD_PROFILE, formatRelevanceStatusLabel } from '@thriveward/shared';
 import { OutreachWorkspaceDrawer } from './components/OutreachWorkspaceDrawer';
 import { LoginModal } from './components/LoginModal';
 import { UserHeaderBadge } from './components/UserHeaderBadge';
@@ -280,7 +280,7 @@ export function App() {
     try {
       await fetch('/api/auth/logout', {
         method: 'POST',
-        headers: { 'X-Bridge-CSRF': '1' },
+        headers: { 'X-Thriveward-CSRF': '1' },
         credentials: 'same-origin',
       });
     } catch (err) {
@@ -791,9 +791,9 @@ export function App() {
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
         <div>
           <div className="header-badge">Phase 1H • Secure Authentication, RBAC & Verified Human Attribution</div>
-          <h1 className="brand-title">Bridge AI</h1>
+          <h1 className="brand-title">Thriveward Funding Intelligence</h1>
           <p className="brand-subtitle">
-            Funding Intelligence & Grant Readiness Platform for Project Thriveward
+            Human-led funding, readiness, and partnership intelligence for Project Thriveward
           </p>
         </div>
         {currentUser && (
@@ -812,7 +812,7 @@ export function App() {
           <span>🛡️</span> PRODUCT PRINCIPLE: Human-Led, AI-Enabled Decision Support
         </div>
         <p className="principle-text">
-          Bridge AI assists authorized humans with research, readiness analysis, and briefing preparation. Bridge AI performs <strong>zero</strong> automated external actions. All outreach inquiries, sponsor applications, legal certifications, and status advances require explicit human authorization.
+          Thriveward Funding Intelligence assists authorized humans with research, readiness analysis, and briefing preparation. Thriveward Funding Intelligence performs <strong>zero</strong> automated external actions. All outreach inquiries, sponsor applications, legal certifications, and status advances require explicit human authorization.
         </p>
       </div>
 
@@ -2086,7 +2086,7 @@ export function App() {
       </div>
 
       <footer>
-        <p>Bridge AI Platform • Phase 1E Fiscal Sponsor & Funding Readiness Foundation • Project Thriveward</p>
+        <p>Thriveward Funding Intelligence Platform • Phase 1E Fiscal Sponsor & Funding Readiness Foundation • Project Thriveward</p>
       </footer>
     </div>
   );

@@ -208,7 +208,7 @@ export class OutreachTrackingService {
 
     const contentHash = this.hashContent(`${input.subject}\n\n${input.body}\n\n${input.recipient}`);
     const creatorType = input.creatorType || 'AI_GENERATED';
-    const creatorActorName = input.creatorActorName || (creatorType === 'HUMAN_EDITED' ? 'Human Operator' : 'Bridge AI Agent');
+    const creatorActorName = input.creatorActorName || (creatorType === 'HUMAN_EDITED' ? 'Human Operator' : 'Thriveward Funding Intelligence Agent');
 
     const draft = await prisma.outreachDraftVersion.create({
       data: {
@@ -276,7 +276,7 @@ export class OutreachTrackingService {
     }
 
     if (!input.zeroTransmissionAck) {
-      const err: any = new Error('Approval requires explicit acknowledgment that Bridge AI will not send the email.');
+      const err: any = new Error('Approval requires explicit acknowledgment that Thriveward Funding Intelligence will not send the email.');
       err.statusCode = 400;
       throw err;
     }

@@ -1,7 +1,7 @@
 import { prisma } from '../lib/prisma';
 import { RelevanceStatus } from '@prisma/client';
 import { BRIDGE_FORWARD_PROFILE, getProfileHash } from '../config/bridgeForwardProfile';
-import { sanitizeHtmlToText, mapScoreToRelevanceStatus } from '@bridge-ai/shared';
+import { sanitizeHtmlToText, mapScoreToRelevanceStatus } from '@thriveward/shared';
 import { ExclusionGateEngine } from './exclusionGateEngine';
 import { GrantsGovMapper } from '../integrations/grantsGov/grantsGovMapper';
 

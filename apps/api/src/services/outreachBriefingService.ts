@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma';
-import { BRIDGE_FORWARD_PROFILE } from '@bridge-ai/shared';
+import { BRIDGE_FORWARD_PROFILE } from '@thriveward/shared';
 import { calculateSopMatchRequirement } from './sopMatchCalculator';
 import { StrategicPartnerService } from './strategicPartnerService';
 import { OpportunityNarrativeService } from './opportunityNarrativeService';
@@ -422,7 +422,7 @@ Planned Launch Counties: Orange County and Los Angeles County`;
       discoveryCallQuestions,
       recommendedFollowUpDate: followUpDate.toISOString().split('T')[0],
       safeguardNotice:
-        '🛡️ HUMAN-CONTROLLED OUTREACH SAFEGUARD: Bridge AI generates briefing packets and email drafts for human review ONLY. Bridge AI will NEVER send an email, submit an application, sign an agreement, make a legal certification, or commit funds without explicit human authorization.',
+        '🛡️ HUMAN-CONTROLLED OUTREACH SAFEGUARD: Thriveward Funding Intelligence generates briefing packets and email drafts for human review ONLY. Thriveward Funding Intelligence will NEVER send an email, submit an application, sign an agreement, make a legal certification, or commit funds without explicit human authorization.',
     };
   }
 }

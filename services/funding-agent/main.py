@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Bridge AI — Funding Agent Python Service
+Thriveward Funding Intelligence — Funding Agent Python Service
 Microservice responsible for funding opportunity analysis, eligibility extraction,
 and provenance verification.
 """
@@ -16,7 +16,7 @@ try:
     import uvicorn
 
     app = FastAPI(
-        title="Bridge AI Funding Agent Service",
+        title="Thriveward Funding Intelligence Funding Agent Service",
         description="Microservice for grant eligibility extraction and fit scoring",
         version="0.1.0-phase0"
     )
@@ -32,7 +32,7 @@ try:
     @app.get("/")
     def root():
         return {
-            "service": "Bridge AI Funding Agent",
+            "service": "Thriveward Funding Intelligence Funding Agent",
             "status": "UP",
             "version": "0.1.0-phase0",
             "docs": "/docs"
@@ -42,7 +42,7 @@ try:
     def health_check():
         return {
             "status": "UP",
-            "service": "Bridge AI Funding Agent",
+            "service": "Thriveward Funding Intelligence Funding Agent",
             "timestamp": datetime.utcnow().isoformat() + "Z",
             "capabilities": [
                 "Eligibility Requirement Extraction",
@@ -58,7 +58,7 @@ try:
 
     def start_server():
         port = int(os.environ.get("PORT", 8000))
-        print(f"🤖 Bridge AI Funding Agent active on http://0.0.0.0:{port}")
+        print(f"🤖 Thriveward Funding Intelligence Funding Agent active on http://0.0.0.0:{port}")
         uvicorn.run(app, host="0.0.0.0", port=port)
 
 except ImportError:
@@ -74,7 +74,7 @@ except ImportError:
                 self.end_headers()
                 response = {
                     "status": "UP",
-                    "service": "Bridge AI Funding Agent (Standard Fallback Mode)",
+                    "service": "Thriveward Funding Intelligence Funding Agent (Standard Fallback Mode)",
                     "timestamp": datetime.utcnow().isoformat() + "Z",
                     "capabilities": [
                         "Eligibility Requirement Extraction",
@@ -97,7 +97,7 @@ except ImportError:
 
     def start_server():
         port = int(os.environ.get("PORT", 8000))
-        print(f"🤖 Bridge AI Funding Agent (Fallback Mode) active on http://0.0.0.0:{port}")
+        print(f"🤖 Thriveward Funding Intelligence Funding Agent (Fallback Mode) active on http://0.0.0.0:{port}")
         server = HTTPServer(("0.0.0.0", port), HealthHandler)
         server.serve_forever()
 

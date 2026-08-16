@@ -1,12 +1,12 @@
-# Bridge AI — Product Specification
+# Thriveward Funding Intelligence — Product Specification
 
 ## 1. Product Vision & Philosophy
 
-**Bridge AI** is an AI-assisted funding intelligence and nonprofit operations platform built for **Bridge Forward Foundation**, a California nonprofit in planning dedicated to successful reentry and long-term independence for system-impacted young adults and justice-involved adults.
+**Thriveward Funding Intelligence** is an AI-assisted funding intelligence and nonprofit operations platform built for **Project Thriveward**, a California nonprofit in planning dedicated to successful reentry and long-term independence for system-impacted young adults and justice-involved adults.
 
 ### Core Product Principle
 
-> **Bridge Forward is human-led and technology-enabled.**
+> **Project Thriveward is human-led and technology-enabled.**
 >
 > AI assists authorized humans with research, analysis, organization, and drafting. AI must **never**:
 > 1. Autonomously submit grant applications.
@@ -21,7 +21,7 @@
 
 ## 2. Capability Scope: Funding Intelligence
 
-The primary phase of Bridge AI focuses on **Funding Intelligence**, transforming unstructured funding opportunities into structured, verifiable insights.
+The primary phase of Thriveward Funding Intelligence focuses on **Funding Intelligence**, transforming unstructured funding opportunities into structured, verifiable insights.
 
 ### Functional Capabilities
 - **Official Grants.gov REST Ingestion**: Ingest official federal grant notices directly from the Grants.gov API using unauthenticated `search2` and `fetchOpportunity` endpoints, preserving exact source provenance and official URLs (`https://www.grants.gov/search-results-detail/{opportunityId}`).
@@ -42,7 +42,7 @@ The primary phase of Bridge AI focuses on **Funding Intelligence**, transforming
   - Paid work experience & subsidized employment
   - On-the-job training (OJT)
   - Emergency financial assistance
-- **Bridge Fit Scoring Engine**: Evaluate opportunities against Bridge Forward's versioned profile across 12 distinct dimensions, outputting a transparent `0–100` score alongside an explicit eligibility classification (`HIGH PRIORITY`, `INVESTIGATE`, `FUTURE OPPORTUNITY`, `NOT ELIGIBLE`).
+- **Bridge Fit Scoring Engine**: Evaluate opportunities against Project Thriveward's versioned profile across 12 distinct dimensions, outputting a transparent `0–100` score alongside an explicit eligibility classification (`HIGH PRIORITY`, `INVESTIGATE`, `FUTURE OPPORTUNITY`, `NOT ELIGIBLE`).
 - **Separation of Eligibility and Alignment**: Prevent semantic alignment from masking mandatory eligibility disqualifiers (e.g., 3-year operating history requirement for a pre-incorporation organization).
 - **Source Citation & Provenance**: Store exact source URLs, verification timestamps, and quoted excerpts for every extracted claim.
 

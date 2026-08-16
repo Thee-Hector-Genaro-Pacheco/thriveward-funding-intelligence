@@ -55,7 +55,7 @@ export function parseArgs(args: string[]) {
 
 async function main() {
   const args = process.argv.slice(2);
-  console.log('🏛️  Bridge AI — Official Grants.gov Ingestion CLI');
+  console.log('🏛️  Thriveward Funding Intelligence — Official Grants.gov Ingestion CLI');
 
   try {
     const options = parseArgs(args);

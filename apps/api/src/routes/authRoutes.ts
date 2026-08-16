@@ -21,7 +21,7 @@ authRouter.post('/login', async (req: Request, res: Response) => {
       userAgent,
     });
 
-    res.cookie('bridge_session_token', sessionToken, {
+    res.cookie('thriveward_tfi_session', sessionToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
@@ -49,8 +49,8 @@ authRouter.post('/login', async (req: Request, res: Response) => {
 authRouter.post('/logout', async (req: Request, res: Response) => {
   let token: string | undefined;
 
-  if (req.cookies && req.cookies.bridge_session_token) {
-    token = req.cookies.bridge_session_token;
+  if (req.cookies && req.cookies.thriveward_tfi_session) {
+    token = req.cookies.thriveward_tfi_session;
   } else if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
     token = req.headers.authorization.substring(7).trim();
   }
@@ -63,7 +63,7 @@ authRouter.post('/logout', async (req: Request, res: Response) => {
     });
   }
 
-  res.clearCookie('bridge_session_token', { path: '/' });
+  res.clearCookie('thriveward_tfi_session', { path: '/' });
 
   return res.status(200).json({
     success: true,
@@ -100,7 +100,7 @@ authRouter.post('/change-password', requireAuth, async (req: Request, res: Respo
       userAgent,
     });
 
-    res.cookie('bridge_session_token', newSessionToken, {
+    res.cookie('thriveward_tfi_session', newSessionToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',

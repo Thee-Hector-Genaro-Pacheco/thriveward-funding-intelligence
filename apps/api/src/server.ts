@@ -10,7 +10,7 @@ import { phase1eRouter } from './routes/phase1eRoutes';
 import { authRouter } from './routes/authRoutes';
 import { adminUserRouter } from './routes/adminUserRoutes';
 import { requireAuth, csrfProtection } from './middleware/authMiddleware';
-import { BRIDGE_FORWARD_PROFILE } from '@bridge-ai/shared';
+import { BRIDGE_FORWARD_PROFILE } from '@thriveward/shared';
 
 dotenv.config();
 
@@ -45,7 +45,7 @@ app.get('/api/profile', requireAuth, (req: Request, res: Response) => {
 // Root API Info
 app.get('/', (req: Request, res: Response) => {
   res.json({
-    message: 'Bridge AI API — Funding Intelligence Engine',
+    message: 'Thriveward Funding Intelligence API — Funding Intelligence Engine',
     version: '0.1.0-phase0',
     documentation: '/docs',
     healthCheck: '/health',
@@ -76,7 +76,7 @@ if (process.env.NODE_ENV !== 'test') {
   }
 
   app.listen(PORT, () => {
-    console.log(`🚀 Bridge AI Core API active on http://localhost:${PORT}`);
+    console.log(`🚀 Thriveward Funding Intelligence Core API active on http://localhost:${PORT}`);
     console.log(`🔍 Health check: http://localhost:${PORT}/health`);
   });
 }

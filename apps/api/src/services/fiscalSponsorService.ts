@@ -1,6 +1,6 @@
 import { prisma } from '../lib/prisma';
 import { SponsorMatchStatus, TriStateStatus } from '@prisma/client';
-import { BRIDGE_FORWARD_PROFILE } from '@bridge-ai/shared';
+import { BRIDGE_FORWARD_PROFILE } from '@thriveward/shared';
 
 export interface CreateSponsorCandidateInput {
   name: string;

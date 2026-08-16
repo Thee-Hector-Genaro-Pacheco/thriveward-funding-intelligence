@@ -20,7 +20,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'X-Bridge-CSRF': '1',
+          'X-Thriveward-CSRF': '1',
         },
         credentials: 'same-origin',
         body: JSON.stringify({ email, password }),
@@ -88,11 +88,11 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
               B
             </div>
             <span style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.02em' }}>
-              Bridge AI
+              Thriveward Funding Intelligence
             </span>
           </div>
           <p style={{ margin: 0, color: '#94a3b8', fontSize: '0.875rem' }}>
-            Project Thriveward Internal Funding Intelligence Engine
+            Human-led funding, readiness, and partnership intelligence for Project Thriveward
           </p>
         </div>
 
@@ -180,7 +180,7 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
               transition: 'all 0.2s ease',
             }}
           >
-            {loading ? 'Authenticating...' : 'Sign In to Bridge AI'}
+            {loading ? 'Authenticating...' : 'Sign In to Thriveward Funding Intelligence'}
           </button>
         </form>
 

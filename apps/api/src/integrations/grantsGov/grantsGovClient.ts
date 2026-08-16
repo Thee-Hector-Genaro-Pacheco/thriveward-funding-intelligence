@@ -19,7 +19,7 @@ export class GrantsGovClient {
   private baseUrl: string;
   private timeoutMs: number;
   private maxRetries: number;
-  private userAgent = 'BridgeAI-FundingIntelligence/1.0 (Project Thriveward)';
+  private userAgent = 'ThrivewardFundingIntelligence/1.0 (Project Thriveward)';
 
   constructor(config?: GrantsGovClientConfig) {
     this.baseUrl = (config?.baseUrl || process.env.GRANTS_GOV_API_BASE_URL || 'https://api.grants.gov').replace(/\/$/, '');

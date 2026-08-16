@@ -178,7 +178,7 @@ describe('Phase 1G — Human-Controlled Outreach & Response Tracking Complete Su
         .send({
           engagementId: demoEngagementId,
           draftVersionId: draftId,
-          humanReviewerName: 'Bridge AI Agent',
+          humanReviewerName: 'Thriveward Funding Intelligence Agent',
           approvalReason: 'Automated test',
           zeroTransmissionAck: true,
           userConfirmedChecks: { recipientReviewed: true, contentReviewed: true, evidenceVerified: true },
@@ -204,7 +204,7 @@ describe('Phase 1G — Human-Controlled Outreach & Response Tracking Complete Su
         })
         .expect(400);
 
-      expect(res.body.error).toContain('Bridge AI will not send');
+      expect(res.body.error).toContain('Thriveward Funding Intelligence will not send');
     });
 
     it('successfully approves draft, freezes evidence, and advances status to CONTACT_APPROVED', async () => {

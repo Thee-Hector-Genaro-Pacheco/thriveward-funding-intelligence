@@ -8,14 +8,14 @@ let cachedAdminToken: string | null = null;
 /**
  * Helper providing an authenticated ADMIN session header and anti-CSRF headers for integration test suites.
  */
-export async function getTestAuthHeaders(): Promise<{ Authorization: string; 'X-Bridge-CSRF': string }> {
+export async function getTestAuthHeaders(): Promise<{ Authorization: string; 'X-Thriveward-CSRF': string }> {
   if (cachedAdminToken) {
     // Verify token active
     const authResult = await AuthService.authenticateSession(cachedAdminToken);
     if (authResult) {
       return {
         Authorization: `Bearer ${cachedAdminToken}`,
-        'X-Bridge-CSRF': '1',
+        'X-Thriveward-CSRF': '1',
       };
     }
   }
@@ -38,7 +38,7 @@ export async function getTestAuthHeaders(): Promise<{ Authorization: string; 'X-
 
   const loginRes = await request(app)
     .post('/api/auth/login')
-    .set('X-Bridge-CSRF', '1')
+    .set('X-Thriveward-CSRF', '1')
     .send({ email: testEmail, password: 'TestAdminPassword123!' });
 
   if (loginRes.status !== 200 || !loginRes.body.sessionToken) {
@@ -49,6 +49,6 @@ export async function getTestAuthHeaders(): Promise<{ Authorization: string; 'X-
 
   return {
     Authorization: `Bearer ${cachedAdminToken}`,
-    'X-Bridge-CSRF': '1',
+    'X-Thriveward-CSRF': '1',
   };
 }

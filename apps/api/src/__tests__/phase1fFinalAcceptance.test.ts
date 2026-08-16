@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { prisma } from '../lib/prisma';
-import { mapScoreToRelevanceStatus, formatRelevanceStatusLabel } from '@bridge-ai/shared';
+import { mapScoreToRelevanceStatus, formatRelevanceStatusLabel } from '@thriveward/shared';
 import { getMissionStatementHash, getCanonicalProfileHash, computeProfileHashes } from '../config/bridgeForwardProfile';
 import { StrategicPartnerService } from '../services/strategicPartnerService';
 import { ContactProvenanceVerifier } from '../services/contactProvenanceVerifier';
