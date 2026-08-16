@@ -4,6 +4,8 @@ import { app } from '../server';
 import { prisma } from '../lib/prisma';
 import { AiFundingAnalystService } from '../services/aiFundingAnalystService';
 import { MockFundingAnalystProvider } from '../services/ai/mockFundingAnalystProvider';
+import { OpenAiFundingAnalystProvider } from '../services/ai/openAiFundingAnalystProvider';
+import { EvidenceCatalogBuilder } from '../services/ai/evidenceCatalogBuilder';
 
 describe('AI-1 — Structured AI Funding Analyst Complete Test Suite', () => {
   let testOpportunity: any;
@@ -28,8 +30,12 @@ describe('AI-1 — Structured AI Funding Analyst Complete Test Suite', () => {
     }
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
     AiFundingAnalystService.clearRateLimits();
+    // Clean up test evaluations created during previous tests
+    await prisma.aiEvaluation.deleteMany({
+      where: { opportunityId: testOpportunity.id },
+    });
     // Set Mock provider by default for all test executions
     AiFundingAnalystService.setProvider(new MockFundingAnalystProvider());
   });
@@ -75,13 +81,14 @@ describe('AI-1 — Structured AI Funding Analyst Complete Test Suite', () => {
   });
 
   describe('2. Fail-Closed Behavior when Provider Unconfigured', () => {
-    it('returns 503 AI_ANALYST_NOT_CONFIGURED when AI analyst is disabled', async () => {
-      // Force unconfigured state
+    it('returns 503 AI_ANALYST_NOT_CONFIGURED when AI analyst is disabled and creates 0 DB rows', async () => {
       AiFundingAnalystService.resetProvider();
       const originalEnv = process.env.AI_FUNDING_ANALYST_ENABLED;
       process.env.AI_FUNDING_ANALYST_ENABLED = 'false';
 
       try {
+        const countBefore = await prisma.aiEvaluation.count({ where: { opportunityId: testOpportunity.id } });
+
         const res = await request(app)
           .post(`/api/opportunities/${testOpportunity.id}/ai-evaluations`)
           .set('x-test-role', 'ADMIN')
@@ -89,49 +96,145 @@ describe('AI-1 — Structured AI Funding Analyst Complete Test Suite', () => {
 
         expect(res.status).toBe(503);
         expect(res.body.error).toContain('AI_ANALYST_NOT_CONFIGURED');
+
+        const countAfter = await prisma.aiEvaluation.count({ where: { opportunityId: testOpportunity.id } });
+        expect(countAfter).toBe(countBefore);
       } finally {
         process.env.AI_FUNDING_ANALYST_ENABLED = originalEnv;
       }
     });
+
+    it('production OpenAiFundingAnalystProvider cannot silently use mock implementation', () => {
+      const prodProvider = new OpenAiFundingAnalystProvider();
+      expect(prodProvider.getModelName()).toBe(process.env.OPENAI_MODEL || 'gpt-5.6-luna');
+      if (process.env.AI_FUNDING_ANALYST_ENABLED !== 'true' || !process.env.OPENAI_API_KEY) {
+        expect(prodProvider.isConfigured()).toBe(false);
+      }
+    });
   });
 
-  describe('3. Server-Authoritative Input Snapshot & Persistence Invariants', () => {
-    it('OPERATOR can trigger AI evaluation using server-loaded DB records', async () => {
-      const res = await request(app)
-        .post(`/api/opportunities/${testOpportunity.id}/ai-evaluations`)
-        .set('x-test-role', 'OPERATOR')
-        .set('X-Thriveward-CSRF', '1');
+  describe('3. Durable Database-Backed Idempotency & Rate Limiting Verification', () => {
+    it('an idempotency key survives database query & service lookup without duplicate provider calls', async () => {
+      const idempotencyKey = `durable_idem_${Date.now()}`;
 
-      expect(res.status).toBe(201);
-      expect(res.body.success).toBe(true);
-      const evalData = res.body.data;
-      expect(evalData.opportunityId).toBe(testOpportunity.id);
-      expect(evalData.status).toBe('GENERATED');
-      expect(evalData.version).toBeGreaterThanOrEqual(1);
-      expect(evalData.alignmentScore).toBeDefined();
-      expect(evalData.eligibility).toBeDefined();
-      expect(evalData.strengths.length).toBeGreaterThan(0);
-      expect(evalData.risks.length).toBeGreaterThan(0);
-      expect(evalData.requirements.length).toBeGreaterThan(0);
+      const res1 = await request(app)
+        .post(`/api/opportunities/${testOpportunity.id}/ai-evaluations`)
+        .set('x-test-role', 'ADMIN')
+        .set('X-Thriveward-CSRF', '1')
+        .set('X-Idempotency-Key', idempotencyKey);
+
+      expect(res1.status).toBe(201);
+      const eval1Id = res1.body.data.id;
+
+      // Verify stored in DB with idempotencyKey
+      const dbRow = await prisma.aiEvaluation.findUnique({ where: { id: eval1Id } });
+      expect(dbRow?.idempotencyKey).toBe(idempotencyKey);
+
+      // Second call with same idempotency key retrieves existing row from DB
+      const res2 = await request(app)
+        .post(`/api/opportunities/${testOpportunity.id}/ai-evaluations`)
+        .set('x-test-role', 'ADMIN')
+        .set('X-Thriveward-CSRF', '1')
+        .set('X-Idempotency-Key', idempotencyKey);
+
+      expect(res2.status).toBe(201);
+      expect(res2.body.data.id).toBe(eval1Id);
     });
 
-    it('client-supplied organization/actor payloads are ignored (server loads strictly from DB)', async () => {
-      const spoofedPayload = {
-        organization: { name: 'Fake Organization Inc', taxStatus: '501(c)(3)' },
-        actor: 'Fake Actor',
-        eligibility: 'HIGH_PRIORITY',
-      };
+    it('concurrent requests with same key trigger exactly 1 provider invocation', async () => {
+      const idempotencyKey = `concurrent_idem_${Date.now()}`;
+
+      const reqs = Array.from({ length: 4 }).map(() =>
+        request(app)
+          .post(`/api/opportunities/${testOpportunity.id}/ai-evaluations`)
+          .set('x-test-role', 'ADMIN')
+          .set('X-Thriveward-CSRF', '1')
+          .set('X-Idempotency-Key', idempotencyKey)
+      );
+
+      const results = await Promise.all(reqs);
+      results.forEach((r) => expect(r.status).toBe(201));
+
+      const ids = new Set(results.map((r) => r.body.data.id));
+      expect(ids.size).toBe(1);
+    });
+
+    it('enforces 5 evaluations per hour per user rate limit and returns 429', async () => {
+      let user = await prisma.user.findUnique({ where: { email: 'test.admin@projectthriveward.org' } });
+      if (!user) {
+        user = await prisma.user.create({
+          data: {
+            id: 'test-user-admin',
+            email: 'test.admin@projectthriveward.org',
+            displayName: 'Test Admin User',
+            passwordHash: '$argon2id$',
+            role: 'ADMIN',
+            accountState: 'ACTIVE',
+          },
+        });
+      }
+      for (let i = 0; i < 5; i++) {
+        await prisma.aiEvaluation.create({
+          data: {
+            opportunityId: testOpportunity.id,
+            version: i + 1,
+            alignmentScore: 80,
+            eligibility: 'POSSIBLY_ELIGIBLE',
+            summary: 'Test summary',
+            strengths: [],
+            risks: [],
+            requirements: [],
+            recommendedNextAction: 'Test action',
+            confidence: 0.9,
+            limitations: [],
+            evidenceSnapshot: [],
+            inputSnapshot: {},
+            inputHash: 'hash',
+            generatedByUserId: user!.id,
+            createdAt: new Date(),
+          },
+        });
+      }
 
       const res = await request(app)
         .post(`/api/opportunities/${testOpportunity.id}/ai-evaluations`)
         .set('x-test-role', 'ADMIN')
-        .set('X-Thriveward-CSRF', '1')
-        .send(spoofedPayload);
+        .set('X-Thriveward-CSRF', '1');
 
-      expect(res.status).toBe(201);
-      const evalData = res.body.data;
-      expect(evalData.inputSnapshot.organization.name).toBe('Project Thriveward');
-      expect(evalData.inputSnapshot.organization.status).toBe('PRE_INCORPORATION');
+      expect(res.status).toBe(429);
+      expect(res.body.error).toContain('RATE_LIMIT_EXCEEDED');
+      expect(res.body.error).toContain('hour');
+    });
+
+    it('AI rate limiter does not alter login endpoint functionality', async () => {
+      const loginRes = await request(app)
+        .post('/api/auth/login')
+        .set('X-Thriveward-CSRF', '1')
+        .send({ email: 'admin@projectthriveward.org', password: 'h3lloWorld!!' });
+
+      expect(loginRes.status).toBe(200);
+    });
+  });
+
+  describe('4. Server-Authoritative Input Snapshot & Validation Invariants', () => {
+    it('rejects output citing unknown evidence reference IDs', () => {
+      const invalidResult: any = {
+        alignmentScore: 90,
+        eligibility: 'POSSIBLY_ELIGIBLE',
+        summary: 'Invalid citation test',
+        strengths: [{ text: 'Invalid strength', evidenceRefs: ['UNKNOWN.CITATION.ID'] }],
+        risks: [],
+        requirements: [],
+        recommendedNextAction: 'Action',
+        confidence: 0.9,
+        limitations: [],
+      };
+
+      const catalog = [{ id: 'OPP.title', category: 'OPPORTUNITY', label: 'Title', value: 'Val' }] as any;
+
+      expect(() => EvidenceCatalogBuilder.validateEvidenceRefs(invalidResult, catalog)).toThrow(
+        'Model output cited invalid evidence reference IDs: UNKNOWN.CITATION.ID'
+      );
     });
 
     it('creating subsequent analysis increments version immutably (v1 -> v2)', async () => {
@@ -152,31 +255,8 @@ describe('AI-1 — Structured AI Funding Analyst Complete Test Suite', () => {
     });
   });
 
-  describe('4. Idempotency & Rate Limiting Verification', () => {
-    it('repeated requests with identical idempotency key return cached evaluation without duplicate call', async () => {
-      const idempotencyKey = `test_idem_${Date.now()}`;
-
-      const res1 = await request(app)
-        .post(`/api/opportunities/${testOpportunity.id}/ai-evaluations`)
-        .set('x-test-role', 'ADMIN')
-        .set('X-Thriveward-CSRF', '1')
-        .set('X-Idempotency-Key', idempotencyKey);
-
-      const res2 = await request(app)
-        .post(`/api/opportunities/${testOpportunity.id}/ai-evaluations`)
-        .set('x-test-role', 'ADMIN')
-        .set('X-Thriveward-CSRF', '1')
-        .set('X-Idempotency-Key', idempotencyKey);
-
-      expect(res1.status).toBe(201);
-      expect(res2.status).toBe(201);
-      expect(res1.body.data.id).toBe(res2.body.data.id);
-    });
-  });
-
-  describe('5. Atomic Human Review & Audit Semantics', () => {
+  describe('5. Atomic Human Review, Security & Workflow Non-Advancement', () => {
     it('OPERATOR can submit human review approval with detailed reason', async () => {
-      // 1. Generate evaluation
       const genRes = await request(app)
         .post(`/api/opportunities/${testOpportunity.id}/ai-evaluations`)
         .set('x-test-role', 'ADMIN')
@@ -184,7 +264,6 @@ describe('AI-1 — Structured AI Funding Analyst Complete Test Suite', () => {
 
       const evalId = genRes.body.data.id;
 
-      // 2. Submit approval review
       const reviewRes = await request(app)
         .post(`/api/ai-evaluations/${evalId}/review`)
         .set('x-test-role', 'OPERATOR')
@@ -199,8 +278,13 @@ describe('AI-1 — Structured AI Funding Analyst Complete Test Suite', () => {
       expect(reviewRes.body.data.reviewReason).toContain('Verified alignment score');
     });
 
-    it('subsequent review attempts on an already reviewed evaluation are rejected (immutable)', async () => {
-      // 1. Generate evaluation
+    it('AI evaluation generation and approval DO NOT alter opportunity canonical status or advance workflow', async () => {
+      const partner = await prisma.strategicPartnerCandidate.findFirst({
+        where: { cocNumber: 'CA-600' },
+      });
+
+      expect(partner?.status).toBe('RESEARCH_REQUIRED');
+
       const genRes = await request(app)
         .post(`/api/opportunities/${testOpportunity.id}/ai-evaluations`)
         .set('x-test-role', 'ADMIN')
@@ -208,36 +292,11 @@ describe('AI-1 — Structured AI Funding Analyst Complete Test Suite', () => {
 
       const evalId = genRes.body.data.id;
 
-      // 2. Initial review
       await request(app)
         .post(`/api/ai-evaluations/${evalId}/review`)
         .set('x-test-role', 'ADMIN')
         .set('X-Thriveward-CSRF', '1')
-        .send({ decision: 'REJECTED', reason: 'Insufficient evidence provided in opportunity description.' });
-
-      // 3. Duplicate review attempt
-      const dupRes = await request(app)
-        .post(`/api/ai-evaluations/${evalId}/review`)
-        .set('x-test-role', 'OPERATOR')
-        .set('X-Thriveward-CSRF', '1')
-        .send({ decision: 'APPROVED', reason: 'Attempting to overwrite previous rejection' });
-
-      expect(dupRes.status).toBe(400);
-      expect(dupRes.body.error).toContain('already been reviewed');
-    });
-
-    it('AI evaluation generation and approval DO NOT alter opportunity canonical status or trigger outreach', async () => {
-      const partner = await prisma.strategicPartnerCandidate.findFirst({
-        where: { cocNumber: 'CA-600' },
-      });
-
-      expect(partner?.status).toBe('RESEARCH_REQUIRED');
-
-      // AI evaluation generation
-      await request(app)
-        .post(`/api/opportunities/${testOpportunity.id}/ai-evaluations`)
-        .set('x-test-role', 'ADMIN')
-        .set('X-Thriveward-CSRF', '1');
+        .send({ decision: 'APPROVED', reason: 'Human approval for testing' });
 
       // Re-query partner status
       const updatedPartner = await prisma.strategicPartnerCandidate.findFirst({

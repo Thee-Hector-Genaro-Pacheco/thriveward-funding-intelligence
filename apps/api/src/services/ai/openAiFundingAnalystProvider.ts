@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { zodResponseFormat } from 'openai/helpers/zod';
+import { zodTextFormat } from 'openai/helpers/zod';
 import {
   FundingAnalystProvider,
   InputSnapshot,
@@ -45,45 +45,52 @@ export class OpenAiFundingAnalystProvider implements FundingAnalystProvider {
     }
 
     try {
-      const completion = await this.client.chat.completions.create({
+      const response = await this.client.responses.parse({
         model: this.model,
-        messages: [
+        input: [
           { role: 'system', content: EvidenceCatalogBuilder.getSystemPrompt() },
           { role: 'user', content: `IMMUTABLE INPUT SNAPSHOT & EVIDENCE CATALOG:\n${JSON.stringify(snapshot, null, 2)}` },
         ],
-        response_format: zodResponseFormat(FundingAnalysisResultSchema, 'funding_analysis_result'),
-        max_tokens: this.maxTokens,
+        text: {
+          format: zodTextFormat(FundingAnalysisResultSchema, 'funding_analysis_result'),
+        },
+        max_output_tokens: this.maxTokens,
       });
 
-      const choice = completion.choices[0];
-      if (!choice) {
-        throw new Error('OpenAI returned empty completion choices.');
+      // Check refusal or empty output
+      let refusal: string | null = null;
+      if (Array.isArray(response.output)) {
+        for (const item of response.output) {
+          if ((item as any).type === 'refusal') {
+            refusal = (item as any).refusal || 'Model refused request';
+            break;
+          }
+        }
       }
 
-      if (choice.message.refusal) {
-        throw new Error(`OpenAI Provider Refusal: ${choice.message.refusal}`);
+      if (refusal) {
+        throw new Error(`OpenAI Provider Refusal: ${refusal}`);
       }
 
-      const content = choice.message.content;
-      if (!content) {
-        throw new Error('OpenAI returned empty response content.');
+      const parsedResult = response.output_parsed;
+      if (!parsedResult) {
+        throw new Error('OpenAI returned empty or unparsable response output.');
       }
 
-      const parsedResult = FundingAnalysisResultSchema.parse(JSON.parse(content));
-
-      // Validate evidence references against snapshot catalog
-      EvidenceCatalogBuilder.validateEvidenceRefs(parsedResult, snapshot.evidenceCatalog);
+      // Re-validate against strict Zod schema & evidence references
+      const validatedResult = FundingAnalysisResultSchema.parse(parsedResult);
+      EvidenceCatalogBuilder.validateEvidenceRefs(validatedResult, snapshot.evidenceCatalog);
 
       return {
-        result: parsedResult,
+        result: validatedResult,
         meta: {
           provider: 'OPENAI',
           model: this.model,
           promptVersion: snapshot.promptVersion || EvidenceCatalogBuilder.PROMPT_VERSION,
-          providerResponseId: completion.id || undefined,
-          inputTokenCount: completion.usage?.prompt_tokens,
-          outputTokenCount: completion.usage?.completion_tokens,
-          rawRefusal: choice.message.refusal || null,
+          providerResponseId: response.id || undefined,
+          inputTokenCount: response.usage?.input_tokens,
+          outputTokenCount: response.usage?.output_tokens,
+          rawRefusal: refusal,
         },
       };
     } catch (err: any) {

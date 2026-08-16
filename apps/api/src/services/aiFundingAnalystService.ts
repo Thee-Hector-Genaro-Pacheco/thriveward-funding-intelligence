@@ -8,17 +8,11 @@ import { OpenAiFundingAnalystProvider } from './ai/openAiFundingAnalystProvider'
 import { EvidenceCatalogBuilder } from './ai/evidenceCatalogBuilder';
 import { AuthService } from './authService';
 
-interface RateLimitRecord {
-  count: number;
-  resetTime: number;
-}
-
 export class AiFundingAnalystService {
   private static providerOverride: FundingAnalystProvider | null = null;
   private static defaultProvider: OpenAiFundingAnalystProvider = new OpenAiFundingAnalystProvider();
   
-  // In-memory rate limiting and idempotency maps
-  private static rateLimitMap = new Map<string, RateLimitRecord>();
+  // In-flight active generation lock map to prevent concurrent duplicate model invocations
   private static idempotencyMap = new Map<string, Promise<any>>();
 
   public static setProvider(provider: FundingAnalystProvider): void {
@@ -31,7 +25,6 @@ export class AiFundingAnalystService {
   }
 
   public static clearRateLimits(): void {
-    AiFundingAnalystService.rateLimitMap.clear();
     AiFundingAnalystService.idempotencyMap.clear();
   }
 
@@ -58,22 +51,31 @@ export class AiFundingAnalystService {
     };
   }
 
-  private static checkRateLimit(userId: string): void {
-    const now = Date.now();
-    const windowMs = 60000; // 1 minute
-    const maxRequests = 5;
+  private static async checkHourlyRateLimit(userId: string): Promise<void> {
+    const maxPerHour = Number(process.env.AI_EVALUATION_RATE_LIMIT_PER_HOUR) || 5;
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
 
-    const record = AiFundingAnalystService.rateLimitMap.get(userId);
-    if (!record || now > record.resetTime) {
-      AiFundingAnalystService.rateLimitMap.set(userId, { count: 1, resetTime: now + windowMs });
-      return;
+    const count = await prisma.aiEvaluation.count({
+      where: {
+        generatedByUserId: userId,
+        createdAt: { gte: oneHourAgo },
+      },
+    });
+
+    if (count >= maxPerHour) {
+      const oldestEval = await prisma.aiEvaluation.findFirst({
+        where: {
+          generatedByUserId: userId,
+          createdAt: { gte: oneHourAgo },
+        },
+        orderBy: { createdAt: 'asc' },
+      });
+
+      const retryMs = oldestEval ? oldestEval.createdAt.getTime() + 60 * 60 * 1000 - Date.now() : 60 * 60 * 1000;
+      const retryMins = Math.max(1, Math.ceil(retryMs / 60000));
+
+      throw new Error(`RATE_LIMIT_EXCEEDED: Maximum ${maxPerHour} AI evaluations per hour per user. Please wait ${retryMins} minute(s) before generating another evaluation.`);
     }
-
-    if (record.count >= maxRequests) {
-      throw new Error(`RATE_LIMIT_EXCEEDED: Maximum ${maxRequests} AI evaluations per minute per user. Please wait before generating another analysis.`);
-    }
-
-    record.count += 1;
   }
 
   public static async generateEvaluation(params: {
@@ -85,17 +87,40 @@ export class AiFundingAnalystService {
   }): Promise<any> {
     const { opportunityId, userId, idempotencyKey, ipAddress, userAgent } = params;
 
-    // Idempotency check to prevent concurrent duplicate model calls
-    const cacheKey = idempotencyKey ? `idem_${opportunityId}_${idempotencyKey}` : null;
-    if (cacheKey && AiFundingAnalystService.idempotencyMap.has(cacheKey)) {
-      return await AiFundingAnalystService.idempotencyMap.get(cacheKey)!;
+    // 1. Durable Database-Backed Idempotency Check (Survives process restarts, user-scoped)
+    if (idempotencyKey) {
+      const existing = await prisma.aiEvaluation.findFirst({
+        where: {
+          generatedByUserId: userId,
+          opportunityId,
+          idempotencyKey,
+        },
+        include: {
+          generatedByUser: {
+            select: { id: true, displayName: true, email: true, role: true },
+          },
+          reviewedByUser: {
+            select: { id: true, displayName: true, email: true, role: true },
+          },
+        },
+      });
+
+      if (existing) {
+        return existing;
+      }
+    }
+
+    // 2. In-Flight Active Generation Lock (Prevents concurrent duplicate LLM invocations)
+    const lockKey = `${userId}_${opportunityId}_${idempotencyKey || 'default'}`;
+    if (AiFundingAnalystService.idempotencyMap.has(lockKey)) {
+      return await AiFundingAnalystService.idempotencyMap.get(lockKey)!;
     }
 
     const executionPromise = (async () => {
-      // 1. Check rate limit
-      AiFundingAnalystService.checkRateLimit(userId);
+      // 3. Hourly Rate Limit Check (5 per hour per user default)
+      await AiFundingAnalystService.checkHourlyRateLimit(userId);
 
-      // 2. Fetch authoritative records from PostgreSQL
+      // 4. Fetch authoritative records from PostgreSQL
       const opp = await prisma.fundingOpportunity.findUnique({
         where: { id: opportunityId },
       });
@@ -107,23 +132,23 @@ export class AiFundingAnalystService {
         include: { programs: true },
       });
 
-      // 3. Build snapshot and hash
+      // 5. Build snapshot and hash
       const snapshot: InputSnapshot = EvidenceCatalogBuilder.buildSnapshot(opp, orgProfile);
       const inputHash = EvidenceCatalogBuilder.hashSnapshot(snapshot);
 
-      // 4. Call provider
+      // 6. Call provider
       const activeProvider = AiFundingAnalystService.getActiveProvider();
       const response = await activeProvider.analyze(snapshot);
       const { result, meta } = response;
 
-      // 5. Versioning check
+      // 7. Versioning check
       const lastEval = await prisma.aiEvaluation.findFirst({
         where: { opportunityId },
         orderBy: { version: 'desc' },
       });
       const nextVersion = lastEval ? lastEval.version + 1 : 1;
 
-      // 6. Atomic persistence
+      // 8. Atomic persistence in PostgreSQL with idempotencyKey
       const evaluation = await prisma.aiEvaluation.create({
         data: {
           opportunityId,
@@ -144,6 +169,7 @@ export class AiFundingAnalystService {
           provider: meta.provider,
           model: meta.model,
           promptVersion: meta.promptVersion,
+          idempotencyKey: idempotencyKey || null,
           providerResponseId: meta.providerResponseId || null,
           inputTokenCount: meta.inputTokenCount || null,
           outputTokenCount: meta.outputTokenCount || null,
@@ -156,7 +182,7 @@ export class AiFundingAnalystService {
         },
       });
 
-      // 7. Audit log
+      // 9. Audit log
       await AuthService.logSecurityEvent({
         userId,
         eventType: 'AI_EVALUATION_GENERATED',
@@ -170,23 +196,22 @@ export class AiFundingAnalystService {
           eligibility: result.eligibility,
           provider: meta.provider,
           model: meta.model,
+          idempotencyKey,
         }),
       });
 
       return evaluation;
     })();
 
-    if (cacheKey) {
-      AiFundingAnalystService.idempotencyMap.set(cacheKey, executionPromise);
-      // Clean up cacheKey after 1 minute
-      setTimeout(() => AiFundingAnalystService.idempotencyMap.delete(cacheKey), 60000);
-    }
+    AiFundingAnalystService.idempotencyMap.set(lockKey, executionPromise);
 
     try {
-      return await executionPromise;
+      const res = await executionPromise;
+      return res;
     } catch (err) {
-      if (cacheKey) AiFundingAnalystService.idempotencyMap.delete(cacheKey);
       throw err;
+    } finally {
+      AiFundingAnalystService.idempotencyMap.delete(lockKey);
     }
   }
 

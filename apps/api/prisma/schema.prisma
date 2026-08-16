@@ -1051,6 +1051,7 @@ model AiEvaluation {
   provider              String              @default("OPENAI")
   model                 String              @default("gpt-5.6-luna")
   promptVersion         String              @default("funding-analyst-v1")
+  idempotencyKey        String?
   providerResponseId    String?
   inputTokenCount       Int?
   outputTokenCount      Int?
@@ -1062,6 +1063,7 @@ model AiEvaluation {
   reviewedAt            DateTime?
   reviewReason          String?
 
+  @@unique([generatedByUserId, opportunityId, idempotencyKey])
   @@index([opportunityId, version])
   @@index([generatedByUserId])
   @@index([status])
