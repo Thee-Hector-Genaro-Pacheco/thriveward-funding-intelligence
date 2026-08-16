@@ -16,7 +16,10 @@ const TEST_OPP_ID = 'test-phase1d-opp-001';
 describe('Phase 1D — Applicant Readiness & Source-Integrity Correction Suite', () => {
   const cleanTestOpp = async (target: string) => {
     const opps = await prisma.fundingOpportunity.findMany({
-      where: { OR: [{ id: target }, { externalOpportunityId: target }, { fundingOpportunityNumber: target }] },
+      where: {
+        OR: [{ id: target }, { externalOpportunityId: target }, { fundingOpportunityNumber: target }],
+        isDemo: true, // Never clean up live operational opportunities
+      },
       select: { id: true },
     });
     const ids = opps.map((o) => o.id);

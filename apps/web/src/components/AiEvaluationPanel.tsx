@@ -166,7 +166,7 @@ export const AiEvaluationPanel: React.FC<AiEvaluationPanelProps> = ({
               AI-GENERATED — HUMAN REVIEW REQUIRED (v{currentEval.version})
             </span>
             <span style={{ fontSize: '0.75rem', color: '#cbd5e1' }}>
-              Confidence: <strong>{Math.round(currentEval.confidence * 100)}%</strong>
+              Model confidence: <strong>{Math.round(currentEval.confidence * 100)}%</strong>
             </span>
           </div>
 

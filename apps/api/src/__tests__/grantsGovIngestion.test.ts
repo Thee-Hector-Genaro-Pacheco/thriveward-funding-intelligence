@@ -38,7 +38,7 @@ const MOCK_DETAIL_PAYLOAD = {
 describe('Phase 1B — Grants.gov Verified Ingestion & Provenance Complete Audit Suite', () => {
   const cleanMockRecord = async (extId: string) => {
     const opps = await prisma.fundingOpportunity.findMany({
-      where: { externalOpportunityId: extId },
+      where: { externalOpportunityId: extId, isDemo: true },
       select: { id: true },
     });
     const ids = opps.map((o) => o.id);

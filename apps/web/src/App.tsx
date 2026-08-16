@@ -928,7 +928,7 @@ export function App() {
       {/* Header */}
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
         <div>
-          <div className="header-badge">Phase 1H • Secure Authentication, RBAC & Verified Human Attribution</div>
+          <div className="header-badge">AI-1 • Structured AI Funding Analyst</div>
           <h1 className="brand-title">Thriveward Funding Intelligence</h1>
           <p className="brand-subtitle">
             Human-led funding, readiness, and partnership intelligence for Project Thriveward
