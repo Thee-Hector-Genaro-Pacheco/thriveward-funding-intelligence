@@ -9,6 +9,7 @@ import { opportunitiesRouter } from './routes/opportunities';
 import { phase1eRouter } from './routes/phase1eRoutes';
 import { authRouter } from './routes/authRoutes';
 import { adminUserRouter } from './routes/adminUserRoutes';
+import { aiEvaluationRouter } from './routes/aiEvaluationRoutes';
 import { requireAuth, csrfProtection } from './middleware/authMiddleware';
 import { BRIDGE_FORWARD_PROFILE } from '@thriveward/shared';
 
@@ -36,6 +37,7 @@ app.use('/api/auth', authRouter);
 app.use('/api/admin/users', adminUserRouter);
 app.use('/api/opportunities', requireAuth, opportunitiesRouter);
 app.use('/api', requireAuth, phase1eRouter);
+app.use('/api', requireAuth, aiEvaluationRouter);
 
 // Organization profile route (Protected)
 app.get('/api/profile', requireAuth, (req: Request, res: Response) => {

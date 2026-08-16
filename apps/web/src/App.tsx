@@ -6,6 +6,7 @@ import { LoginModal } from './components/LoginModal';
 import { UserHeaderBadge } from './components/UserHeaderBadge';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { AdminUserManagementModal } from './components/AdminUserManagementModal';
+import { AiEvaluationPanel, AiEvaluationData } from './components/AiEvaluationPanel';
 
 const formatEligibilityText = (val: string | undefined | null) => {
   if (!val) return 'UNKNOWN';
@@ -228,6 +229,12 @@ export interface SystemHealth {
   databaseStatus: 'UP' | 'DOWN' | 'CHECKING';
   pythonAgentStatus: 'UP' | 'DOWN' | 'UNREACHABLE' | 'CHECKING';
   overallStatus: 'UP' | 'DEGRADED' | 'DOWN' | 'CHECKING';
+  aiAnalyst?: {
+    enabled: boolean;
+    provider: string;
+    model: string;
+    promptVersion: string;
+  };
 }
 
 function sanitizeHtmlToText(html?: string | null): string {
@@ -385,6 +392,70 @@ export function App() {
   const [outreachEngagement, setOutreachEngagement] = useState<any | null>(null);
   const [outreachDashboard, setOutreachDashboard] = useState<any | null>(null);
 
+  // AI-1 AI Funding Analyst State
+  const [aiEvaluations, setAiEvaluations] = useState<AiEvaluationData[]>([]);
+  const [aiGenerating, setAiGenerating] = useState<boolean>(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  const fetchAiEvaluations = async (oppId: string) => {
+    try {
+      const res = await apiFetch(`/api/opportunities/${oppId}/ai-evaluations`);
+      if (res.ok) {
+        const json = await res.json();
+        setAiEvaluations(json.data || []);
+      }
+    } catch (err) {
+      console.error('Error fetching AI evaluations:', err);
+    }
+  };
+
+  const handleGenerateAiAnalysis = async () => {
+    if (!selectedOppForDrawer) return;
+    setAiGenerating(true);
+    setAiError(null);
+    try {
+      const idempotencyKey = `ui_${selectedOppForDrawer.id}_${Date.now()}`;
+      const res = await apiFetch(`/api/opportunities/${selectedOppForDrawer.id}/ai-evaluations`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Idempotency-Key': idempotencyKey,
+        },
+        body: JSON.stringify({ idempotencyKey }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error || 'Failed to generate AI evaluation');
+      }
+
+      await fetchAiEvaluations(selectedOppForDrawer.id);
+      setActionMessage(`✓ Generated new AI evaluation (v${json.data.version}) for "${selectedOppForDrawer.title}"`);
+    } catch (err: any) {
+      setAiError(err.message || 'Failed to generate AI evaluation');
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
+  const handleReviewAiAnalysis = async (evaluationId: string, decision: 'APPROVED' | 'REJECTED', reason: string) => {
+    const res = await apiFetch(`/api/ai-evaluations/${evaluationId}/review`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ decision, reason }),
+    });
+
+    const json = await res.json();
+    if (!res.ok) {
+      throw new Error(json.error || 'Failed to submit review');
+    }
+
+    if (selectedOppForDrawer) {
+      await fetchAiEvaluations(selectedOppForDrawer.id);
+    }
+    setActionMessage(`✓ AI evaluation marked ${decision} with human review attestation.`);
+  };
+
   const fetchOutreachDashboard = async () => {
     if (authStatus !== 'AUTHENTICATED') return;
     try {
@@ -463,6 +534,7 @@ export function App() {
           databaseStatus: dbUp ? 'UP' : 'DOWN',
           pythonAgentStatus: agentUp ? 'UP' : agentStatusRaw.includes('UNREACHABLE') ? 'UNREACHABLE' : 'DOWN',
           overallStatus: overall,
+          aiAnalyst: data.aiAnalyst,
         });
       } else {
         setHealth({ apiStatus: 'DOWN', databaseStatus: 'DOWN', pythonAgentStatus: 'DOWN', overallStatus: 'DOWN' });
@@ -760,6 +832,9 @@ export function App() {
         const matchesData = await matchesRes.json();
         setDrawerSponsorMatches(matchesData.data || []);
       }
+
+      // 4. Fetch AI Evaluations
+      await fetchAiEvaluations(opp.id);
     } catch (err: any) {
       setDrawerError(err.message || 'Error loading opportunity details drawer');
     } finally {
@@ -1838,6 +1913,17 @@ export function App() {
                   )}
                 </div>
 
+                {/* AI-1 Structured AI Funding Analyst Panel */}
+                <AiEvaluationPanel
+                  evaluations={aiEvaluations}
+                  currentUser={currentUser}
+                  isAiConfigured={Boolean(health.aiAnalyst?.enabled)}
+                  onGenerateAiAnalysis={handleGenerateAiAnalysis}
+                  onReviewAiAnalysis={handleReviewAiAnalysis}
+                  generating={aiGenerating}
+                  error={aiError}
+                />
+
                 {/* Dynamic Routing Navigation Action (Partnership vs Sponsor) */}
                 {selectedOppForDrawer.candidateRoutingStatus === 'PARTNERSHIP_REQUIRED' || selectedOppForDrawer.fundingOpportunityNumber?.includes('CPD-2600-DC-0025') ? (
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(59, 130, 246, 0.12)', border: '1px solid #3b82f6', padding: '1rem', borderRadius: '0.65rem' }}>
@@ -2147,7 +2233,7 @@ export function App() {
       </div>
 
       <footer>
-        <p>Thriveward Funding Intelligence Platform • Phase 1E Fiscal Sponsor & Funding Readiness Foundation • Project Thriveward</p>
+        <p>Thriveward Funding Intelligence Platform • AI-1 • Structured AI Funding Analyst • Project Thriveward</p>
       </footer>
     </div>
   );

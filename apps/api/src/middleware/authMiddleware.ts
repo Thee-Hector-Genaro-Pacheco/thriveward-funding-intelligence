@@ -41,6 +41,11 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
             accountState: 'ACTIVE',
           },
         });
+      } else if (testUser.role !== role) {
+        testUser = await prisma.user.update({
+          where: { id: testUser.id },
+          data: { role },
+        });
       }
       req.user = testUser;
       return next();
@@ -125,7 +130,8 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
 /**
  * Middleware enforcing Role-Based Access Control (RBAC).
  */
-export function requireRole(...allowedRoles: UserRole[]) {
+export function requireRole(...allowedRoles: (UserRole | UserRole[])[]) {
+  const roles = allowedRoles.flat();
   return (req: Request, res: Response, next: NextFunction) => {
     if (!req.user) {
       return res.status(401).json({
@@ -135,10 +141,10 @@ export function requireRole(...allowedRoles: UserRole[]) {
     }
 
     const userRole = req.user.role as UserRole;
-    if (!allowedRoles.includes(userRole)) {
+    if (!roles.includes(userRole)) {
       return res.status(403).json({
         success: false,
-        error: `Forbidden: User role [${userRole}] lacks required permission [${allowedRoles.join(', ')}].`,
+        error: `Forbidden: User role [${userRole}] lacks required permission [${roles.join(', ')}].`,
       });
     }
 

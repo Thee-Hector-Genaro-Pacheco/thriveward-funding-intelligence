@@ -167,6 +167,7 @@ model FundingOpportunity {
   readinessPlans          OpportunityReadinessPlan[]
   grantCalendarItems      GrantCalendarItem[]
   engagements             OutreachEngagement[]
+  aiEvaluations           AiEvaluation[]
 
   @@unique([sourceSystem, externalOpportunityId])
   @@index([candidateRoutingStatus])
@@ -808,6 +809,8 @@ model User {
   outreachResponses      OutreachResponseRecord[]
   outreachFollowUps      OutreachFollowUp[]
   mouChecklistItems      MouChecklistItem[]
+  generatedAiEvaluations AiEvaluation[]            @relation("GeneratedAiEvaluations")
+  reviewedAiEvaluations  AiEvaluation[]            @relation("ReviewedAiEvaluations")
 }
 
 model UserSession {
@@ -1010,4 +1013,56 @@ model OutreachAttachmentRef {
   storageRef   String
   description  String?
   createdAt    DateTime           @default(now())
+}
+
+// --- AI-1: AI Funding Analyst Models & Enums ---
+
+enum AiEvaluationStatus {
+  GENERATED
+  APPROVED
+  REJECTED
+}
+
+enum AiEligibilityRating {
+  LIKELY_ELIGIBLE
+  POSSIBLY_ELIGIBLE
+  UNLIKELY_ELIGIBLE
+  INSUFFICIENT_INFORMATION
+}
+
+model AiEvaluation {
+  id                    String              @id @default(uuid())
+  opportunityId         String
+  opportunity           FundingOpportunity  @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  version               Int                 @default(1)
+  status                AiEvaluationStatus  @default(GENERATED)
+  alignmentScore        Int
+  eligibility           AiEligibilityRating
+  summary               String
+  strengths             Json
+  risks                 Json
+  requirements          Json
+  recommendedNextAction String
+  confidence            Float
+  limitations           String[]
+  evidenceSnapshot      Json
+  inputSnapshot         Json
+  inputHash             String
+  provider              String              @default("OPENAI")
+  model                 String              @default("gpt-5.6-luna")
+  promptVersion         String              @default("funding-analyst-v1")
+  providerResponseId    String?
+  inputTokenCount       Int?
+  outputTokenCount      Int?
+  generatedByUserId     String
+  generatedByUser       User                @relation("GeneratedAiEvaluations", fields: [generatedByUserId], references: [id])
+  createdAt             DateTime            @default(now())
+  reviewedByUserId      String?
+  reviewedByUser        User?               @relation("ReviewedAiEvaluations", fields: [reviewedByUserId], references: [id])
+  reviewedAt            DateTime?
+  reviewReason          String?
+
+  @@index([opportunityId, version])
+  @@index([generatedByUserId])
+  @@index([status])
 }

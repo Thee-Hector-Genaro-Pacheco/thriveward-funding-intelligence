@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { BRIDGE_FORWARD_PROFILE } from '@thriveward/shared';
 import { prisma } from '../lib/prisma';
+import { AiFundingAnalystService } from '../services/aiFundingAnalystService';
 
 export const healthRouter = Router();
 
@@ -12,7 +13,7 @@ healthRouter.get('/', async (req: Request, res: Response) => {
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const timeoutId = setTimeout(() => controller.abort(), 1000);
     const resp = await fetch(`${pythonAgentUrl}/health`, { signal: controller.signal });
     clearTimeout(timeoutId);
     if (resp.ok) {
@@ -62,5 +63,6 @@ healthRouter.get('/', async (req: Request, res: Response) => {
       humanInTheLoopEnforced: true,
       autonomousSubmissionsAllowed: false,
     },
+    aiAnalyst: AiFundingAnalystService.getConfigurationStatus(),
   });
 });
