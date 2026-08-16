@@ -350,9 +350,23 @@ export class FiscalSponsorService {
     let repairedCount = 0;
 
     // 1. Repair SEE provenance
-    const see = await prisma.fiscalSponsorCandidate.findUnique({
+    let see = await prisma.fiscalSponsorCandidate.findUnique({
       where: { id: '3264d2c7-9803-456f-a907-61205e9f6d0c' },
     });
+    if (!see) {
+      const existingSee = await prisma.fiscalSponsorCandidate.findFirst({
+        where: { OR: [{ canonicalDomain: 'saveourplanet.org' }, { name: { contains: 'Social and Environmental Entrepreneurs' } }] },
+      });
+      if (existingSee) {
+        await prisma.$executeRawUnsafe(
+          `UPDATE "FiscalSponsorCandidate" SET "id" = '3264d2c7-9803-456f-a907-61205e9f6d0c' WHERE "id" = $1`,
+          existingSee.id
+        );
+        see = await prisma.fiscalSponsorCandidate.findUnique({
+          where: { id: '3264d2c7-9803-456f-a907-61205e9f6d0c' },
+        });
+      }
+    }
     if (see) {
       if (see.isFixture || !see.hasLiveVerification || see.isMerged || see.mergedIntoId !== null) {
         await prisma.fiscalSponsorCandidate.update({

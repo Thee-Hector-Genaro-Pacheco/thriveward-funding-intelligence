@@ -8,6 +8,7 @@ import { AiFundingAnalystService } from '../services/aiFundingAnalystService';
 import { MockFundingAnalystProvider } from '../services/ai/mockFundingAnalystProvider';
 import { OpenAiFundingAnalystProvider } from '../services/ai/openAiFundingAnalystProvider';
 import { EvidenceCatalogBuilder } from '../services/ai/evidenceCatalogBuilder';
+import { AuthService } from '../services/authService';
 
 describe('AI-1 — Structured AI Funding Analyst Complete Test Suite', () => {
   const TEST_FIXTURE_OPPORTUNITY_ID = 'test-ai1-opp-fixture-9999';
@@ -42,6 +43,22 @@ describe('AI-1 — Structured AI Funding Analyst Complete Test Suite', () => {
   };
 
   beforeAll(async () => {
+    // Ensure admin@projectthriveward.org user exists for login test
+    const existingAdmin = await prisma.user.findUnique({ where: { email: 'admin@projectthriveward.org' } });
+    if (!existingAdmin) {
+      const passwordHash = await AuthService.hashPassword('h3lloWorld!!');
+      await prisma.user.create({
+        data: {
+          id: 'ac0b7f55-0e42-43ae-897f-627ff7d9fb75',
+          email: 'admin@projectthriveward.org',
+          displayName: 'Hector Pacheco',
+          passwordHash,
+          role: 'ADMIN',
+          accountState: 'ACTIVE',
+        },
+      });
+    }
+
     // Create dedicated, isolated test opportunity fixture
     testOpportunity = await prisma.fundingOpportunity.upsert({
       where: { id: TEST_FIXTURE_OPPORTUNITY_ID },

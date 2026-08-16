@@ -11,9 +11,11 @@ const REVIEW_TOKEN = 'bridge_secret_review_token_change_in_production_2026';
 describe('Phase 1E — Live Source-Transport & Lineage Final Closeout Test Suite', () => {
   beforeAll(async () => {
     process.env.DATABASE_URL =
+      process.env.TEST_DATABASE_URL ||
       process.env.DATABASE_URL ||
-      'postgresql://bridge_admin:bridge_secure_pass_2026@localhost:5432/bridge_ai_db?schema=public';
+      'postgresql://bridge_admin:bridge_secure_pass_2026@localhost:5432/bridge_ai_test_db?schema=public';
     process.env.BRIDGE_REVIEW_TOKEN = REVIEW_TOKEN;
+    await FiscalSponsorService.repairExistingDatabaseProvenance();
   });
 
   it('1. Authorized NNFS URL is https://www.fiscalsponsors.org/member-directory', () => {

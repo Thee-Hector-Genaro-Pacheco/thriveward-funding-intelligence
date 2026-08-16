@@ -18,7 +18,6 @@ describe('Phase 1D — Applicant Readiness & Source-Integrity Correction Suite',
     const opps = await prisma.fundingOpportunity.findMany({
       where: {
         OR: [{ id: target }, { externalOpportunityId: target }, { fundingOpportunityNumber: target }],
-        isDemo: true, // Never clean up live operational opportunities
       },
       select: { id: true },
     });
@@ -40,8 +39,9 @@ describe('Phase 1D — Applicant Readiness & Source-Integrity Correction Suite',
 
   beforeAll(async () => {
     process.env.DATABASE_URL =
+      process.env.TEST_DATABASE_URL ||
       process.env.DATABASE_URL ||
-      'postgresql://bridge_admin:bridge_secure_pass_2026@localhost:5432/bridge_ai_db?schema=public';
+      'postgresql://bridge_admin:bridge_secure_pass_2026@localhost:5432/bridge_ai_test_db?schema=public';
     process.env.BRIDGE_REVIEW_TOKEN = REVIEW_TOKEN;
 
     await cleanTestOpp(TEST_OPP_ID);

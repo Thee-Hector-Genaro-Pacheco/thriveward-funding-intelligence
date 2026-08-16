@@ -38,7 +38,7 @@ const MOCK_DETAIL_PAYLOAD = {
 describe('Phase 1B — Grants.gov Verified Ingestion & Provenance Complete Audit Suite', () => {
   const cleanMockRecord = async (extId: string) => {
     const opps = await prisma.fundingOpportunity.findMany({
-      where: { externalOpportunityId: extId, isDemo: true },
+      where: { externalOpportunityId: extId },
       select: { id: true },
     });
     const ids = opps.map((o) => o.id);
@@ -52,8 +52,9 @@ describe('Phase 1B — Grants.gov Verified Ingestion & Provenance Complete Audit
 
   beforeAll(async () => {
     process.env.DATABASE_URL =
+      process.env.TEST_DATABASE_URL ||
       process.env.DATABASE_URL ||
-      'postgresql://bridge_admin:bridge_secure_pass_2026@localhost:5432/bridge_ai_db?schema=public';
+      'postgresql://bridge_admin:bridge_secure_pass_2026@localhost:5432/bridge_ai_test_db?schema=public';
 
     await cleanMockRecord('test-unit-mock-888888');
     await cleanMockRecord('test-unit-mismatch-777777');

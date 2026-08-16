@@ -241,17 +241,28 @@ export class StrategicPartnerService {
             contactValue: 'CareCoordination@ceo.oc.gov',
             contactType: 'EMAIL',
             purpose: 'Grant Applications & CoC Collaborative Proposals',
+            purposeCategory: 'GRANT_COMPETITION',
             verificationStatus: 'VERIFIED_OFFICIAL',
-            sourceUrl: 'https://www.ochealthinfo.com/about-hca/directors-office/care-coordination',
-            quotedCitation: 'For questions related to the CoC NOFO, please email the Office of Care Coordination at CareCoordination@ceo.oc.gov.',
+            sourceUrl: 'https://ceo.oc.gov/fy2026cocnofo',
+            quotedCitation: 'For questions related to the CoC NOFO, please email the Office of Care Coordination at CareCoordination@ceo.oc.gov with the email subject line "CoC NOFO Question".',
           },
           {
-            contactValue: 'homelessprevention@ochca.com',
+            contactValue: 'CareCoordination@ceo.oc.gov',
             contactType: 'EMAIL',
             purpose: 'General Homelessness Prevention & Program Inquiries',
+            purposeCategory: 'GENERAL',
             verificationStatus: 'VERIFIED_OFFICIAL',
-            sourceUrl: 'https://www.ochealthinfo.com',
-            quotedCitation: 'Official Orange County Health Care Agency homeless prevention contact.',
+            sourceUrl: 'https://ceo.oc.gov/office-care-coordination',
+            quotedCitation: 'For further information, contact CareCoordination@ceo.oc.gov',
+          },
+          {
+            contactValue: 'CoordinatedEntry@ceo.oc.gov',
+            contactType: 'EMAIL',
+            purpose: 'Coordinated Entry System (CES) & Direct Service Referral Inquiries',
+            purposeCategory: 'CES_INTEGRATION',
+            verificationStatus: 'VERIFIED_OFFICIAL',
+            sourceUrl: 'https://ceo.ocgov.com/care-coordination/homeless-services/coordinated-entry-system',
+            quotedCitation: 'For additional information about the Coordinated Entry System, email CoordinatedEntry@ceo.oc.gov.',
           },
         ];
 
@@ -259,8 +270,7 @@ export class StrategicPartnerService {
           const exists = await prisma.partnerContactChannel.findFirst({
             where: {
               strategicPartnerCandidateId: candidate.id,
-              contactValue: sc.contactValue,
-              purpose: sc.purpose,
+              purposeCategory: sc.purposeCategory,
             },
           });
           if (!exists) {
@@ -268,6 +278,18 @@ export class StrategicPartnerService {
               data: {
                 strategicPartnerCandidateId: candidate.id,
                 ...sc,
+              },
+            });
+          } else {
+            await prisma.partnerContactChannel.update({
+              where: { id: exists.id },
+              data: {
+                contactValue: sc.contactValue,
+                contactType: sc.contactType,
+                purpose: sc.purpose,
+                sourceUrl: sc.sourceUrl,
+                quotedCitation: sc.quotedCitation,
+                verificationStatus: sc.verificationStatus,
               },
             });
           }

@@ -12,9 +12,12 @@ const REVIEW_TOKEN = 'bridge_secret_review_token_change_in_production_2026';
 describe('Phase 1E — Source Accuracy, Sponsor Facts & Live Discovery Correction Test Suite', () => {
   beforeAll(async () => {
     process.env.DATABASE_URL =
+      process.env.TEST_DATABASE_URL ||
       process.env.DATABASE_URL ||
-      'postgresql://bridge_admin:bridge_secure_pass_2026@localhost:5432/bridge_ai_db?schema=public';
+      'postgresql://bridge_admin:bridge_secure_pass_2026@localhost:5432/bridge_ai_test_db?schema=public';
     process.env.BRIDGE_REVIEW_TOKEN = REVIEW_TOKEN;
+    await SponsorDiscoveryService.runDiscovery();
+    await FiscalSponsorService.repairExistingDatabaseProvenance();
   });
 
   it('1. Canonical SOP Detail ID is 362088 and 357658 cannot be associated with SOP', () => {
@@ -50,7 +53,7 @@ describe('Phase 1E — Source Accuracy, Sponsor Facts & Live Discovery Correctio
 
   it('4. Community Partners official published facts are persisted accurately', async () => {
     const cp = await prisma.fiscalSponsorCandidate.findFirst({
-      where: { name: { contains: 'Community Partners' } },
+      where: { id: 'sponsor-community-partners-la' },
     });
 
     expect(cp).toBeDefined();
