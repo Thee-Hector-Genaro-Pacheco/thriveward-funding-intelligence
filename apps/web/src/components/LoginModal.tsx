@@ -74,18 +74,20 @@ export const LoginModal: React.FC<LoginModalProps> = ({ onLoginSuccess }) => {
             marginBottom: '0.75rem',
           }}>
             <div style={{
-              width: '40px',
+              minWidth: '44px',
               height: '40px',
+              padding: '0 8px',
               borderRadius: '10px',
               background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               fontWeight: 800,
-              fontSize: '1.25rem',
+              fontSize: '0.9375rem',
+              letterSpacing: '0.04em',
               color: '#ffffff',
-            }}>
-              B
+            }} aria-label="Thriveward Funding Intelligence Monogram">
+              TFI
             </div>
             <span style={{ fontSize: '1.5rem', fontWeight: 700, letterSpacing: '-0.02em' }}>
               Thriveward Funding Intelligence
