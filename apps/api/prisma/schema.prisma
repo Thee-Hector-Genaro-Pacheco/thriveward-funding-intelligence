@@ -1216,3 +1216,22 @@ model FundingDocumentPage {
   @@index([documentVersionId])
   @@index([citationRef])
 }
+
+model FundingDocumentIdempotency {
+  id                  String    @id @default(uuid())
+  opportunityId       String
+  idempotencyKey      String
+  authenticatedUserId String
+  documentTitle       String
+  payloadSha256       String
+  resultingDocumentId String?
+  resultingVersionId  String?
+  status              String    @default("PROCESSING") // PROCESSING, COMPLETED, FAILED
+  responsePayload     Json?
+  createdAt           DateTime  @default(now())
+  completedAt         DateTime?
+
+  @@unique([opportunityId, idempotencyKey])
+  @@index([opportunityId, payloadSha256])
+  @@index([authenticatedUserId])
+}

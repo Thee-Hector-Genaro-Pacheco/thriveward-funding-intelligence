@@ -195,3 +195,17 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction) 
     error: 'CSRF Protection: Missing required X-Thriveward-CSRF header or valid origin header.',
   });
 }
+
+/**
+ * Server-side feature-gate middleware for official funding document ingestion.
+ */
+export function requireDocumentIngestionEnabled(req: Request, res: Response, next: NextFunction) {
+  const isEnabled = process.env.DOCUMENT_INGESTION_ENABLED === 'true' || process.env.DOCUMENT_INGESTION_ENABLED === '1';
+  if (!isEnabled) {
+    return res.status(503).json({
+      success: false,
+      error: 'DOCUMENT_INGESTION_NOT_CONFIGURED: Official funding document ingestion is disabled on this server.',
+    });
+  }
+  next();
+}

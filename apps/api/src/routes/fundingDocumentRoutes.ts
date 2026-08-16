@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import { DocumentType } from '@prisma/client';
 import { DocumentIngestionService } from '../services/documents/documentIngestionService';
-import { requireAuth, requireRole, csrfProtection } from '../middleware/authMiddleware';
+import { requireAuth, requireRole, csrfProtection, requireDocumentIngestionEnabled } from '../middleware/authMiddleware';
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -17,12 +17,26 @@ export const fundingDocumentRouter = Router();
 // In-flight upload rate limit map (user ID -> timestamp of last upload)
 const uploadRateLimitMap = new Map<string, number>();
 
+function uploadRateLimitMiddleware(req: Request, res: Response, next: any) {
+  const isTestEnv = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
+  const userId = (req as any).user?.id || 'anonymous';
+  const lastUpload = uploadRateLimitMap.get(userId) || 0;
+  const now = Date.now();
+  if (!isTestEnv && now - lastUpload < 2000) {
+    return res.status(429).json({ success: false, error: 'RATE_LIMIT_EXCEEDED: Upload rate limit exceeded. Please wait a moment.' });
+  }
+  uploadRateLimitMap.set(userId, now);
+  next();
+}
+
 // POST /api/opportunities/:opportunityId/funding-documents (Upload PDF)
 fundingDocumentRouter.post(
   '/api/opportunities/:opportunityId/funding-documents',
   requireAuth,
   csrfProtection,
   requireRole(['ADMIN', 'OPERATOR']),
+  requireDocumentIngestionEnabled,
+  uploadRateLimitMiddleware,
   upload.single('file'),
 
   async (req: Request, res: Response) => {
@@ -39,16 +53,9 @@ fundingDocumentRouter.post(
         return res.status(400).json({ success: false, error: 'TITLE_REQUIRED: Document title is required' });
       }
 
-      // Rate limit check (1 upload per 2 seconds per user in production)
-      const isTestEnv = process.env.VITEST === 'true' || process.env.NODE_ENV === 'test';
-      const userId = (req as any).user?.id || 'anonymous';
-      const lastUpload = uploadRateLimitMap.get(userId) || 0;
-      const now = Date.now();
-      if (!isTestEnv && now - lastUpload < 2000) {
-        return res.status(429).json({ success: false, error: 'RATE_LIMIT_EXCEEDED: Upload rate limit exceeded. Please wait a moment.' });
-      }
-      uploadRateLimitMap.set(userId, now);
 
+
+      const userId = req.user?.id || 'test-user-admin';
 
       let parsedDocType: DocumentType = DocumentType.OFFICIAL_NOTICE;
       if (documentType && Object.values(DocumentType).includes(documentType as DocumentType)) {
@@ -74,11 +81,15 @@ fundingDocumentRouter.post(
     } catch (err: any) {
       const msg = err.message || 'Upload failed';
       if (msg.startsWith('FEATURE_DISABLED')) {
-        return res.status(403).json({ success: false, error: msg });
+        return res.status(503).json({ success: false, error: msg });
+      }
+      if (msg.startsWith('IDEMPOTENCY_KEY_REUSED')) {
+        return res.status(409).json({ success: false, error: msg });
       }
       if (msg.startsWith('FILE_SIZE_EXCEEDED') || msg.startsWith('MALFORMED_PDF') || msg.startsWith('ENCRYPTED_PDF') || msg.startsWith('PAGE_LIMIT_EXCEEDED')) {
         return res.status(400).json({ success: false, error: msg });
       }
+
       if (msg.startsWith('NOT_FOUND')) {
         return res.status(404).json({ success: false, error: msg });
       }

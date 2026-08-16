@@ -43,7 +43,7 @@ export class DocumentIngestionService {
       throw new Error('FEATURE_DISABLED: Document ingestion is disabled on this server');
     }
 
-    const { opportunityId, title, officialSourceUrl, originalFileName, mimeType, bytes, userId } = params;
+    const { opportunityId, title, officialSourceUrl, originalFileName, mimeType, bytes, userId, idempotencyKey } = params;
     const documentType = params.documentType || DocumentType.OFFICIAL_NOTICE;
 
     const maxBytes = Number(process.env.DOCUMENT_MAX_FILE_BYTES) || 26214400; // 25MB
@@ -62,8 +62,68 @@ export class DocumentIngestionService {
       throw new Error(`NOT_FOUND: Funding opportunity '${opportunityId}' does not exist`);
     }
 
-    // Compute document SHA-256
+    // Compute document payload SHA-256
     const fileHash = crypto.createHash('sha256').update(bytes).digest('hex');
+
+    // Handle persistent idempotency key check if provided
+    let idempotencyRecord: any = null;
+    if (idempotencyKey && idempotencyKey.trim().length > 0) {
+      const cleanKey = idempotencyKey.trim();
+      const existingIdempotency = await prisma.fundingDocumentIdempotency.findUnique({
+        where: {
+          opportunityId_idempotencyKey: {
+            opportunityId,
+            idempotencyKey: cleanKey,
+          },
+        },
+      });
+
+      if (existingIdempotency) {
+        if (existingIdempotency.payloadSha256 !== fileHash) {
+          throw new Error(`IDEMPOTENCY_KEY_REUSED: Idempotency key '${cleanKey}' was previously used with a different payload SHA-256`);
+        }
+
+        if (existingIdempotency.resultingVersionId) {
+          const version = await prisma.fundingDocumentVersion.findUnique({
+            where: { id: existingIdempotency.resultingVersionId },
+            include: { pages: true, fundingDocument: true },
+          });
+          if (version) {
+            return {
+              document: version.fundingDocument,
+              version,
+              isDuplicate: true,
+            };
+          }
+        }
+      } else {
+        try {
+          idempotencyRecord = await prisma.fundingDocumentIdempotency.create({
+            data: {
+              opportunityId,
+              idempotencyKey: cleanKey,
+              authenticatedUserId: userId,
+              documentTitle: title.trim(),
+              payloadSha256: fileHash,
+              status: 'PROCESSING',
+            },
+          });
+        } catch (err: any) {
+          // Concurrent request with same idempotency key race check
+          const raced = await prisma.fundingDocumentIdempotency.findUnique({
+            where: {
+              opportunityId_idempotencyKey: {
+                opportunityId,
+                idempotencyKey: cleanKey,
+              },
+            },
+          });
+          if (raced && raced.payloadSha256 !== fileHash) {
+            throw new Error(`IDEMPOTENCY_KEY_REUSED: Idempotency key '${cleanKey}' was previously used with a different payload SHA-256`);
+          }
+        }
+      }
+    }
 
     // Find or create FundingDocument row
     let document = await prisma.fundingDocument.findFirst({
@@ -95,6 +155,18 @@ export class DocumentIngestionService {
     });
 
     if (existingVersion && existingVersion.status === DocumentVersionStatus.READY) {
+      if (idempotencyRecord) {
+        await prisma.fundingDocumentIdempotency.update({
+          where: { id: idempotencyRecord.id },
+          data: {
+            resultingDocumentId: document.id,
+            resultingVersionId: existingVersion.id,
+            status: 'COMPLETED',
+            completedAt: new Date(),
+          },
+        }).catch(() => {});
+      }
+
       return {
         document,
         version: existingVersion,
@@ -102,66 +174,81 @@ export class DocumentIngestionService {
       };
     }
 
-    // Determine next version number
-    const maxVersionRow = await prisma.fundingDocumentVersion.aggregate({
-      where: { fundingDocumentId: document.id },
-      _max: { version: true },
+    // Determine next version number using transactional advisory lock logic
+    const nextVersionNum = await prisma.$transaction(async (tx) => {
+      const maxVersionRow = await tx.fundingDocumentVersion.aggregate({
+        where: { fundingDocumentId: document!.id },
+        _max: { version: true },
+      });
+      return (maxVersionRow._max.version || 0) + 1;
     });
-    const nextVersionNum = (maxVersionRow._max.version || 0) + 1;
 
     // Generate storage key
     const storageKey = `funding-documents/${opportunityId}/${document.id}/v${nextVersionNum}-${fileHash.substring(0, 12)}.pdf`;
 
-    // Create database version record in UPLOADED status
-    const versionRecord = await prisma.fundingDocumentVersion.create({
-      data: {
-        fundingDocumentId: document.id,
-        version: nextVersionNum,
-        status: DocumentVersionStatus.PROCESSING,
-        originalFileName: cleanFileName,
-        mimeType: mimeType || 'application/pdf',
-        sizeBytes: bytes.length,
-        sha256: fileHash,
-        storageKey,
-        pageCount: 0,
-        extractionVersion: PdfExtractionService.EXTRACTION_VERSION,
-        uploadedByUserId: userId,
-      },
-    });
+    // Save PDF bytes to storage first
+    await DocumentIngestionService.storageProvider.save(storageKey, bytes);
 
-    // Log upload security audit event
-    await AuthService.logSecurityEvent({
-      userId,
-      eventType: 'FUNDING_DOCUMENT_UPLOADED',
-      details: JSON.stringify({
-        opportunityId,
-        documentId: document.id,
-        versionId: versionRecord.id,
-        version: nextVersionNum,
-        sha256: fileHash,
-        sizeBytes: bytes.length,
-        originalFileName: cleanFileName,
-      }),
-    });
-
-    // Save PDF bytes to storage
-    await DocumentIngestionService.storageProvider.save({
-      storageKey,
-      bytes,
-    });
-
-    // Extract PDF text
+    // Create version record and upload audit event inside database transaction
+    let versionRecord: any;
     try {
-      const extractionResult = await PdfExtractionService.extractPageText({
-        documentVersionId: versionRecord.id,
-        buffer: bytes,
+      versionRecord = await prisma.$transaction(async (tx) => {
+        const ver = await tx.fundingDocumentVersion.create({
+          data: {
+            fundingDocumentId: document!.id,
+            version: nextVersionNum,
+            status: DocumentVersionStatus.PROCESSING,
+            originalFileName: cleanFileName,
+            mimeType: mimeType || 'application/pdf',
+            sizeBytes: bytes.length,
+            sha256: fileHash,
+            storageKey,
+            pageCount: 0,
+            extractionVersion: process.env.DOCUMENT_EXTRACTION_VERSION || 'pdf-page-text-v1',
+            uploadedByUserId: userId,
+          },
+        });
+
+        // Fail-closed transactional upload audit event
+        await tx.securityAuditEvent.create({
+          data: {
+            userId,
+            eventType: 'FUNDING_DOCUMENT_UPLOADED',
+            details: JSON.stringify({
+              opportunityId,
+              documentId: document!.id,
+              versionId: ver.id,
+              version: nextVersionNum,
+              sha256: fileHash,
+              sizeBytes: bytes.length,
+              originalFileName: cleanFileName,
+            }),
+          },
+        });
+
+        return ver;
       });
+    } catch (dbErr: any) {
+      // If DB reservation or upload audit fails, attempt storage cleanup
+      try {
+        await DocumentIngestionService.storageProvider.delete(storageKey);
+      } catch (_) {}
+      throw new Error(`DOCUMENT_INGESTION_FAILED: Database reservation or audit logging failed: ${dbErr.message}`);
+    }
+
+    // Extract PDF text using worker thread
+    try {
+      const extractionResult = await PdfExtractionService.extractPageText(bytes, versionRecord.id);
 
       const finalStatus = extractionResult.status === 'OCR_REQUIRED'
         ? DocumentVersionStatus.OCR_REQUIRED
         : DocumentVersionStatus.READY;
 
-      // Save extracted pages atomically
+      const auditEventType = finalStatus === DocumentVersionStatus.OCR_REQUIRED
+        ? 'FUNDING_DOCUMENT_OCR_REQUIRED'
+        : 'FUNDING_DOCUMENT_EXTRACTION_COMPLETED';
+
+      // Transactionally commit extracted pages, update version status, and log audit event fail-closed
       await prisma.$transaction(async (tx) => {
         if (extractionResult.pages.length > 0) {
           await tx.fundingDocumentPage.createMany({
@@ -184,24 +271,34 @@ export class DocumentIngestionService {
             processedAt: new Date(),
           },
         });
-      });
 
-      // Audit event based on extraction outcome
-      const auditEventType = finalStatus === DocumentVersionStatus.OCR_REQUIRED
-        ? 'FUNDING_DOCUMENT_OCR_REQUIRED'
-        : 'FUNDING_DOCUMENT_EXTRACTION_COMPLETED';
+        // Fail-closed transactional completion audit event
+        await tx.securityAuditEvent.create({
+          data: {
+            userId,
+            eventType: auditEventType,
+            details: JSON.stringify({
+              opportunityId,
+              documentId: document!.id,
+              versionId: versionRecord.id,
+              status: finalStatus,
+              pageCount: extractionResult.pageCount,
+              extractionVersion: extractionResult.extractionVersion,
+            }),
+          },
+        });
 
-      await AuthService.logSecurityEvent({
-        userId,
-        eventType: auditEventType,
-        details: JSON.stringify({
-          opportunityId,
-          documentId: document.id,
-          versionId: versionRecord.id,
-          status: finalStatus,
-          pageCount: extractionResult.pageCount,
-          extractionVersion: extractionResult.extractionVersion,
-        }),
+        if (idempotencyRecord) {
+          await tx.fundingDocumentIdempotency.update({
+            where: { id: idempotencyRecord.id },
+            data: {
+              resultingDocumentId: document!.id,
+              resultingVersionId: versionRecord.id,
+              status: 'COMPLETED',
+              completedAt: new Date(),
+            },
+          });
+        }
       });
 
       const updatedVersion = await prisma.fundingDocumentVersion.findUnique({
@@ -215,27 +312,41 @@ export class DocumentIngestionService {
         isDuplicate: false,
       };
     } catch (extractError: any) {
-      // Failed extraction path
-      await prisma.fundingDocumentVersion.update({
-        where: { id: versionRecord.id },
-        data: {
-          status: DocumentVersionStatus.FAILED,
-          failureCode: extractError.message?.split(':')[0] || 'EXTRACTION_FAILED',
-          failureMessage: extractError.message || 'Failed to extract text from PDF',
-          processedAt: new Date(),
-        },
-      });
+      // Failed extraction path: transactionally update status to FAILED and log failure audit event
+      await prisma.$transaction(async (tx) => {
+        await tx.fundingDocumentVersion.update({
+          where: { id: versionRecord.id },
+          data: {
+            status: DocumentVersionStatus.FAILED,
+            failureCode: extractError.message?.split(':')[0] || 'EXTRACTION_FAILED',
+            failureMessage: extractError.message || 'Failed to extract text from PDF',
+            processedAt: new Date(),
+          },
+        });
 
-      await AuthService.logSecurityEvent({
-        userId,
-        eventType: 'FUNDING_DOCUMENT_EXTRACTION_FAILED',
-        details: JSON.stringify({
-          opportunityId,
-          documentId: document.id,
-          versionId: versionRecord.id,
-          error: extractError.message,
-        }),
-      });
+        await tx.securityAuditEvent.create({
+          data: {
+            userId,
+            eventType: 'FUNDING_DOCUMENT_EXTRACTION_FAILED',
+            details: JSON.stringify({
+              opportunityId,
+              documentId: document!.id,
+              versionId: versionRecord.id,
+              error: extractError.message,
+            }),
+          },
+        });
+
+        if (idempotencyRecord) {
+          await tx.fundingDocumentIdempotency.update({
+            where: { id: idempotencyRecord.id },
+            data: {
+              status: 'FAILED',
+              completedAt: new Date(),
+            },
+          });
+        }
+      }).catch(() => {});
 
       throw extractError;
     }

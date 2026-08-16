@@ -206,6 +206,7 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
   };
 
   const selectedPage = pages.find((p) => p.pageNumber === selectedPageNum) || null;
+  const isIngestionDisabled = Boolean(error && (error.includes('DOCUMENT_INGESTION_NOT_CONFIGURED') || error.includes('FEATURE_DISABLED')));
 
   return (
     <div className="card" style={{ marginTop: '1.5rem', background: 'rgba(15, 23, 42, 0.75)', border: '1px solid var(--border-color)', borderRadius: '0.75rem', padding: '1.25rem' }}>
@@ -220,16 +221,29 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
         </div>
       </div>
 
+      {isIngestionDisabled && (
+        <div style={{ background: 'rgba(234, 179, 8, 0.1)', border: '1px solid #eab308', borderRadius: '0.5rem', padding: '0.85rem 1rem', marginBottom: '1.25rem', display: 'flex', alignItems: 'flex-start', gap: '0.75rem' }}>
+          <span style={{ fontSize: '1.2rem' }}>⚠️</span>
+          <div>
+            <div style={{ color: '#fef08a', fontWeight: 700, fontSize: '0.875rem' }}>Document Ingestion Offline</div>
+            <div style={{ color: '#fef9c3', fontSize: '0.8rem', marginTop: '0.25rem', lineHeight: 1.4 }}>
+              Document ingestion is currently disabled on this server (`DOCUMENT_INGESTION_ENABLED=false`). Upload controls remain inactive until enabled by an administrator.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Mandatory Disclaimer Box */}
       <div style={{ padding: '0.75rem 1rem', background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: '0.5rem', marginBottom: '1.25rem', fontSize: '0.82rem', color: '#94a3b8', lineHeight: 1.5 }}>
         ℹ️ <strong>Document Evidence Notice:</strong> Extracted document text is preserved for evidence review and future grounded analysis. Verify critical requirements against the original official PDF. This phase does not perform AI retrieval or eligibility analysis.
       </div>
 
-      {error && (
+      {error && !isIngestionDisabled && (
         <div style={{ padding: '0.75rem', marginBottom: '1rem', background: 'rgba(239,68,68,0.15)', border: '1px solid rgba(239,68,68,0.3)', borderRadius: '0.375rem', color: '#fca5a5', fontSize: '0.85rem' }}>
           ❌ {error}
         </div>
       )}
+
 
       {successMessage && (
         <div style={{ padding: '0.75rem', marginBottom: '1rem', background: 'rgba(34,197,94,0.15)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: '0.375rem', color: '#86efac', fontSize: '0.85rem' }}>
@@ -248,8 +262,9 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
               <label style={{ display: 'block', fontSize: '0.75rem', color: '#94a3b8', marginBottom: '0.25rem' }}>Document Type</label>
               <select
                 value={documentType}
+                disabled={isIngestionDisabled}
                 onChange={(e) => setDocumentType(e.target.value)}
-                style={{ width: '100%', background: '#0f172a', color: '#f8fafc', border: '1px solid var(--border-color)', padding: '0.45rem', borderRadius: '0.375rem', fontSize: '0.8rem' }}
+                style={{ width: '100%', background: '#0f172a', color: '#f8fafc', border: '1px solid var(--border-color)', padding: '0.45rem', borderRadius: '0.375rem', fontSize: '0.8rem', opacity: isIngestionDisabled ? 0.6 : 1 }}
               >
                 <option value="OFFICIAL_NOTICE">Official Notice / FOA / NOFO</option>
                 <option value="AMENDMENT">Official Amendment</option>
@@ -263,9 +278,10 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
                 type="text"
                 placeholder="e.g. Official Solicitation Notice & Guidelines"
                 value={title}
+                disabled={isIngestionDisabled}
                 onChange={(e) => setTitle(e.target.value)}
                 required
-                style={{ width: '100%', background: '#0f172a', color: '#f8fafc', border: '1px solid var(--border-color)', padding: '0.45rem', borderRadius: '0.375rem', fontSize: '0.8rem' }}
+                style={{ width: '100%', background: '#0f172a', color: '#f8fafc', border: '1px solid var(--border-color)', padding: '0.45rem', borderRadius: '0.375rem', fontSize: '0.8rem', opacity: isIngestionDisabled ? 0.6 : 1 }}
               />
             </div>
             <div>
@@ -274,8 +290,9 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
                 type="url"
                 placeholder="https://www.grants.gov/search-results-detail/..."
                 value={officialSourceUrl}
+                disabled={isIngestionDisabled}
                 onChange={(e) => setOfficialSourceUrl(e.target.value)}
-                style={{ width: '100%', background: '#0f172a', color: '#f8fafc', border: '1px solid var(--border-color)', padding: '0.45rem', borderRadius: '0.375rem', fontSize: '0.8rem' }}
+                style={{ width: '100%', background: '#0f172a', color: '#f8fafc', border: '1px solid var(--border-color)', padding: '0.45rem', borderRadius: '0.375rem', fontSize: '0.8rem', opacity: isIngestionDisabled ? 0.6 : 1 }}
               />
             </div>
           </div>
@@ -284,28 +301,32 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
             <input
               type="file"
               accept="application/pdf,.pdf"
+              disabled={isIngestionDisabled}
               onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-              style={{ fontSize: '0.8rem', color: '#cbd5e1' }}
+              style={{ fontSize: '0.8rem', color: '#cbd5e1', opacity: isIngestionDisabled ? 0.6 : 1 }}
             />
             <button
               type="submit"
-              disabled={uploading || !selectedFile || !title.trim()}
+              disabled={uploading || !selectedFile || !title.trim() || isIngestionDisabled}
               style={{
-                background: uploading ? '#475569' : 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                background: (uploading || isIngestionDisabled) ? '#475569' : 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
                 color: '#ffffff',
                 border: 'none',
                 padding: '0.5rem 1.25rem',
                 borderRadius: '0.375rem',
                 fontWeight: 700,
                 fontSize: '0.85rem',
-                cursor: uploading || !selectedFile ? 'not-allowed' : 'pointer',
+                cursor: (uploading || isIngestionDisabled) ? 'not-allowed' : 'pointer',
+                opacity: isIngestionDisabled ? 0.6 : 1,
               }}
             >
-              {uploading ? '⏳ Uploading & Extracting PDF...' : '🚀 Upload & Extract Pages'}
+              {isIngestionDisabled ? '🔒 Ingestion Offline' : uploading ? '⏳ Extracting PDF...' : '📤 Upload & Process Notice'}
             </button>
+
           </div>
         </form>
       )}
+
 
       {/* Document List */}
       {loading ? (
