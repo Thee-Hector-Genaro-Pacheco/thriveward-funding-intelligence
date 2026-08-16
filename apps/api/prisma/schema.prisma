@@ -168,6 +168,7 @@ model FundingOpportunity {
   grantCalendarItems      GrantCalendarItem[]
   engagements             OutreachEngagement[]
   aiEvaluations           AiEvaluation[]
+  recoveryRecords         FundingOpportunityRecoveryRecord[]
 
   @@unique([sourceSystem, externalOpportunityId])
   @@index([candidateRoutingStatus])
@@ -833,6 +834,8 @@ model SecurityAuditEvent {
   userAgent String?
   details   String? // JSON string (NO secrets/passwords/tokens!)
   timestamp DateTime @default(now())
+
+  classifications SecurityAuditEventClassification[]
 }
 
 model OutreachDraftVersion {
@@ -1063,8 +1066,73 @@ model AiEvaluation {
   reviewedAt            DateTime?
   reviewReason          String?
 
+  recoveryRecords AiEvaluationRecoveryRecord[]
+
   @@unique([generatedByUserId, opportunityId, idempotencyKey])
   @@index([opportunityId, version])
   @@index([generatedByUserId])
   @@index([status])
+}
+
+model SecurityAuditClassificationBatch {
+  id              String                             @id @default(uuid())
+  batchName       String
+  reason          String
+  eventCount      Int
+  manifestDigest  String
+  evidence        String?
+  actorType       String                             @default("SYSTEM_DATA_REPAIR")
+  createdAt       DateTime                           @default(now())
+  classifications SecurityAuditEventClassification[]
+}
+
+model SecurityAuditEventClassification {
+  id                    String                           @id @default(uuid())
+  securityAuditEventId  String
+  securityAuditEvent    SecurityAuditEvent               @relation(fields: [securityAuditEventId], references: [id], onDelete: Cascade)
+  classificationBatchId String
+  batch                 SecurityAuditClassificationBatch @relation(fields: [classificationBatchId], references: [id], onDelete: Cascade)
+  classification        String
+  reason                String
+  createdAt             DateTime                         @default(now())
+
+  @@unique([securityAuditEventId, classificationBatchId])
+  @@index([securityAuditEventId])
+  @@index([classificationBatchId])
+}
+
+model FundingOpportunityRecoveryRecord {
+  id                       String             @id @default(uuid())
+  originalOpportunityId    String
+  currentOpportunityId     String
+  currentOpportunity       FundingOpportunity @relation(fields: [currentOpportunityId], references: [id], onDelete: Cascade)
+  fundingOpportunityNumber String
+  recoveryReason           String
+  recoveryMechanism        String
+  sourceEvidence           String
+  originalDeletedAt        DateTime?
+  createdAt                DateTime           @default(now())
+  actorType                String             @default("SYSTEM_DATA_REPAIR")
+
+  @@index([currentOpportunityId])
+  @@index([originalOpportunityId])
+}
+
+model AiEvaluationRecoveryRecord {
+  id                     String       @id @default(uuid())
+  aiEvaluationId         String
+  aiEvaluation           AiEvaluation @relation(fields: [aiEvaluationId], references: [id], onDelete: Cascade)
+  originalOpportunityId  String
+  currentOpportunityId   String
+  originalAuditEventId   String?
+  inputHash              String
+  providerResponseId     String?
+  recoveryReason         String
+  recoveryMechanism      String
+  fieldEquivalenceResult String
+  createdAt              DateTime     @default(now())
+  actorType              String       @default("SYSTEM_DATA_REPAIR")
+
+  @@index([aiEvaluationId])
+  @@index([originalOpportunityId])
 }

@@ -375,4 +375,37 @@ export class AuthService {
       console.error('[AuthService] Failed to write security audit event:', err);
     });
   }
+
+  public static async getAuditEvents(options: {
+    includeSyntheticTestEvents?: boolean;
+    limit?: number;
+  } = {}) {
+    const includeSynthetic = !!options.includeSyntheticTestEvents;
+    const limit = options.limit || 100;
+
+    const events = await prisma.securityAuditEvent.findMany({
+      take: limit,
+      orderBy: { timestamp: 'desc' },
+      include: {
+        classifications: {
+          include: { batch: true },
+        },
+      },
+    });
+
+    return events
+      .filter((event) => {
+        const isSynthetic = event.classifications.some((c) => c.classification === 'SYNTHETIC_TEST_EVENT');
+        if (isSynthetic && !includeSynthetic) return false;
+        return true;
+      })
+      .map((event) => {
+        const syntheticClassification = event.classifications.find((c) => c.classification === 'SYNTHETIC_TEST_EVENT');
+        return {
+          ...event,
+          classifiedLabel: syntheticClassification ? 'Synthetic automated-test event — retained for audit integrity' : null,
+        };
+      });
+  }
 }
+

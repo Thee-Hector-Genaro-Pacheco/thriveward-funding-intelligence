@@ -388,8 +388,33 @@ describe('AI-1 — Structured AI Funding Analyst Complete Test Suite', () => {
     });
 
     it('AI evaluation generation and approval DO NOT alter opportunity canonical status or advance workflow', async () => {
-      const partner = await prisma.strategicPartnerCandidate.findFirst({
-        where: { cocNumber: 'CA-600' },
+      const partner = await prisma.strategicPartnerCandidate.upsert({
+        where: { id: 'test-partner-ca-600' },
+        update: { status: 'RESEARCH_REQUIRED' },
+        create: {
+          id: 'test-partner-ca-600',
+          name: 'Test CA-600 Partner',
+          legalOrganizationName: 'Test CA-600 Partner',
+          organizationType: 'CONTINUUM_OF_CARE',
+          cocNumber: 'CA-600',
+          websiteUrl: 'https://example.org',
+          officialDirectoryUrl: 'https://example.org',
+          geography: 'CA',
+          countiesServed: ['Orange County'],
+          collaborativeApplicantOrg: 'Test CA-600',
+          leadAgency: 'Test CA-600',
+          verifiedOfficialRole: 'CONFIRMED_COLLABORATIVE_APPLICANT',
+          applicationCoordinatedEntryRole: 'CoC Collaborative Applicant',
+          currentCycleParticipationInfo: 'Test',
+          mission: 'Test',
+          servicesOffered: ['CoC Competition'],
+          collaborationFocus: 'Test',
+          contactChannel: 'test@example.org',
+          verificationStatus: 'VERIFIED_HUMAN_REVIEWED',
+          isFixture: true,
+          hasLiveVerification: true,
+          status: 'RESEARCH_REQUIRED',
+        },
       });
 
       expect(partner?.status).toBe('RESEARCH_REQUIRED');

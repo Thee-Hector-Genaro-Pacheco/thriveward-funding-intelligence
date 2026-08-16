@@ -291,4 +291,29 @@ export class AiFundingAnalystService {
 
     return updated;
   }
+
+  public static async getEvaluationWithProvenance(evaluationId: string) {
+    const evaluation = await prisma.aiEvaluation.findUnique({
+      where: { id: evaluationId },
+      include: {
+        generatedByUser: { select: { id: true, displayName: true, email: true, role: true } },
+        reviewedByUser: { select: { id: true, displayName: true, email: true, role: true } },
+        recoveryRecords: true,
+      },
+    });
+
+    if (!evaluation) return null;
+
+    let recoveryNotice: string | null = null;
+    if (evaluation.recoveryRecords.length > 0) {
+      const rec = evaluation.recoveryRecords[0];
+      recoveryNotice = `Recovery provenance: This evaluation's persistence row was reconstructed after an automated-test cleanup deleted its original opportunity relationship. The saved evaluation content, provider response metadata, input snapshot, and input hash remain preserved. Original opportunity ID at generation: ${rec.originalOpportunityId}.`;
+    }
+
+    return {
+      ...evaluation,
+      recoveryNotice,
+    };
+  }
 }
+
