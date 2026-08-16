@@ -89,12 +89,19 @@ export async function assertTestDatabaseIsolation(options?: { suppressDbQueries?
     return;
   }
 
-  // 6. DB-level record verification on target test database
+  // 6. DB-level record & current_database() verification on target test database
   try {
     const { PrismaClient } = await import('@prisma/client');
     const testPrisma = new PrismaClient({
       datasources: { db: { url: testDbUrl } },
     });
+
+    const dbRes: any = await testPrisma.$queryRawUnsafe('SELECT current_database()');
+    const activeDbName = dbRes[0]?.current_database;
+    if (activeDbName !== 'bridge_ai_test_db') {
+      await testPrisma.$disconnect();
+      throw new Error(`[FAIL_CLOSED_TEST_ISOLATION_GUARD] current_database() must equal 'bridge_ai_test_db' exactly. Received: '${activeDbName}'.`);
+    }
 
     const liveEval = await testPrisma.aiEvaluation.findUnique({
       where: { id: '536c89cb-4b0c-4cd7-b61a-0f8b762ebec9' },
