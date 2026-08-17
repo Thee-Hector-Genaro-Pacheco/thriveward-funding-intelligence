@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { GroundedEvidenceModal, RetrievedEvidenceData } from './GroundedEvidenceModal';
 
 export interface AiEvaluationData {
   id: string;
@@ -30,26 +31,40 @@ interface AiEvaluationPanelProps {
   evaluations: AiEvaluationData[];
   currentUser: any;
   isAiConfigured: boolean;
+  isGroundingEnabled?: boolean;
   onGenerateAiAnalysis: () => Promise<void>;
+  onGenerateGroundedAiAnalysis?: () => Promise<void>;
   onReviewAiAnalysis: (evaluationId: string, decision: 'APPROVED' | 'REJECTED', reason: string) => Promise<void>;
+  onFetchRetrievedEvidence?: (evaluationId: string) => Promise<RetrievedEvidenceData>;
   generating: boolean;
   error: string | null;
+  onSelectPage?: (pageNumber: number) => void;
 }
 
 export const AiEvaluationPanel: React.FC<AiEvaluationPanelProps> = ({
   evaluations,
   currentUser,
   isAiConfigured,
+  isGroundingEnabled = false,
   onGenerateAiAnalysis,
+  onGenerateGroundedAiAnalysis,
   onReviewAiAnalysis,
+  onFetchRetrievedEvidence,
   generating,
   error,
+  onSelectPage,
 }) => {
   const [selectedVersionIndex, setSelectedVersionIndex] = useState<number>(0);
   const [reviewReason, setReviewReason] = useState<string>('');
   const [reviewSubmitting, setReviewSubmitting] = useState<boolean>(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [showEvidenceMap, setShowEvidenceMap] = useState<boolean>(false);
+
+  // Evidence Modal State
+  const [isEvidenceModalOpen, setIsEvidenceModalOpen] = useState<boolean>(false);
+  const [retrievedEvidenceData, setRetrievedEvidenceData] = useState<RetrievedEvidenceData | null>(null);
+  const [loadingEvidence, setLoadingEvidence] = useState<boolean>(false);
+  const [evidenceError, setEvidenceError] = useState<string | null>(null);
 
   const currentEval = evaluations[selectedVersionIndex] || null;
   const isViewer = currentUser?.role === 'VIEWER';
@@ -86,24 +101,41 @@ export const AiEvaluationPanel: React.FC<AiEvaluationPanelProps> = ({
     }
   };
 
+  const handleViewRetrievedEvidence = async () => {
+    if (!currentEval || !onFetchRetrievedEvidence) return;
+    setIsEvidenceModalOpen(true);
+    setLoadingEvidence(true);
+    setEvidenceError(null);
+    try {
+      const data = await onFetchRetrievedEvidence(currentEval.id);
+      setRetrievedEvidenceData(data);
+    } catch (err: any) {
+      setEvidenceError(err.message || 'Failed to load retrieved evidence');
+    } finally {
+      setLoadingEvidence(false);
+    }
+  };
+
+  const isGroundedEval = currentEval?.promptVersion === 'funding-analyst-document-grounded-v1';
+
   return (
     <div className="card" style={{ marginTop: '1.5rem', background: 'rgba(15, 23, 42, 0.75)', border: '1px solid var(--border-color)', borderRadius: '0.75rem', padding: '1.25rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
-            <span style={{ background: '#4338ca', color: '#e0e7ff', fontWeight: 800, fontSize: '0.75rem', padding: '0.2rem 0.5rem', borderRadius: '0.25rem', letterSpacing: '0.05em' }}>
-              AI-1 STRUCTURED ANALYST
+            <span style={{ background: isGroundedEval ? '#0284c7' : '#4338ca', color: '#e0e7ff', fontWeight: 800, fontSize: '0.75rem', padding: '0.2rem 0.5rem', borderRadius: '0.25rem', letterSpacing: '0.05em' }}>
+              {isGroundedEval ? 'AI-2B DOCUMENT-GROUNDED ANALYST' : 'AI-1 STRUCTURED ANALYST'}
             </span>
             <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
               Model: <strong style={{ color: '#e2e8f0' }}>{currentEval?.model || 'gpt-5.6-luna'}</strong> (Prompt: {currentEval?.promptVersion || 'funding-analyst-v1'})
             </span>
           </div>
           <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#f8fafc', marginTop: '0.35rem' }}>
-            🤖 AI Opportunity Evaluation
+            {isGroundedEval ? '📜 Document-Grounded Opportunity Evaluation' : '🤖 AI Opportunity Evaluation'}
           </h3>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
           {evaluations.length > 1 && (
             <select
               value={selectedVersionIndex}
@@ -112,16 +144,17 @@ export const AiEvaluationPanel: React.FC<AiEvaluationPanelProps> = ({
             >
               {evaluations.map((ev, idx) => (
                 <option key={ev.id} value={idx}>
-                  Version {ev.version} ({ev.status}) — {new Date(ev.createdAt).toLocaleDateString()}
+                  v{ev.version} ({ev.promptVersion.includes('grounded') ? 'Grounded' : 'Standard'}) — {new Date(ev.createdAt).toLocaleDateString()}
                 </option>
               ))}
             </select>
           )}
 
+          {/* Standard AI-1 Profile Analysis Action */}
           <button
             onClick={onGenerateAiAnalysis}
             disabled={generating || isViewer || !isAiConfigured}
-            title={!isAiConfigured ? 'AI Funding Analyst is disabled or not configured on server' : isViewer ? 'VIEWER role cannot generate AI evaluations' : 'Generate new AI evaluation'}
+            title={!isAiConfigured ? 'AI Funding Analyst is disabled or not configured on server' : isViewer ? 'VIEWER role cannot generate AI evaluations' : 'Generate standard AI profile evaluation'}
             style={{
               background: generating ? '#475569' : !isAiConfigured || isViewer ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)',
               color: !isAiConfigured || isViewer ? '#64748b' : '#ffffff',
@@ -134,8 +167,30 @@ export const AiEvaluationPanel: React.FC<AiEvaluationPanelProps> = ({
               boxShadow: isAiConfigured && !isViewer ? '0 4px 12px rgba(79, 70, 229, 0.3)' : 'none',
             }}
           >
-            {generating ? '⏳ Analyzing Opportunity with AI...' : '✨ Analyze with AI'}
+            {generating ? '⏳ Analyzing...' : '✨ Analyze with AI'}
           </button>
+
+          {/* AI-2B Document Grounded Analysis Action */}
+          {onGenerateGroundedAiAnalysis && (
+            <button
+              onClick={onGenerateGroundedAiAnalysis}
+              disabled={generating || isViewer || !isGroundingEnabled}
+              title={!isGroundingEnabled ? 'AI Document Grounding is disabled (AI_DOCUMENT_GROUNDING_ENABLED=false)' : isViewer ? 'VIEWER role cannot generate AI evaluations' : 'Generate document-grounded AI evaluation using semantic retrieval'}
+              style={{
+                background: generating ? '#475569' : !isGroundingEnabled || isViewer ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                color: !isGroundingEnabled || isViewer ? '#64748b' : '#ffffff',
+                border: '1px solid rgba(255,255,255,0.1)',
+                padding: '0.5rem 1rem',
+                borderRadius: '0.375rem',
+                fontWeight: 700,
+                fontSize: '0.85rem',
+                cursor: generating || isViewer || !isGroundingEnabled ? 'not-allowed' : 'pointer',
+                boxShadow: isGroundingEnabled && !isViewer ? '0 4px 12px rgba(2, 132, 199, 0.3)' : 'none',
+              }}
+            >
+              {generating ? '⏳ Grounding Evidence...' : '📜 Analyze with Official Notice'}
+            </button>
+          )}
         </div>
       </div>
 
@@ -148,11 +203,16 @@ export const AiEvaluationPanel: React.FC<AiEvaluationPanelProps> = ({
       {!currentEval && !generating && (
         <div style={{ textAlign: 'center', padding: '2rem', background: 'rgba(30, 41, 59, 0.4)', borderRadius: '0.5rem', border: '1px border-dashed rgba(255,255,255,0.1)' }}>
           <p style={{ color: '#94a3b8', fontSize: '0.9rem' }}>
-            No AI Evaluation generated for this opportunity yet. Click <strong>Analyze with AI</strong> above to run schema-constrained evaluation.
+            No AI Evaluation generated for this opportunity yet. Click <strong>Analyze with AI</strong> or <strong>Analyze with Official Notice</strong> above.
           </p>
           {!isAiConfigured && (
             <p style={{ color: '#f87171', fontSize: '0.8rem', marginTop: '0.5rem' }}>
               ⚠️ AI Funding Analyst service is disabled or server OPENAI_API_KEY is unconfigured.
+            </p>
+          )}
+          {!isGroundingEnabled && (
+            <p style={{ color: '#fbbf24', fontSize: '0.8rem', marginTop: '0.35rem' }}>
+              ℹ️ Document-grounded semantic retrieval is currently disabled (AI_DOCUMENT_GROUNDING_ENABLED=false).
             </p>
           )}
         </div>
@@ -161,17 +221,40 @@ export const AiEvaluationPanel: React.FC<AiEvaluationPanelProps> = ({
       {currentEval && (
         <div>
           {/* Header Banner & Disclaimer */}
-          <div style={{ padding: '0.6rem 0.85rem', background: 'rgba(234, 179, 8, 0.12)', border: '1px solid rgba(234, 179, 8, 0.3)', borderRadius: '0.375rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
-            <span style={{ fontWeight: 800, fontSize: '0.75rem', color: '#fef08a', letterSpacing: '0.04em' }}>
-              AI-GENERATED — HUMAN REVIEW REQUIRED (v{currentEval.version})
+          <div style={{ padding: '0.6rem 0.85rem', background: isGroundedEval ? 'rgba(2, 132, 199, 0.15)' : 'rgba(234, 179, 8, 0.12)', border: isGroundedEval ? '1px solid #0284c7' : '1px solid rgba(234, 179, 8, 0.3)', borderRadius: '0.375rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
+            <span style={{ fontWeight: 800, fontSize: '0.75rem', color: isGroundedEval ? '#7dd3fc' : '#fef08a', letterSpacing: '0.04em' }}>
+              {isGroundedEval ? `DOCUMENT-GROUNDED AI — HUMAN REVIEW REQUIRED (v${currentEval.version})` : `AI-GENERATED — HUMAN REVIEW REQUIRED (v${currentEval.version})`}
             </span>
-            <span style={{ fontSize: '0.75rem', color: '#cbd5e1' }}>
-              Model confidence: <strong>{Math.round(currentEval.confidence * 100)}%</strong>
-            </span>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+              {isGroundedEval && onFetchRetrievedEvidence && (
+                <button
+                  onClick={handleViewRetrievedEvidence}
+                  style={{
+                    background: '#0284c7',
+                    color: '#ffffff',
+                    border: 'none',
+                    padding: '0.25rem 0.6rem',
+                    borderRadius: '0.25rem',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                  }}
+                >
+                  📜 View Retrieved Evidence ({retrievedEvidenceData?.evidenceItems.length || 'Ready'})
+                </button>
+              )}
+
+              <span style={{ fontSize: '0.75rem', color: '#cbd5e1' }}>
+                Model confidence: <strong>{Math.round(currentEval.confidence * 100)}%</strong>
+              </span>
+            </div>
           </div>
 
           <p style={{ fontSize: '0.75rem', color: '#94a3b8', fontStyle: 'italic', marginBottom: '1rem', lineHeight: 1.4 }}>
-            AI-generated decision support. Verify all eligibility requirements against the official funding notice before acting. Approval confirms human review of this analysis; it does not establish legal eligibility or authorize submission.
+            {isGroundedEval
+              ? 'Document-grounded AI decision support. Semantic retrieval identifies potentially relevant evidence but does not prove legal eligibility. Verify every citation against the official notice before acting. Human review does not authorize submission.'
+              : 'AI-generated decision support. Verify all eligibility requirements against the official funding notice before acting. Approval confirms human review of this analysis; it does not establish legal eligibility or authorize submission.'}
           </p>
 
           {/* Scores and Ratings */}
@@ -401,6 +484,16 @@ export const AiEvaluationPanel: React.FC<AiEvaluationPanelProps> = ({
           </div>
         </div>
       )}
+
+      {/* Retrieved Semantic Evidence Drawer / Modal */}
+      <GroundedEvidenceModal
+        isOpen={isEvidenceModalOpen}
+        onClose={() => setIsEvidenceModalOpen(false)}
+        evidenceData={retrievedEvidenceData}
+        loading={loadingEvidence}
+        error={evidenceError}
+        onSelectPage={onSelectPage}
+      />
     </div>
   );
 };

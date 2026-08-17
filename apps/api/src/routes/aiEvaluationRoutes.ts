@@ -144,3 +144,99 @@ aiEvaluationRouter.post(
     }
   }
 );
+
+/**
+ * POST /api/opportunities/:opportunityId/document-grounded-ai-evaluations
+ * Generates a document-grounded AI evaluation based on top-K semantic retrieval evidence.
+ * Restricted to ADMIN and OPERATOR roles.
+ */
+aiEvaluationRouter.post(
+  '/opportunities/:opportunityId/document-grounded-ai-evaluations',
+  requireAuth,
+  requireRole(['ADMIN', 'OPERATOR']),
+  async (req: Request, res: Response) => {
+    try {
+      const opportunityId = req.params.opportunityId;
+      const userId = req.user!.id;
+      const idempotencyKey = (req.headers['x-idempotency-key'] as string) || req.body?.idempotencyKey;
+
+      const evaluation = await AiFundingAnalystService.generateGroundedEvaluation({
+        opportunityId,
+        userId,
+        idempotencyKey,
+        ipAddress: req.ip,
+        userAgent: req.get('User-Agent'),
+      });
+
+      return res.status(201).json({
+        success: true,
+        data: evaluation,
+      });
+    } catch (err: any) {
+      const msg = err.message || 'Failed to generate grounded AI evaluation';
+
+      if (msg.includes('AI_DOCUMENT_GROUNDING_NOT_CONFIGURED')) {
+        return res.status(503).json({ success: false, error: msg });
+      }
+
+      if (msg.includes('DOCUMENT_INDEX_NOT_READY')) {
+        return res.status(400).json({ success: false, error: msg });
+      }
+
+      if (msg.includes('RATE_LIMIT_EXCEEDED')) {
+        return res.status(429).json({ success: false, error: msg });
+      }
+
+      if (msg.includes('Funding opportunity not found')) {
+        return res.status(404).json({ success: false, error: msg });
+      }
+
+      if (
+        msg.includes('OpenAI Provider Refusal') ||
+        msg.includes('cited invalid evidence reference') ||
+        msg.includes('GROUNDED_CITATION_CONSTRAINT_VIOLATION')
+      ) {
+        return res.status(400).json({ success: false, error: msg });
+      }
+
+      return res.status(500).json({
+        success: false,
+        error: msg,
+      });
+    }
+  }
+);
+
+/**
+ * GET /api/ai-evaluations/:evaluationId/retrieved-evidence
+ * Retrieves exact retrieved evidence snapshot for a document-grounded evaluation.
+ * Available to VIEWER, OPERATOR, ADMIN.
+ */
+aiEvaluationRouter.get(
+  '/ai-evaluations/:evaluationId/retrieved-evidence',
+  requireAuth,
+  async (req: Request, res: Response) => {
+    try {
+      const evaluationId = req.params.evaluationId;
+      const evidenceData = await AiFundingAnalystService.getRetrievedEvidenceForEvaluation(evaluationId);
+
+      if (!evidenceData) {
+        return res.status(404).json({
+          success: false,
+          error: `RETRIEVED_EVIDENCE_NOT_FOUND: No retrieved evidence run exists for evaluation '${evaluationId}'.`,
+        });
+      }
+
+      return res.json({
+        success: true,
+        data: evidenceData,
+      });
+    } catch (err: any) {
+      return res.status(500).json({
+        success: false,
+        error: err.message || 'Failed to fetch retrieved evidence',
+      });
+    }
+  }
+);
+

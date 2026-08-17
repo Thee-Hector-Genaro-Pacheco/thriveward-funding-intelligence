@@ -32,7 +32,8 @@ export class OpenAiFundingAnalystProvider implements FundingAnalystProvider {
   }
 
   public isConfigured(): boolean {
-    return Boolean(this.isEnabled && this.client);
+    const isEnabled = process.env.AI_FUNDING_ANALYST_ENABLED === 'true';
+    return Boolean(isEnabled && this.client);
   }
 
   public getModelName(): string {
@@ -40,7 +41,8 @@ export class OpenAiFundingAnalystProvider implements FundingAnalystProvider {
   }
 
   public async analyze(snapshot: InputSnapshot): Promise<AnalysisResponse> {
-    if (!this.isEnabled || !this.client) {
+    const isEnabled = process.env.AI_FUNDING_ANALYST_ENABLED === 'true';
+    if (!isEnabled || !this.client) {
       throw new Error('AI_ANALYST_NOT_CONFIGURED: AI Funding Analyst service is disabled or OPENAI_API_KEY is not configured.');
     }
 

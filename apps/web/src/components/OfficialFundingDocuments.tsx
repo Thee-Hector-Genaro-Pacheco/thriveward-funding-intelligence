@@ -42,11 +42,11 @@ export interface ExtractedPage {
 }
 
 interface OfficialFundingDocumentsProps {
-
   opportunityId: string;
   currentUser: any;
   apiFetch: (url: string, options?: RequestInit) => Promise<Response>;
   isIngestionEnabled?: boolean;
+  isGroundingEnabled?: boolean;
 }
 
 export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> = ({
@@ -54,12 +54,18 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
   currentUser,
   apiFetch,
   isIngestionEnabled = false,
+  isGroundingEnabled = false,
 }) => {
   const [documents, setDocuments] = useState<FundingDocumentData[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [uploading, setUploading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  // Indexing State
+  const [indexStatuses, setIndexStatuses] = useState<Record<string, any>>({});
+  const [confirmIndexingVerId, setConfirmIndexingVerId] = useState<string | null>(null);
+  const [indexingInProg, setIndexingInProg] = useState<boolean>(false);
 
   // Form State
   const [title, setTitle] = useState<string>('');
@@ -76,6 +82,18 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
   const isViewer = currentUser?.role === 'VIEWER';
   const isIngestionDisabled = isIngestionEnabled === false || Boolean(error && (error.includes('DOCUMENT_INGESTION_NOT_CONFIGURED') || error.includes('FEATURE_DISABLED')));
 
+  const fetchIndexStatus = async (versionId: string) => {
+    try {
+      const res = await apiFetch(`/api/document-versions/${versionId}/index-status`);
+      if (res.ok) {
+        const json = await res.json();
+        setIndexStatuses((prev) => ({ ...prev, [versionId]: json.data }));
+      }
+    } catch (err) {
+      console.error('Failed to fetch index status for version:', versionId, err);
+    }
+  };
+
   const fetchDocuments = async () => {
     setLoading(true);
     setError(null);
@@ -83,7 +101,17 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
       const res = await apiFetch(`/api/opportunities/${opportunityId}/funding-documents`);
       if (res.ok) {
         const json = await res.json();
-        setDocuments(json.data || []);
+        const docs: FundingDocumentData[] = json.data || [];
+        setDocuments(docs);
+
+        // Fetch index status for all READY document versions
+        for (const doc of docs) {
+          for (const ver of doc.versions) {
+            if (ver.status === 'READY') {
+              fetchIndexStatus(ver.id);
+            }
+          }
+        }
       } else {
         const json = await res.json();
         setError(json.error || 'Failed to load funding documents');
@@ -92,6 +120,33 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
       setError(err.message || 'Failed to load funding documents');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleStartIndexing = async (versionId: string) => {
+    setIndexingInProg(true);
+    setError(null);
+    try {
+      const res = await apiFetch(`/api/document-versions/${versionId}/index`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Idempotency-Key': `index_${versionId}_${Date.now()}`,
+        },
+      });
+
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error || 'Failed to start indexing');
+      }
+
+      setSuccessMessage(`✓ Document version ${versionId} successfully indexed for semantic vector retrieval.`);
+      setConfirmIndexingVerId(null);
+      await fetchIndexStatus(versionId);
+    } catch (err: any) {
+      setError(err.message || 'Failed to index document version');
+    } finally {
+      setIndexingInProg(false);
     }
   };
 
@@ -222,11 +277,16 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
     <div className="card" style={{ marginTop: '1.5rem', background: 'rgba(15, 23, 42, 0.75)', border: '1px solid var(--border-color)', borderRadius: '0.75rem', padding: '1.25rem' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1rem' }}>
         <div>
-          <span style={{ background: '#0284c7', color: '#e0f2fe', fontWeight: 800, fontSize: '0.75rem', padding: '0.2rem 0.5rem', borderRadius: '0.25rem', letterSpacing: '0.05em' }}>
-            AI-2A • OFFICIAL NOTICE INGESTION & CITATION FOUNDATION
-          </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+            <span style={{ background: '#0284c7', color: '#e0f2fe', fontWeight: 800, fontSize: '0.75rem', padding: '0.2rem 0.5rem', borderRadius: '0.25rem', letterSpacing: '0.05em' }}>
+              AI-2A / AI-2B • OFFICIAL NOTICE & RETRIEVAL GROUNDING
+            </span>
+            <span style={{ background: isGroundingEnabled ? '#15803d' : '#854d0e', color: isGroundingEnabled ? '#bbf7d0' : '#fef08a', fontWeight: 700, fontSize: '0.7rem', padding: '0.15rem 0.4rem', borderRadius: '0.2rem' }}>
+              Grounding: {isGroundingEnabled ? 'ENABLED' : 'DISABLED'}
+            </span>
+          </div>
           <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#f8fafc', marginTop: '0.35rem' }}>
-            📄 Official Funding Documents
+            📄 Official Funding Documents & Vector Indexing
           </h3>
         </div>
       </div>
@@ -411,23 +471,63 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
                   </div>
 
                   {latestVersion && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
                       <span style={{ fontSize: '0.75rem', padding: '0.2rem 0.5rem', borderRadius: '0.25rem', fontWeight: 700, ...getStatusBadgeStyle(latestVersion.status) }}>
                         {latestVersion.status} (v{latestVersion.version})
                       </span>
+
+                      {/* Index Status Badge */}
+                      {latestVersion.status === 'READY' && (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                          <span
+                            style={{
+                              fontSize: '0.75rem',
+                              padding: '0.2rem 0.5rem',
+                              borderRadius: '0.25rem',
+                              fontWeight: 700,
+                              background: indexStatuses[latestVersion.id]?.status === 'READY' ? '#15803d' : indexStatuses[latestVersion.id]?.status === 'PROCESSING' ? '#854d0e' : indexStatuses[latestVersion.id]?.status === 'FAILED' ? '#9f1239' : '#334155',
+                              color: indexStatuses[latestVersion.id]?.status === 'READY' ? '#bbf7d0' : indexStatuses[latestVersion.id]?.status === 'PROCESSING' ? '#fef08a' : indexStatuses[latestVersion.id]?.status === 'FAILED' ? '#fecdd3' : '#cbd5e1',
+                              border: '1px solid rgba(255,255,255,0.1)',
+                            }}
+                          >
+                            INDEX: {indexStatuses[latestVersion.id]?.status || 'NOT_INDEXED'}
+                            {indexStatuses[latestVersion.id]?.status === 'READY' && ` (${indexStatuses[latestVersion.id]?.chunkCount} chunks)`}
+                          </span>
+
+                          {!isViewer && (
+                            <button
+                              onClick={() => setConfirmIndexingVerId(latestVersion.id)}
+                              disabled={indexingInProg}
+                              style={{
+                                background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                                color: '#ffffff',
+                                border: 'none',
+                                padding: '0.3rem 0.65rem',
+                                borderRadius: '0.25rem',
+                                fontSize: '0.75rem',
+                                fontWeight: 700,
+                                cursor: indexingInProg ? 'not-allowed' : 'pointer',
+                              }}
+                            >
+                              {indexStatuses[latestVersion.id]?.status === 'READY' ? '🔄 Re-index Evidence' : '🧠 Prepare Grounded Evidence'}
+                            </button>
+                          )}
+                        </div>
+                      )}
+
                       {latestVersion.status === 'READY' && (
                         <button
                           onClick={() => handleInspectPages(latestVersion)}
                           style={{ background: '#0284c7', color: '#ffffff', border: 'none', padding: '0.3rem 0.65rem', borderRadius: '0.25rem', fontSize: '0.75rem', fontWeight: 700, cursor: 'pointer' }}
                         >
-                          🔍 Inspect Extracted Pages ({latestVersion.pageCount})
+                          🔍 Inspect Pages ({latestVersion.pageCount})
                         </button>
                       )}
                       <button
                         onClick={() => handleDownload(latestVersion.id, latestVersion.originalFileName)}
                         style={{ background: '#334155', color: '#f8fafc', border: '1px solid var(--border-color)', padding: '0.3rem 0.65rem', borderRadius: '0.25rem', fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}
                       >
-                        ⬇️ Download Original PDF
+                        ⬇️ PDF
                       </button>
                     </div>
                   )}
@@ -437,21 +537,65 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
                 <div style={{ marginTop: '0.75rem', borderTop: '1px solid rgba(255,255,255,0.05)', paddingTop: '0.75rem' }}>
                   <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', marginBottom: '0.4rem' }}>Version History ({doc.versions.length})</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
-                    {doc.versions.map((ver) => (
-                      <div key={ver.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.75rem', color: '#cbd5e1', background: 'rgba(15, 23, 42, 0.4)', padding: '0.4rem 0.6rem', borderRadius: '0.25rem' }}>
-                        <div>
-                          <strong>v{ver.version}</strong> — {ver.originalFileName} ({formatBytes(ver.sizeBytes)}) | {ver.pageCount} pages | Version: <code>{ver.extractionVersion}</code> | Uploaded by <em>{ver.uploadedByUser?.displayName || 'User'}</em> on {new Date(ver.createdAt).toLocaleString()}
+                    {doc.versions.map((ver) => {
+                      const idxStatus = indexStatuses[ver.id];
+                      return (
+                        <div key={ver.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.75rem', color: '#cbd5e1', background: 'rgba(15, 23, 42, 0.4)', padding: '0.4rem 0.6rem', borderRadius: '0.25rem' }}>
+                          <div>
+                            <strong>v{ver.version}</strong> — {ver.originalFileName} ({formatBytes(ver.sizeBytes)}) | {ver.pageCount} pages | Extraction: <code>{ver.extractionVersion}</code>
+                            {idxStatus?.status === 'READY' && (
+                              <span style={{ marginLeft: '0.5rem', color: '#38bdf8', fontWeight: 600 }}>
+                                • Vector Index: {idxStatus.embeddingModel} ({idxStatus.embeddingDimensions}d, {idxStatus.chunkCount} chunks)
+                              </span>
+                            )}
+                          </div>
+                          <div style={{ fontFamily: 'monospace', fontSize: '0.7rem', color: '#64748b' }}>
+                            SHA256: {ver.sha256.substring(0, 16)}...
+                          </div>
                         </div>
-                        <div style={{ fontFamily: 'monospace', fontSize: '0.7rem', color: '#64748b' }}>
-                          SHA256: {ver.sha256.substring(0, 16)}...
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               </div>
             );
           })}
+        </div>
+      )}
+
+      {/* Grounded Evidence Indexing Confirmation Modal */}
+      {confirmIndexingVerId && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1100, padding: '1rem' }}>
+          <div style={{ background: '#0f172a', border: '1px solid #38bdf8', borderRadius: '0.75rem', maxWidth: '550px', width: '100%', padding: '1.5rem', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)' }}>
+            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#f8fafc', marginBottom: '0.75rem' }}>
+              🧠 Prepare Grounded Semantic Evidence Index
+            </h3>
+
+            <p style={{ fontSize: '0.85rem', color: '#cbd5e1', lineHeight: 1.5, marginBottom: '1rem' }}>
+              This action will process the extracted document pages for document version <code style={{ color: '#38bdf8' }}>{confirmIndexingVerId}</code>, partition them into deterministic page-bounded chunks (<code style={{ color: '#a7f3d0' }}>document-chunker-v1</code>), and request vector embeddings from the server-configured provider (<code style={{ color: '#fef08a' }}>text-embedding-3-small</code>, 1536 dimensions).
+            </p>
+
+            <div style={{ padding: '0.75rem', background: 'rgba(234, 179, 8, 0.1)', border: '1px solid rgba(234, 179, 8, 0.25)', borderRadius: '0.375rem', color: '#fef08a', fontSize: '0.75rem', marginBottom: '1.25rem', lineHeight: 1.4 }}>
+              <strong>⚠️ PAID PROVIDER OPERATION:</strong> If live OpenAI embeddings are enabled on the server, this will issue API requests to generate vector embeddings. The resulting vectors will be persisted in PostgreSQL (<code style={{ color: '#93c5fd' }}>pgvector</code>) for semantic retrieval grounding.
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+              <button
+                onClick={() => setConfirmIndexingVerId(null)}
+                disabled={indexingInProg}
+                style={{ background: '#334155', color: '#f8fafc', border: 'none', padding: '0.5rem 1rem', borderRadius: '0.375rem', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer' }}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => handleStartIndexing(confirmIndexingVerId)}
+                disabled={indexingInProg}
+                style={{ background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)', color: '#ffffff', border: 'none', padding: '0.5rem 1.25rem', borderRadius: '0.375rem', fontWeight: 700, fontSize: '0.85rem', cursor: indexingInProg ? 'not-allowed' : 'pointer' }}
+              >
+                {indexingInProg ? '⏳ Indexing Vector Evidence...' : '🚀 Confirm & Start Indexing'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

@@ -243,6 +243,15 @@ export interface SystemHealth {
     maxPages: number;
     extractionVersion: string;
   };
+  documentGrounding?: {
+    enabled: boolean;
+    configured: boolean;
+    embeddingModel: string;
+    embeddingDimensions: number;
+    chunkingVersion: string;
+    retrievalVersion: string;
+    promptVersion: string;
+  };
 }
 
 
@@ -445,6 +454,44 @@ export function App() {
     } finally {
       setAiGenerating(false);
     }
+  };
+
+  const handleGenerateGroundedAiAnalysis = async () => {
+    if (!selectedOppForDrawer) return;
+    setAiGenerating(true);
+    setAiError(null);
+    try {
+      const idempotencyKey = `ui_grounded_${selectedOppForDrawer.id}_${Date.now()}`;
+      const res = await apiFetch(`/api/opportunities/${selectedOppForDrawer.id}/document-grounded-ai-evaluations`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Idempotency-Key': idempotencyKey,
+        },
+        body: JSON.stringify({ idempotencyKey }),
+      });
+
+      const json = await res.json();
+      if (!res.ok) {
+        throw new Error(json.error || 'Failed to generate document-grounded AI evaluation');
+      }
+
+      await fetchAiEvaluations(selectedOppForDrawer.id);
+      setActionMessage(`✓ Generated new document-grounded AI evaluation (v${json.data.version}) for "${selectedOppForDrawer.title}"`);
+    } catch (err: any) {
+      setAiError(err.message || 'Failed to generate document-grounded AI evaluation');
+    } finally {
+      setAiGenerating(false);
+    }
+  };
+
+  const handleFetchRetrievedEvidence = async (evaluationId: string) => {
+    const res = await apiFetch(`/api/ai-evaluations/${evaluationId}/retrieved-evidence`);
+    const json = await res.json();
+    if (!res.ok) {
+      throw new Error(json.error || 'Failed to fetch retrieved evidence');
+    }
+    return json.data;
   };
 
   const handleReviewAiAnalysis = async (evaluationId: string, decision: 'APPROVED' | 'REJECTED', reason: string) => {
@@ -1923,13 +1970,16 @@ export function App() {
                   )}
                 </div>
 
-                {/* AI-1 Structured AI Funding Analyst Panel */}
+                {/* AI-1 & AI-2B Structured AI Funding Analyst Panel */}
                 <AiEvaluationPanel
                   evaluations={aiEvaluations}
                   currentUser={currentUser}
                   isAiConfigured={Boolean(health.aiAnalyst?.enabled)}
+                  isGroundingEnabled={Boolean(health.documentGrounding?.enabled)}
                   onGenerateAiAnalysis={handleGenerateAiAnalysis}
+                  onGenerateGroundedAiAnalysis={handleGenerateGroundedAiAnalysis}
                   onReviewAiAnalysis={handleReviewAiAnalysis}
+                  onFetchRetrievedEvidence={handleFetchRetrievedEvidence}
                   generating={aiGenerating}
                   error={aiError}
                 />
@@ -1940,6 +1990,7 @@ export function App() {
                   currentUser={currentUser}
                   apiFetch={apiFetch}
                   isIngestionEnabled={Boolean(health.documentIngestion?.enabled)}
+                  isGroundingEnabled={Boolean(health.documentGrounding?.enabled)}
                 />
 
 

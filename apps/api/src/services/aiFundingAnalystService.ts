@@ -6,6 +6,8 @@ import {
 } from './ai/fundingAnalystProvider';
 import { OpenAiFundingAnalystProvider } from './ai/openAiFundingAnalystProvider';
 import { EvidenceCatalogBuilder } from './ai/evidenceCatalogBuilder';
+import { DocumentIndexingService } from './documentIndexingService';
+import { DocumentRetrievalService } from './documentRetrievalService';
 import { AuthService } from './authService';
 
 export class AiFundingAnalystService {
@@ -213,6 +215,229 @@ export class AiFundingAnalystService {
     } finally {
       AiFundingAnalystService.idempotencyMap.delete(lockKey);
     }
+  }
+
+  public static async generateGroundedEvaluation(params: {
+    opportunityId: string;
+    userId: string;
+    idempotencyKey?: string;
+    ipAddress?: string;
+    userAgent?: string;
+    provider?: FundingAnalystProvider;
+  }): Promise<any> {
+    const { opportunityId, userId, idempotencyKey, ipAddress, userAgent } = params;
+
+    if (!DocumentIndexingService.isGroundingEnabled()) {
+      throw new Error(
+        'AI_DOCUMENT_GROUNDING_NOT_CONFIGURED: Document grounding service is disabled or OPENAI_API_KEY is not configured.'
+      );
+    }
+
+    if (idempotencyKey) {
+      const existing = await prisma.aiEvaluation.findFirst({
+        where: {
+          generatedByUserId: userId,
+          opportunityId,
+          idempotencyKey,
+        },
+        include: {
+          generatedByUser: { select: { id: true, displayName: true, email: true, role: true } },
+          reviewedByUser: { select: { id: true, displayName: true, email: true, role: true } },
+          retrievalRun: {
+            include: {
+              evidenceItems: true,
+            },
+          },
+        },
+      });
+
+      if (existing && existing.retrievalRun) {
+        return existing;
+      }
+    }
+
+    const lockKey = `grounded_${userId}_${opportunityId}_${idempotencyKey || 'default'}`;
+    if (AiFundingAnalystService.idempotencyMap.has(lockKey)) {
+      return await AiFundingAnalystService.idempotencyMap.get(lockKey)!;
+    }
+
+    const executionPromise = (async () => {
+      await AiFundingAnalystService.checkHourlyRateLimit(userId);
+
+      const opp = await prisma.fundingOpportunity.findUnique({
+        where: { id: opportunityId },
+      });
+      if (!opp) {
+        throw new Error('Funding opportunity not found');
+      }
+
+      const orgProfile = await prisma.organizationProfile.findFirst({
+        include: { programs: true },
+      });
+
+      const retrievalResult = await DocumentRetrievalService.executeRetrieval(opportunityId);
+
+      const snapshot = EvidenceCatalogBuilder.buildGroundedSnapshot(
+        opp,
+        orgProfile,
+        retrievalResult.retrievedEvidence
+      );
+      const inputHash = EvidenceCatalogBuilder.hashSnapshot(snapshot);
+
+      const activeAnalystProvider = params.provider || AiFundingAnalystService.getActiveProvider();
+
+      const originalPrompt = EvidenceCatalogBuilder.getSystemPrompt;
+      EvidenceCatalogBuilder.getSystemPrompt = EvidenceCatalogBuilder.getGroundedSystemPrompt;
+
+      let response: any;
+      try {
+        response = await activeAnalystProvider.analyze(snapshot);
+      } finally {
+        EvidenceCatalogBuilder.getSystemPrompt = originalPrompt;
+      }
+
+      const { result, meta } = response;
+
+      EvidenceCatalogBuilder.validateGroundedEvidenceRefs(result, snapshot.evidenceCatalog);
+
+      const lastEval = await prisma.aiEvaluation.findFirst({
+        where: { opportunityId },
+        orderBy: { version: 'desc' },
+      });
+      const nextVersion = lastEval ? lastEval.version + 1 : 1;
+
+      const evaluation = await prisma.$transaction(async (tx) => {
+        const createdEval = await tx.aiEvaluation.create({
+          data: {
+            opportunityId,
+            version: nextVersion,
+            status: 'GENERATED',
+            alignmentScore: result.alignmentScore,
+            eligibility: result.eligibility as any,
+            summary: result.summary,
+            strengths: result.strengths as any,
+            risks: result.risks as any,
+            requirements: result.requirements as any,
+            recommendedNextAction: result.recommendedNextAction,
+            confidence: result.confidence,
+            limitations: result.limitations,
+            evidenceSnapshot: snapshot.evidenceCatalog as any,
+            inputSnapshot: snapshot as any,
+            inputHash,
+            provider: meta.provider,
+            model: meta.model,
+            promptVersion: meta.promptVersion || EvidenceCatalogBuilder.GROUNDED_PROMPT_VERSION,
+            idempotencyKey: idempotencyKey || null,
+            providerResponseId: meta.providerResponseId || null,
+            inputTokenCount: meta.inputTokenCount || null,
+            outputTokenCount: meta.outputTokenCount || null,
+            generatedByUserId: userId,
+          },
+          include: {
+            generatedByUser: { select: { id: true, displayName: true, email: true, role: true } },
+          },
+        });
+
+        const createdRun = await tx.aiEvaluationRetrievalRun.create({
+          data: {
+            evaluationId: createdEval.id,
+            documentIndexId: retrievalResult.documentIndexId,
+            retrievalVersion: retrievalResult.retrievalVersion,
+            querySnapshot: retrievalResult.querySnapshot as any,
+            retrievalConfiguration: retrievalResult.retrievalConfiguration as any,
+            retrievalHash: retrievalResult.retrievalHash,
+          },
+        });
+
+        if (retrievalResult.retrievedEvidence.length > 0) {
+          await tx.aiEvaluationRetrievalEvidence.createMany({
+            data: retrievalResult.retrievedEvidence.map((item) => ({
+              retrievalRunId: createdRun.id,
+              documentChunkId: item.chunkId,
+              queryLabel: item.queryLabel,
+              rank: item.rank,
+              cosineSimilarity: item.cosineSimilarity,
+              citationRef: item.citationRef,
+              pageNumber: item.pageNumber,
+              excerptSnapshot: item.text,
+              textHash: item.textHash,
+            })),
+          });
+        }
+
+        await tx.securityAuditEvent.create({
+          data: {
+            userId,
+            eventType: 'AI_DOCUMENT_GROUNDED_EVALUATION_GENERATED',
+            ipAddress,
+            userAgent,
+            details: JSON.stringify({
+              evaluationId: createdEval.id,
+              opportunityId,
+              version: nextVersion,
+              alignmentScore: result.alignmentScore,
+              eligibility: result.eligibility,
+              documentIndexId: retrievalResult.documentIndexId,
+              retrievedChunksCount: retrievalResult.totalRetrievedChunks,
+              provider: meta.provider,
+              model: meta.model,
+              promptVersion: meta.promptVersion,
+              idempotencyKey,
+            }),
+          },
+        });
+
+        return createdEval;
+      });
+
+      return evaluation;
+    })();
+
+    AiFundingAnalystService.idempotencyMap.set(lockKey, executionPromise);
+
+    try {
+      return await executionPromise;
+    } finally {
+      AiFundingAnalystService.idempotencyMap.delete(lockKey);
+    }
+  }
+
+  public static async getRetrievedEvidenceForEvaluation(evaluationId: string) {
+    const run = await prisma.aiEvaluationRetrievalRun.findUnique({
+      where: { evaluationId },
+      include: {
+        evidenceItems: {
+          orderBy: [{ queryLabel: 'asc' }, { rank: 'asc' }],
+        },
+        documentIndex: {
+          include: {
+            documentVersion: {
+              include: {
+                fundingDocument: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!run) {
+      return null;
+    }
+
+    return {
+      retrievalRunId: run.id,
+      evaluationId: run.evaluationId,
+      documentIndexId: run.documentIndexId,
+      retrievalVersion: run.retrievalVersion,
+      documentTitle: run.documentIndex.documentVersion.fundingDocument.title,
+      documentVersionId: run.documentIndex.documentVersionId,
+      querySnapshot: run.querySnapshot,
+      retrievalConfiguration: run.retrievalConfiguration,
+      retrievalHash: run.retrievalHash,
+      createdAt: run.createdAt,
+      evidenceItems: run.evidenceItems,
+    };
   }
 
   public static async getEvaluationsForOpportunity(opportunityId: string): Promise<any[]> {

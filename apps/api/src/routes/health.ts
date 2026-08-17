@@ -70,5 +70,14 @@ healthRouter.get('/', async (req: Request, res: Response) => {
       maxPages: Number(process.env.DOCUMENT_MAX_PAGES) || 300,
       extractionVersion: process.env.DOCUMENT_EXTRACTION_VERSION || 'pdf-page-text-v1',
     },
+    documentGrounding: {
+      enabled: process.env.AI_DOCUMENT_GROUNDING_ENABLED === 'true',
+      configured: process.env.AI_DOCUMENT_GROUNDING_ENABLED === 'true' && Boolean(process.env.OPENAI_API_KEY),
+      embeddingModel: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small',
+      embeddingDimensions: Number(process.env.OPENAI_EMBEDDING_DIMENSIONS) || 1536,
+      chunkingVersion: 'document-chunker-v1',
+      retrievalVersion: 'document-retrieval-v1',
+      promptVersion: 'funding-analyst-document-grounded-v1',
+    },
   });
 });

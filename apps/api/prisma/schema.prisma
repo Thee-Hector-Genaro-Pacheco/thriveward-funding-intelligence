@@ -814,6 +814,7 @@ model User {
   generatedAiEvaluations   AiEvaluation[]            @relation("GeneratedAiEvaluations")
   reviewedAiEvaluations    AiEvaluation[]            @relation("ReviewedAiEvaluations")
   uploadedDocumentVersions FundingDocumentVersion[]  @relation("UploadedDocumentVersions")
+  indexedDocumentVersions  FundingDocumentIndex[]    @relation("IndexedDocumentVersions")
 }
 
 model UserSession {
@@ -1069,6 +1070,7 @@ model AiEvaluation {
   reviewReason          String?
 
   recoveryRecords AiEvaluationRecoveryRecord[]
+  retrievalRun    AiEvaluationRetrievalRun?
 
   @@unique([generatedByUserId, opportunityId, idempotencyKey])
   @@index([opportunityId, version])
@@ -1192,7 +1194,9 @@ model FundingDocumentVersion {
   failureCode       String?
   failureMessage    String?
 
-  pages FundingDocumentPage[]
+  pages              FundingDocumentPage[]
+  indices            FundingDocumentIndex[]
+  indexIdempotencies FundingDocumentIndexIdempotency[]
 
   @@unique([fundingDocumentId, version])
   @@unique([fundingDocumentId, sha256])
@@ -1211,6 +1215,8 @@ model FundingDocumentPage {
   characterCount    Int
   citationRef       String
   createdAt         DateTime               @default(now())
+
+  chunks FundingDocumentChunk[]
 
   @@unique([documentVersionId, pageNumber])
   @@index([documentVersionId])
@@ -1234,4 +1240,125 @@ model FundingDocumentIdempotency {
   @@unique([opportunityId, idempotencyKey])
   @@index([opportunityId, payloadSha256])
   @@index([authenticatedUserId])
+}
+
+// --- AI-2B: Document-Grounded Retrieval & Citation-Constrained Analysis Models ---
+
+enum FundingDocumentIndexStatus {
+  PENDING
+  PROCESSING
+  READY
+  FAILED
+}
+
+model FundingDocumentIndex {
+  id                   String                     @id @default(uuid())
+  documentVersionId    String
+  documentVersion      FundingDocumentVersion     @relation(fields: [documentVersionId], references: [id], onDelete: Cascade)
+  version              Int                        @default(1)
+  status               FundingDocumentIndexStatus @default(PENDING)
+  sourceManifestHash   String
+  configurationHash    String
+  chunkingVersion      String                     @default("document-chunker-v1")
+  embeddingProvider    String                     @default("OPENAI")
+  embeddingModel       String                     @default("text-embedding-3-small")
+  embeddingDimensions  Int                        @default(1536)
+  pageCount            Int
+  chunkCount           Int                        @default(0)
+  inputTokenCount      Int                        @default(0)
+  providerRequestCount Int                        @default(0)
+  indexedByUserId      String
+  indexedByUser        User                       @relation("IndexedDocumentVersions", fields: [indexedByUserId], references: [id])
+  createdAt            DateTime                   @default(now())
+  startedAt            DateTime?
+  completedAt          DateTime?
+  failureCode          String?
+
+  chunks        FundingDocumentChunk[]
+  idempotencies FundingDocumentIndexIdempotency[]
+  retrievalRuns AiEvaluationRetrievalRun[]
+
+  @@unique([documentVersionId, version])
+  @@unique([documentVersionId, configurationHash])
+  @@index([documentVersionId])
+  @@index([indexedByUserId])
+  @@index([status])
+}
+
+model FundingDocumentIndexIdempotency {
+  id                String                 @id @default(uuid())
+  documentVersionId String
+  documentVersion   FundingDocumentVersion @relation(fields: [documentVersionId], references: [id], onDelete: Cascade)
+  idempotencyKey    String
+  payloadHash       String
+  indexId           String?
+  index             FundingDocumentIndex?  @relation(fields: [indexId], references: [id], onDelete: SetNull)
+  status            String                 @default("PROCESSING") // PROCESSING, COMPLETED, FAILED
+  createdAt         DateTime               @default(now())
+  completedAt       DateTime?
+
+  @@unique([documentVersionId, idempotencyKey])
+  @@index([documentVersionId, payloadHash])
+}
+
+model FundingDocumentChunk {
+  id              String                      @id @default(uuid())
+  documentIndexId String
+  documentIndex   FundingDocumentIndex        @relation(fields: [documentIndexId], references: [id], onDelete: Cascade)
+  documentPageId  String
+  documentPage    FundingDocumentPage         @relation(fields: [documentPageId], references: [id], onDelete: Cascade)
+  pageNumber      Int
+  chunkIndex      Int
+  startOffset     Int
+  endOffset       Int
+  text            String
+  textHash        String
+  tokenCount      Int
+  citationRef     String
+  embedding       Unsupported("vector(1536)")
+  createdAt       DateTime                    @default(now())
+
+  retrievedEvidence AiEvaluationRetrievalEvidence[]
+
+  @@unique([documentIndexId, pageNumber, chunkIndex])
+  @@index([documentIndexId])
+  @@index([documentPageId])
+  @@index([citationRef])
+}
+
+model AiEvaluationRetrievalRun {
+  id                     String               @id @default(uuid())
+  evaluationId           String               @unique
+  evaluation             AiEvaluation         @relation(fields: [evaluationId], references: [id], onDelete: Cascade)
+  documentIndexId        String
+  documentIndex          FundingDocumentIndex @relation(fields: [documentIndexId], references: [id], onDelete: Restrict)
+  retrievalVersion       String               @default("document-retrieval-v1")
+  querySnapshot          Json
+  retrievalConfiguration Json
+  retrievalHash          String
+  createdAt              DateTime             @default(now())
+
+  evidenceItems AiEvaluationRetrievalEvidence[]
+
+  @@index([documentIndexId])
+}
+
+model AiEvaluationRetrievalEvidence {
+  id               String                   @id @default(uuid())
+  retrievalRunId   String
+  retrievalRun     AiEvaluationRetrievalRun @relation(fields: [retrievalRunId], references: [id], onDelete: Cascade)
+  documentChunkId  String
+  documentChunk    FundingDocumentChunk     @relation(fields: [documentChunkId], references: [id], onDelete: Restrict)
+  queryLabel       String
+  rank             Int
+  cosineSimilarity Float
+  citationRef      String
+  pageNumber       Int
+  excerptSnapshot  String
+  textHash         String
+  createdAt        DateTime                 @default(now())
+
+  @@index([retrievalRunId])
+  @@index([documentChunkId])
+  @@index([citationRef])
 }

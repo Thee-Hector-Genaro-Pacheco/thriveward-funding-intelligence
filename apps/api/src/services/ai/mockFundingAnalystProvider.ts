@@ -62,8 +62,30 @@ export class MockFundingAnalystProvider implements FundingAnalystProvider {
       ],
     };
 
+    const docItems = snapshot.evidenceCatalog.filter((c) => c.category === 'DOCUMENT_RETRIEVED');
+    if (docItems.length > 0) {
+      const docRef1 = docItems[0].id;
+      const docRef2 = docItems[1]?.id || docRef1;
+      result.requirements = [
+        {
+          requirement: '501(c)(3) Nonprofit Status or Eligible Fiscal Sponsorship',
+          status: 'NOT_MET',
+          evidenceRefs: [docRef1, 'ORG.taxExemptionStatus', 'OPP.eligibility'],
+        },
+        {
+          requirement: 'Mandatory Program & Partnership Requirements',
+          status: 'UNKNOWN',
+          evidenceRefs: [docRef2, 'ORG.serviceAreas', 'OPP.sourceUrl'],
+        },
+      ];
+    }
+
     // Validate evidence references internally to verify catalog integrity
-    EvidenceCatalogBuilder.validateEvidenceRefs(result, snapshot.evidenceCatalog);
+    if (snapshot.promptVersion === EvidenceCatalogBuilder.GROUNDED_PROMPT_VERSION) {
+      EvidenceCatalogBuilder.validateGroundedEvidenceRefs(result, snapshot.evidenceCatalog);
+    } else {
+      EvidenceCatalogBuilder.validateEvidenceRefs(result, snapshot.evidenceCatalog);
+    }
 
     return {
       result,

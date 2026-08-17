@@ -10,6 +10,7 @@
     "test": "vitest run",
     "ingest": "tsx src/scripts/ingestGrantsGov.ts",
     "ingest:grants-gov": "tsx src/scripts/ingestGrantsGov.ts",
+    "recover:document-index": "tsx src/scripts/recoverDocumentIndex.ts",
     "prisma:generate": "prisma generate",
     "prisma:push": "prisma db push",
     "prisma:migrate": "prisma migrate dev",

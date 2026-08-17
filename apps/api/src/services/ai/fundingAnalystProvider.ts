@@ -43,7 +43,7 @@ export type FundingAnalysisResult = z.infer<typeof FundingAnalysisResultSchema>;
 
 export interface EvidenceCatalogItem {
   id: string;
-  category: 'OPPORTUNITY' | 'ORGANIZATION';
+  category: 'OPPORTUNITY' | 'ORGANIZATION' | 'DOCUMENT_RETRIEVED';
   label: string;
   value: string;
 }
