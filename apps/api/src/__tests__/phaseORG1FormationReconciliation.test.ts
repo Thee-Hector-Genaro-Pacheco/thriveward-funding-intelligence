@@ -50,6 +50,17 @@ describe('Phase ORG-1 • Formation Evidence Reconciliation & Match Impact Previ
       expect(opRes.body.success).toBe(false);
     });
 
+    it('enforces CSRF protection for mutating POST reconciliation requests', async () => {
+      const res = await request(app)
+        .post('/api/organization/reconcile-formation')
+        .set('x-test-role', 'ADMIN')
+        .set('x-test-reject-csrf', 'true')
+        .send({ entityNumber: 'B20260372748' });
+
+      expect(res.status).toBe(403);
+      expect(res.body.error).toContain('CSRF');
+    });
+
     it('rejects client-supplied actor identity fields with 400', async () => {
       const res = await request(app)
         .post('/api/organization/reconcile-formation')
@@ -65,15 +76,26 @@ describe('Phase ORG-1 • Formation Evidence Reconciliation & Match Impact Previ
       expect(res.body.error).toContain('Client-supplied actor identity is rejected');
     });
 
-    it('rejects invalid or missing California entity numbers', async () => {
-      const res = await request(app)
+    it('rejects missing or incorrect entity numbers with 400', async () => {
+      // 1. Incorrect entity number
+      const wrongRes = await request(app)
         .post('/api/organization/reconcile-formation')
         .set('x-test-role', 'ADMIN')
         .set('X-Thriveward-CSRF', '1')
-        .send({ entityNumber: 'WRONG_NUMBER' });
+        .send({ entityNumber: 'B99999999999' });
 
-      expect(res.status).toBe(400);
-      expect(res.body.error).toContain('B20260372748');
+      expect(wrongRes.status).toBe(400);
+      expect(wrongRes.body.error).toContain('B20260372748');
+
+      // 2. Missing entity number
+      const missingRes = await request(app)
+        .post('/api/organization/reconcile-formation')
+        .set('x-test-role', 'ADMIN')
+        .set('X-Thriveward-CSRF', '1')
+        .send({});
+
+      expect(missingRes.status).toBe(400);
+      expect(missingRes.body.error).toContain('B20260372748');
     });
   });
 
@@ -102,6 +124,7 @@ describe('Phase ORG-1 • Formation Evidence Reconciliation & Match Impact Previ
       expect(unverifiedStatuses.irsEin).toBe('NOT_OBTAINED');
       expect(unverifiedStatuses.samGovUeiRegistration).toBe('NOT_REGISTERED');
       expect(unverifiedStatuses.grantsGovRegistration).toBe('NOT_REGISTERED');
+      expect(unverifiedStatuses.californiaAttorneyGeneralRegistration).toBe('NOT_REGISTERED');
       expect(unverifiedStatuses.taxStatus).toBe('NOT_OBTAINED');
 
       // Profile in DB is updated
@@ -109,8 +132,13 @@ describe('Phase ORG-1 • Formation Evidence Reconciliation & Match Impact Previ
       expect(organizationProfile.taxStatus).toBe('NOT_OBTAINED');
     });
 
-    it('is idempotent: repeated reconciliation creates zero duplicate audit events', async () => {
-      // First call
+    it('is strictly idempotent: repeated identical requests generate exactly one reconciliation audit event', async () => {
+      // Clear previous reconciliation audit events in test DB
+      await prisma.securityAuditEvent.deleteMany({
+        where: { eventType: 'ORGANIZATION_FORMATION_RECONCILED' },
+      });
+
+      // Call 1
       const res1 = await request(app)
         .post('/api/organization/reconcile-formation')
         .set('x-test-role', 'ADMIN')
@@ -120,11 +148,7 @@ describe('Phase ORG-1 • Formation Evidence Reconciliation & Match Impact Previ
       expect(res1.status).toBe(200);
       expect(res1.body.data.alreadyReconciled).toBe(false);
 
-      const auditCountAfterFirst = await prisma.securityAuditEvent.count({
-        where: { eventType: 'ORGANIZATION_FORMATION_RECONCILED' },
-      });
-
-      // Second call (identical)
+      // Call 2
       const res2 = await request(app)
         .post('/api/organization/reconcile-formation')
         .set('x-test-role', 'ADMIN')
@@ -134,11 +158,21 @@ describe('Phase ORG-1 • Formation Evidence Reconciliation & Match Impact Previ
       expect(res2.status).toBe(200);
       expect(res2.body.data.alreadyReconciled).toBe(true);
 
-      const auditCountAfterSecond = await prisma.securityAuditEvent.count({
+      // Call 3
+      const res3 = await request(app)
+        .post('/api/organization/reconcile-formation')
+        .set('x-test-role', 'ADMIN')
+        .set('X-Thriveward-CSRF', '1')
+        .send({ entityNumber: 'B20260372748' });
+
+      expect(res3.status).toBe(200);
+
+      // Verify exactly ONE audit event was created
+      const auditCount = await prisma.securityAuditEvent.count({
         where: { eventType: 'ORGANIZATION_FORMATION_RECONCILED' },
       });
 
-      expect(auditCountAfterSecond).toBe(auditCountAfterFirst);
+      expect(auditCount).toBe(1);
     });
 
     it('records security audit event with ORGANIZATION_FORMATION_RECONCILED semantics', async () => {
@@ -159,8 +193,8 @@ describe('Phase ORG-1 • Formation Evidence Reconciliation & Match Impact Previ
     });
   });
 
-  describe('3. Read-Only Match Impact Preview Engine', () => {
-    it('returns match impact preview for all 14 opportunities via GET', async () => {
+  describe('3. Read-Only Match Impact Preview Engine & Blocker Isolation', () => {
+    it('returns match impact preview comparing pre vs post incorporation profiles for all 14 opportunities', async () => {
       const res = await request(app)
         .get('/api/organization/match-impact-preview')
         .set('x-test-role', 'VIEWER');
@@ -170,20 +204,14 @@ describe('Phase ORG-1 • Formation Evidence Reconciliation & Match Impact Previ
       expect(res.body.data.opportunityCount).toBeGreaterThanOrEqual(14);
       expect(res.body.data.previewResults.length).toBeGreaterThanOrEqual(14);
 
-      // Verify Street Outreach Program preview item
-      const sopItem = res.body.data.previewResults.find((item: any) =>
-        item.title.toLowerCase().includes('street outreach')
-      );
-      expect(sopItem).toBeDefined();
-      expect(sopItem.previousEligibilityClassification).toBe('FISCAL_SPONSOR_REQUIRED');
-      expect(sopItem.previewEligibilityClassification).toBe('FISCAL_SPONSOR_REQUIRED');
-      expect(sopItem.changedBlockingReasons.length).toBeGreaterThan(0);
-      expect(sopItem.remainingBlockingReasons.length).toBeGreaterThan(0);
-      expect(sopItem.recommendedPathway).toBe('FISCAL_SPONSOR_REQUIRED');
+      // Verify both sides of comparison are present
+      const item = res.body.data.previewResults[0];
+      expect(item.previousFormationStatus).toBe('PRE_INCORPORATION');
+      expect(item.updatedFormationStatus).toBe('INCORPORATED');
     });
 
-    it('is completely read-only and performs zero database record mutations', async () => {
-      const oppCountBefore = await prisma.fundingOpportunity.count();
+    it('is completely read-only and performs zero database record mutations or workflow changes', async () => {
+      const oppsBefore = await prisma.fundingOpportunity.findMany();
       const evalCountBefore = await prisma.aiEvaluation.count();
       const auditCountBefore = await prisma.securityAuditEvent.count();
 
@@ -191,13 +219,42 @@ describe('Phase ORG-1 • Formation Evidence Reconciliation & Match Impact Previ
         .get('/api/organization/match-impact-preview')
         .set('x-test-role', 'ADMIN');
 
-      const oppCountAfter = await prisma.fundingOpportunity.count();
+      const oppsAfter = await prisma.fundingOpportunity.findMany();
       const evalCountAfter = await prisma.aiEvaluation.count();
       const auditCountAfter = await prisma.securityAuditEvent.count();
 
-      expect(oppCountAfter).toBe(oppCountBefore);
+      expect(oppsAfter.length).toBe(oppsBefore.length);
       expect(evalCountAfter).toBe(evalCountBefore);
       expect(auditCountAfter).toBe(auditCountBefore);
+
+      // Verify no automatic qualification or locking of opportunity routing status occurred in DB
+      for (let i = 0; i < oppsBefore.length; i++) {
+        expect(oppsAfter[i].candidateRoutingStatus).toBe(oppsBefore[i].candidateRoutingStatus);
+      }
+    });
+
+    it('enforces blocker isolation for Street Outreach Program: loses ONLY incorporation blocker', async () => {
+      const res = await request(app)
+        .get('/api/organization/match-impact-preview')
+        .set('x-test-role', 'OPERATOR');
+
+      const sopItem = res.body.data.previewResults.find((item: any) =>
+        item.title.toLowerCase().includes('street outreach')
+      );
+
+      expect(sopItem).toBeDefined();
+
+      // Resolved blocker: only legal entity status blocker
+      expect(sopItem.changedBlockingReasons.length).toBe(1);
+      expect(sopItem.changedBlockingReasons[0]).toContain('Legal entity status blocker resolved');
+
+      // Remaining blockers: fiscal sponsor, SAM/UEI, Grants.gov, operating history remain strictly enforced
+      expect(sopItem.remainingBlockingReasons).toContain('Fiscal sponsor required for immediate submission');
+      expect(sopItem.remainingBlockingReasons).toContain('SAM.gov / UEI registration NOT_REGISTERED');
+      expect(sopItem.remainingBlockingReasons).toContain('Grants.gov organization registration NOT_REGISTERED');
+
+      // Recommended pathway remains FISCAL_SPONSOR_REQUIRED (no direct qualification)
+      expect(sopItem.recommendedPathway).toBe('FISCAL_SPONSOR_REQUIRED');
     });
 
     it('preserves protected invariants for CA-600, CA-602, and CA-DEMO', async () => {
@@ -226,8 +283,8 @@ describe('Phase ORG-1 • Formation Evidence Reconciliation & Match Impact Previ
     });
   });
 
-  describe('4. Readiness Summary Endpoint', () => {
-    it('returns readiness summary for authenticated users', async () => {
+  describe('4. Readiness Summary Endpoint & Unverified Fact Enforcement', () => {
+    it('returns readiness summary asserting California AG and Grants.gov remain unverified', async () => {
       const res = await request(app)
         .get('/api/organization/readiness')
         .set('x-test-role', 'VIEWER');
@@ -237,6 +294,8 @@ describe('Phase ORG-1 • Formation Evidence Reconciliation & Match Impact Previ
       expect(res.body.data.organizationName).toBe('Project Thriveward');
       expect(res.body.data.irs501c3Status).toBe('NOT_VERIFIED');
       expect(res.body.data.samGovUeiStatus).toBe('NOT_REGISTERED');
+      expect(res.body.data.grantsGovStatus).toBe('NOT_REGISTERED');
+      expect(res.body.data.californiaCharitableRegistration).toBe('NOT_REGISTERED');
       expect(res.body.data.noticeText).toContain('California incorporation has been verified');
     });
   });
