@@ -71,19 +71,6 @@ app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
 });
 
 if (process.env.NODE_ENV !== 'test') {
-  try {
-    const schemaPath = path.resolve(__dirname, '../prisma/schema.prisma');
-    console.log(`🔄 Running database migrations (prisma migrate deploy with schema: ${schemaPath})...`);
-    execSync(`npx prisma migrate deploy --schema="${schemaPath}"`, {
-      stdio: 'inherit',
-      env: process.env,
-    });
-    console.log('✅ Database migrations applied successfully.');
-  } catch (migErr: any) {
-    console.error('❌ Database migration deployment failed:', migErr.message);
-    process.exit(1);
-  }
-
   app.listen(PORT, () => {
     console.log(`🚀 Thriveward Funding Intelligence Core API active on http://localhost:${PORT}`);
     console.log(`🔍 Health check: http://localhost:${PORT}/health`);
