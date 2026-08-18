@@ -444,13 +444,12 @@ describe('AI-1 — Structured AI Funding Analyst Complete Test Suite', () => {
   });
 
   describe('6. UI Label Contract & Governance Verification', () => {
-    it('verifies frontend App.tsx renders active phase label AI-1 • Structured AI Funding Analyst', () => {
+    it('verifies frontend App.tsx renders active phase label ORG-1 • FORMATION EVIDENCE & MATCH IMPACT PREVIEW', () => {
       const appTsxPath = path.resolve(__dirname, '../../../web/src/App.tsx');
       const appContent = fs.readFileSync(appTsxPath, 'utf8');
 
-      expect(appContent).toContain('AI-2A • Official Notice Ingestion & Citation Foundation');
+      expect(appContent).toContain('ORG-1 • FORMATION EVIDENCE & MATCH IMPACT PREVIEW');
       expect(appContent).not.toContain('Phase 1H • Secure Authentication, RBAC & Verified Human Attribution');
-
     });
 
     it('verifies frontend AiEvaluationPanel.tsx explicitly displays Model confidence', () => {

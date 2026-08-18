@@ -985,7 +985,7 @@ export function App() {
       {/* Header */}
       <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', marginBottom: '1.5rem' }}>
         <div>
-          <div className="header-badge">AI-2A • Official Notice Ingestion & Citation Foundation</div>
+          <div className="header-badge">ORG-1 • FORMATION EVIDENCE & MATCH IMPACT PREVIEW</div>
           <h1 className="brand-title">Thriveward Funding Intelligence</h1>
 
           <p className="brand-subtitle">
@@ -2309,7 +2309,7 @@ export function App() {
       </div>
 
       <footer>
-        <p>Thriveward Funding Intelligence Platform • AI-2A • Official Notice Ingestion & Citation Foundation • Project Thriveward</p>
+        <p>Thriveward Funding Intelligence Platform • ORG-1 • Formation Evidence & Match Impact Preview • Project Thriveward</p>
       </footer>
 
     </div>

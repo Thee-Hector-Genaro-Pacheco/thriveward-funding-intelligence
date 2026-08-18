@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { MatchImpactPreviewModal, MatchImpactItem } from './MatchImpactPreviewModal';
 
 interface OrganizationReadinessCardProps {
@@ -27,6 +28,26 @@ export const OrganizationReadinessCard: React.FC<OrganizationReadinessCardProps>
   const [impactError, setImpactError] = useState<string | null>(null);
 
   const isAdmin = currentUser?.role === 'ADMIN';
+
+  useEffect(() => {
+    if (!showConfirmModal) return;
+
+    const originalOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setShowConfirmModal(false);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = originalOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [showConfirmModal]);
 
   const fetchReadiness = async () => {
     setLoading(true);
@@ -144,7 +165,7 @@ export const OrganizationReadinessCard: React.FC<OrganizationReadinessCardProps>
               cursor: 'pointer',
             }}
           >
-            📊 Match Impact Preview (14 Opps)
+            📊 Match Impact Preview (14 Stored Candidates)
           </button>
 
           {isAdmin && (
@@ -195,8 +216,12 @@ export const OrganizationReadinessCard: React.FC<OrganizationReadinessCardProps>
               {isIncorporated ? 'VERIFIED' : 'PRE_INCORPORATION'}
             </div>
             {isIncorporated && (
-              <div style={{ fontSize: '0.7rem', color: '#cbd5e1', marginTop: '0.25rem', fontFamily: 'monospace' }}>
-                CA Entity #: B20260372748
+              <div style={{ fontSize: '0.7rem', color: '#cbd5e1', marginTop: '0.25rem', lineHeight: 1.4 }}>
+                <strong>CA Entity #:</strong> <code style={{ color: '#38bdf8' }}>B20260372748</code>
+                <br />
+                <strong>Articles Filed:</strong> August 15, 2026
+                <br />
+                <strong>Filing Approval Acknowledged:</strong> August 17, 2026
               </div>
             )}
           </div>
@@ -243,6 +268,16 @@ export const OrganizationReadinessCard: React.FC<OrganizationReadinessCardProps>
           </div>
 
           <div style={{ background: '#1e293b', padding: '0.75rem 1rem', borderRadius: '0.5rem', border: '1px solid var(--border-color)' }}>
+            <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>California AG Charitable Reg.</div>
+            <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#cbd5e1', marginTop: '0.2rem' }}>
+              NOT VERIFIED
+            </div>
+            <div style={{ fontSize: '0.7rem', color: '#64748b', marginTop: '0.25rem' }}>
+              Status: NOT_REGISTERED
+            </div>
+          </div>
+
+          <div style={{ background: '#1e293b', padding: '0.75rem 1rem', borderRadius: '0.5rem', border: '1px solid var(--border-color)' }}>
             <div style={{ fontSize: '0.75rem', color: '#94a3b8' }}>SAM.gov / UEI</div>
             <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#cbd5e1', marginTop: '0.2rem' }}>
               NOT REGISTERED
@@ -259,71 +294,109 @@ export const OrganizationReadinessCard: React.FC<OrganizationReadinessCardProps>
       )}
 
       {/* Confirmation Modal */}
-      {showConfirmModal && (
-        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.85)', backdropFilter: 'blur(4px)', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 1200, padding: '1rem' }}>
-          <div style={{ background: '#0f172a', border: '1px solid #38bdf8', borderRadius: '0.75rem', maxWidth: '550px', width: '100%', padding: '1.5rem', boxShadow: '0 20px 25px -5px rgba(0,0,0,0.5)' }}>
-            <h3 style={{ fontSize: '1.1rem', fontWeight: 700, color: '#f8fafc', marginBottom: '0.75rem' }}>
-              🏛️ Confirm Formation Evidence Reconciliation
-            </h3>
+      {showConfirmModal &&
+        createPortal(
+          <div
+            style={{
+              position: 'fixed',
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              width: '100vw',
+              height: '100vh',
+              backgroundColor: 'rgba(15, 23, 42, 0.85)',
+              backdropFilter: 'blur(6px)',
+              WebkitBackdropFilter: 'blur(6px)',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'center',
+              zIndex: 99999,
+              pointerEvents: 'auto',
+              padding: '1rem',
+            }}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="reconcile-modal-title"
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                background: '#0f172a',
+                border: '1px solid #38bdf8',
+                borderRadius: '0.75rem',
+                maxWidth: '550px',
+                width: '100%',
+                padding: '1.5rem',
+                boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
+              }}
+            >
+              <h3
+                id="reconcile-modal-title"
+                style={{ fontSize: '1.1rem', fontWeight: 700, color: '#f8fafc', marginBottom: '0.75rem' }}
+              >
+                🏛️ Confirm Formation Evidence Reconciliation
+              </h3>
 
-            <p style={{ fontSize: '0.85rem', color: '#cbd5e1', lineHeight: 1.5, marginBottom: '1rem' }}>
-              Reconciling official California Secretary of State formation evidence updates Project Thriveward's profile to <code style={{ color: '#34d399' }}>INCORPORATED</code>.
-            </p>
+              <p style={{ fontSize: '0.85rem', color: '#cbd5e1', lineHeight: 1.5, marginBottom: '1rem' }}>
+                Reconciling official California Secretary of State formation evidence updates Project Thriveward's profile to <code style={{ color: '#34d399' }}>INCORPORATED</code>.
+              </p>
 
-            <form onSubmit={handleReconcileSubmit}>
-              <div style={{ marginBottom: '1.25rem' }}>
-                <label style={{ display: 'block', fontSize: '0.78rem', color: '#94a3b8', marginBottom: '0.4rem' }}>
-                  Enter exact California Entity Number to confirm (<code>B20260372748</code>):
-                </label>
-                <input
-                  type="text"
-                  placeholder="B20260372748"
-                  value={inputEntityNumber}
-                  onChange={(e) => setInputEntityNumber(e.target.value)}
-                  required
-                  style={{
-                    width: '100%',
-                    background: '#0f172a',
-                    color: '#f8fafc',
-                    border: '1px solid var(--border-color)',
-                    padding: '0.5rem',
-                    borderRadius: '0.375rem',
-                    fontSize: '0.85rem',
-                    fontFamily: 'monospace',
-                  }}
-                />
-              </div>
+              <form onSubmit={handleReconcileSubmit}>
+                <div style={{ marginBottom: '1.25rem' }}>
+                  <label style={{ display: 'block', fontSize: '0.78rem', color: '#94a3b8', marginBottom: '0.4rem' }}>
+                    Enter exact California Entity Number to confirm (<code>B20260372748</code>):
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="B20260372748"
+                    value={inputEntityNumber}
+                    onChange={(e) => setInputEntityNumber(e.target.value)}
+                    required
+                    style={{
+                      width: '100%',
+                      background: '#0f172a',
+                      color: '#f8fafc',
+                      border: '1px solid var(--border-color)',
+                      padding: '0.5rem',
+                      borderRadius: '0.375rem',
+                      fontSize: '0.85rem',
+                      fontFamily: 'monospace',
+                    }}
+                  />
+                </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmModal(false)}
-                  disabled={reconciling}
-                  style={{ background: '#334155', color: '#f8fafc', border: 'none', padding: '0.5rem 1rem', borderRadius: '0.375rem', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer' }}
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={reconciling || inputEntityNumber.trim().toUpperCase() !== 'B20260372748'}
-                  style={{
-                    background: (reconciling || inputEntityNumber.trim().toUpperCase() !== 'B20260372748') ? '#475569' : 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
-                    color: '#ffffff',
-                    border: 'none',
-                    padding: '0.5rem 1.25rem',
-                    borderRadius: '0.375rem',
-                    fontWeight: 700,
-                    fontSize: '0.85rem',
-                    cursor: (reconciling || inputEntityNumber.trim().toUpperCase() !== 'B20260372748') ? 'not-allowed' : 'pointer',
-                  }}
-                >
-                  {reconciling ? '⏳ Reconciling...' : '🚀 Reconcile Formation'}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '0.75rem' }}>
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmModal(false)}
+                    disabled={reconciling}
+                    style={{ background: '#334155', color: '#f8fafc', border: 'none', padding: '0.5rem 1rem', borderRadius: '0.375rem', fontWeight: 600, fontSize: '0.85rem', cursor: 'pointer' }}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={reconciling || inputEntityNumber.trim().toUpperCase() !== 'B20260372748'}
+                    style={{
+                      background: (reconciling || inputEntityNumber.trim().toUpperCase() !== 'B20260372748') ? '#475569' : 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                      color: '#ffffff',
+                      border: 'none',
+                      padding: '0.5rem 1.25rem',
+                      borderRadius: '0.375rem',
+                      fontWeight: 700,
+                      fontSize: '0.85rem',
+                      cursor: (reconciling || inputEntityNumber.trim().toUpperCase() !== 'B20260372748') ? 'not-allowed' : 'pointer',
+                    }}
+                  >
+                    {reconciling ? '⏳ Reconciling...' : '🚀 Reconcile Formation'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>,
+          document.body
+        )}
 
       {/* Match Impact Modal */}
       <MatchImpactPreviewModal

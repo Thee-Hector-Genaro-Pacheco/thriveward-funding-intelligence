@@ -299,4 +299,56 @@ describe('Phase ORG-1 • Formation Evidence Reconciliation & Match Impact Previ
       expect(res.body.data.noticeText).toContain('California incorporation has been verified');
     });
   });
+
+  describe('5. Modal Stacking, Portal & Accessibility Contract', () => {
+    it('verifies MatchImpactPreviewModal source includes React portal, high z-index backdrop, scroll locking, and dialog accessibility attributes', async () => {
+      const fs = await import('fs');
+      const path = await import('path');
+      const modalPath = path.resolve(__dirname, '../../../web/src/components/MatchImpactPreviewModal.tsx');
+      const content = fs.readFileSync(modalPath, 'utf-8');
+
+      expect(content).toContain('createPortal(');
+      expect(content).toContain('document.body');
+      expect(content).toContain("overflow = 'hidden'");
+      expect(content).toContain('role="dialog"');
+      expect(content).toContain('aria-modal="true"');
+      expect(content).toContain('aria-labelledby="match-impact-title"');
+      expect(content).toContain("e.key === 'Escape'");
+      expect(content).toContain('zIndex: 99999');
+    });
+
+    it('verifies global header and footer display ORG-1 phase badges', async () => {
+      const fs = await import('fs');
+      const path = await import('path');
+      const appPath = path.resolve(__dirname, '../../../web/src/App.tsx');
+      const content = fs.readFileSync(appPath, 'utf-8');
+
+      expect(content).toContain('ORG-1 • FORMATION EVIDENCE & MATCH IMPACT PREVIEW');
+      expect(content).toContain('Thriveward Funding Intelligence Platform • ORG-1 • Formation Evidence & Match Impact Preview • Project Thriveward');
+    });
+
+    it('verifies OrganizationReadinessCard renders AG registration, evidence dates, and 14 Stored Candidates terminology', async () => {
+      const fs = await import('fs');
+      const path = await import('path');
+      const cardPath = path.resolve(__dirname, '../../../web/src/components/OrganizationReadinessCard.tsx');
+      const content = fs.readFileSync(cardPath, 'utf-8');
+
+      expect(content).toContain('California AG Charitable Reg.');
+      expect(content).toContain('Articles Filed:</strong> August 15, 2026');
+      expect(content).toContain('Filing Approval Acknowledged:</strong> August 17, 2026');
+      expect(content).toContain('Match Impact Preview (14 Stored Candidates)');
+    });
+
+    it('verifies MatchImpactPreviewModal renders separate sections for 11 official notices and 3 demo fixtures', async () => {
+      const fs = await import('fs');
+      const path = await import('path');
+      const modalPath = path.resolve(__dirname, '../../../web/src/components/MatchImpactPreviewModal.tsx');
+      const content = fs.readFileSync(modalPath, 'utf-8');
+
+      expect(content).toContain('Official Notice Candidates');
+      expect(content).toContain('Demo & Test Fixtures');
+      expect(content).toContain('EXCLUDED FROM LIVE OPPORTUNITY FEED');
+      expect(content).toContain('40% — FISCAL_SPONSOR_REQUIRED');
+    });
+  });
 });
