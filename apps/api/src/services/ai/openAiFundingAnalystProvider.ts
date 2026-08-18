@@ -81,7 +81,11 @@ export class OpenAiFundingAnalystProvider implements FundingAnalystProvider {
 
       // Re-validate against strict Zod schema & evidence references
       const validatedResult = FundingAnalysisResultSchema.parse(parsedResult);
-      EvidenceCatalogBuilder.validateEvidenceRefs(validatedResult, snapshot.evidenceCatalog);
+      if (snapshot.promptVersion === EvidenceCatalogBuilder.GROUNDED_PROMPT_VERSION) {
+        EvidenceCatalogBuilder.validateGroundedEvidenceRefs(validatedResult, snapshot.evidenceCatalog);
+      } else {
+        EvidenceCatalogBuilder.validateEvidenceRefs(validatedResult, snapshot.evidenceCatalog);
+      }
 
       return {
         result: validatedResult,

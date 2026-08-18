@@ -481,6 +481,141 @@ describe('Phase 2B — Document-Grounded Retrieval & Citation-Constrained Analys
         EvidenceCatalogBuilder.validateGroundedEvidenceRefs(mockResult, snapshot.evidenceCatalog);
       }).toThrow('cited invalid evidence reference IDs');
     });
+
+    it('rejects invalid evidence reference in strengths array', async () => {
+      const snapshot = EvidenceCatalogBuilder.buildGroundedSnapshot(testOppA, null, [
+        { citationRef: `DOC.${TEST_DOC_VER_ID_A}.PAGE.1`, queryLabel: 'ELIGIBILITY_AND_DISQUALIFYING_FACTORS', pageNumber: 1, rank: 1, cosineSimilarity: 0.9, excerptSnapshot: 'Text 1' },
+      ]);
+      const mockResult = {
+        alignmentScore: 80,
+        eligibility: 'POSSIBLY_ELIGIBLE' as const,
+        summary: 'Test summary with valid requirements.',
+        strengths: [{ text: 'Strength 1', evidenceRefs: ['INVALID.STRENGTH.REF'] }],
+        risks: [],
+        requirements: [{ requirement: 'Req 1', status: 'MET' as const, evidenceRefs: [`DOC.${TEST_DOC_VER_ID_A}.PAGE.1`] }],
+        recommendedNextAction: 'Proceed with proposal',
+        confidence: 0.9,
+        limitations: [],
+      };
+
+      expect(() => {
+        EvidenceCatalogBuilder.validateGroundedEvidenceRefs(mockResult, snapshot.evidenceCatalog);
+      }).toThrow('cited invalid evidence reference IDs: INVALID.STRENGTH.REF');
+    });
+
+    it('rejects invalid evidence reference in risks array', async () => {
+      const snapshot = EvidenceCatalogBuilder.buildGroundedSnapshot(testOppA, null, [
+        { citationRef: `DOC.${TEST_DOC_VER_ID_A}.PAGE.1`, queryLabel: 'ELIGIBILITY_AND_DISQUALIFYING_FACTORS', pageNumber: 1, rank: 1, cosineSimilarity: 0.9, excerptSnapshot: 'Text 1' },
+      ]);
+      const mockResult = {
+        alignmentScore: 80,
+        eligibility: 'POSSIBLY_ELIGIBLE' as const,
+        summary: 'Test summary with valid requirements.',
+        strengths: [],
+        risks: [{ text: 'Risk 1', evidenceRefs: ['INVALID.RISK.REF'] }],
+        requirements: [{ requirement: 'Req 1', status: 'MET' as const, evidenceRefs: [`DOC.${TEST_DOC_VER_ID_A}.PAGE.1`] }],
+        recommendedNextAction: 'Proceed with proposal',
+        confidence: 0.9,
+        limitations: [],
+      };
+
+      expect(() => {
+        EvidenceCatalogBuilder.validateGroundedEvidenceRefs(mockResult, snapshot.evidenceCatalog);
+      }).toThrow('cited invalid evidence reference IDs: INVALID.RISK.REF');
+    });
+
+    it('rejects document citation from another document version or opportunity', async () => {
+      const snapshot = EvidenceCatalogBuilder.buildGroundedSnapshot(testOppA, null, [
+        { citationRef: `DOC.${TEST_DOC_VER_ID_A}.PAGE.1`, queryLabel: 'ELIGIBILITY_AND_DISQUALIFYING_FACTORS', pageNumber: 1, rank: 1, cosineSimilarity: 0.9, excerptSnapshot: 'Text 1' },
+      ]);
+
+      const mockResult = {
+        alignmentScore: 80,
+        eligibility: 'POSSIBLY_ELIGIBLE' as const,
+        summary: 'Test summary with unretrieved document citation.',
+        strengths: [],
+        risks: [],
+        requirements: [
+          {
+            requirement: 'Cross-document citation attempt',
+            status: 'MET' as const,
+            evidenceRefs: [`DOC.${TEST_DOC_VER_ID_B}.PAGE.1`], // Doc B chunk (unretrieved for Opp A)
+          },
+        ],
+        recommendedNextAction: 'Proceed with proposal',
+        confidence: 0.9,
+        limitations: [],
+      };
+
+      expect(() => {
+        EvidenceCatalogBuilder.validateGroundedEvidenceRefs(mockResult, snapshot.evidenceCatalog);
+      }).toThrow(`cited invalid evidence reference IDs: DOC.${TEST_DOC_VER_ID_B}.PAGE.1`);
+    });
+
+    it('rejects grounded requirement that lacks retrieved DOC.* citation (only OPP/ORG refs)', async () => {
+      const snapshot = EvidenceCatalogBuilder.buildGroundedSnapshot(testOppA, null, [
+        { citationRef: `DOC.${TEST_DOC_VER_ID_A}.PAGE.1`, queryLabel: 'ELIGIBILITY_AND_DISQUALIFYING_FACTORS', pageNumber: 1, rank: 1, cosineSimilarity: 0.9, excerptSnapshot: 'Text 1' },
+      ]);
+
+      const mockResult = {
+        alignmentScore: 80,
+        eligibility: 'POSSIBLY_ELIGIBLE' as const,
+        summary: 'Test summary with requirement lacking DOC ref.',
+        strengths: [],
+        risks: [],
+        requirements: [
+          {
+            requirement: 'Requirement without document evidence',
+            status: 'MET' as const,
+            evidenceRefs: ['OPP.eligibility', 'ORG.taxExemptionStatus'], // OPP and ORG only, NO DOC.*
+          },
+        ],
+        recommendedNextAction: 'Proceed with proposal',
+        confidence: 0.9,
+        limitations: [],
+      };
+
+      expect(() => {
+        EvidenceCatalogBuilder.validateGroundedEvidenceRefs(mockResult, snapshot.evidenceCatalog);
+      }).toThrow('GROUNDED_CITATION_CONSTRAINT_VIOLATION');
+    });
+
+    it('atomicity check: validation failure leaves zero evaluation, retrieval run, or audit records', async () => {
+      // Create custom provider that returns an invalid citation
+      const badProvider = {
+        isConfigured: () => true,
+        getModelName: () => 'bad-mock',
+        analyze: async () => ({
+          result: {
+            alignmentScore: 50,
+            eligibility: 'INSUFFICIENT_INFORMATION' as const,
+            summary: 'Bad output test',
+            strengths: [],
+            risks: [],
+            requirements: [{ requirement: 'Bad Req', status: 'UNKNOWN' as const, evidenceRefs: ['INVALID_REF_99'] }],
+            recommendedNextAction: 'Stop',
+            confidence: 0.5,
+            limitations: [],
+          },
+          meta: { provider: 'BAD_MOCK', model: 'bad-mock', promptVersion: 'funding-analyst-document-grounded-v1' },
+        }),
+      };
+
+      await expect(
+        AiFundingAnalystService.generateGroundedEvaluation({
+          opportunityId: TEST_OPPORTUNITY_ID_A,
+          userId: adminUser.id,
+          idempotencyKey: 'atomic-failure-test-key-99',
+          provider: badProvider as any,
+        })
+      ).rejects.toThrow('cited invalid evidence reference IDs: INVALID_REF_99');
+
+      // Verify ZERO records created for this failed idempotency key
+      const evalCount = await prisma.aiEvaluation.count({
+        where: { idempotencyKey: 'atomic-failure-test-key-99' },
+      });
+      expect(evalCount).toBe(0);
+    });
   });
 
   describe('7. Grounded Evaluation Persistence & Health Metadata', () => {
