@@ -8,6 +8,7 @@ import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { AdminUserManagementModal } from './components/AdminUserManagementModal';
 import { AiEvaluationPanel, AiEvaluationData } from './components/AiEvaluationPanel';
 import { OfficialFundingDocuments } from './components/OfficialFundingDocuments';
+import { OrganizationReadinessCard } from './components/OrganizationReadinessCard';
 
 
 const formatEligibilityText = (val: string | undefined | null) => {
@@ -1761,10 +1762,13 @@ export function App() {
         </div>
       )}
 
-      {/* TAB 4: READINESS PLANS */}
+      {/* TAB 4: READINESS PLANS & FORMATION PROFILE */}
       {activePrimaryTab === 'READINESS' && (
-        <div className="card" style={{ marginTop: '1.5rem' }}>
-          <h2 className="section-title">📋 Opportunity Readiness Plans</h2>
+        <>
+          <OrganizationReadinessCard currentUser={currentUser} apiFetch={apiFetch} />
+
+          <div className="card" style={{ marginTop: '1.5rem' }}>
+            <h2 className="section-title">📋 Opportunity Readiness Plans</h2>
           <p style={{ color: 'var(--text-muted)', fontSize: '0.925rem', marginBottom: '1.25rem' }}>
             Actionable readiness plans transforming Potential Pathways into 90-day future-cycle preparation schedules.
           </p>
@@ -1826,6 +1830,7 @@ export function App() {
             </div>
           )}
         </div>
+        </>
       )}
 
       {/* TAB 5: FUNDING CALENDAR */}
