@@ -16,6 +16,13 @@
 
 ---
 
+## Implementation Status
+
+- **Phase AI-2B • Document-Grounded Retrieval & Citation-Constrained Analysis**: Live acceptance completed August 18, 2026.
+- **Feature Flag Safeguard**: Document grounding (`AI_DOCUMENT_GROUNDING_ENABLED`) and ingestion (`DOCUMENT_INGESTION_ENABLED`) are disabled by default and require explicit administrative enablement.
+
+---
+
 ## Workspace Structure
 
 ```
