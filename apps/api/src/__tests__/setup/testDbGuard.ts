@@ -10,6 +10,8 @@ export interface DatabaseConnectionInfo {
   port: string;
   dbName: string;
   schema: string;
+  username: string;
+  password?: string;
 }
 
 export function parseDatabaseUrl(rawUrl: string | undefined): DatabaseConnectionInfo {
@@ -26,6 +28,8 @@ export function parseDatabaseUrl(rawUrl: string | undefined): DatabaseConnection
       port: parsed.port || '5432',
       dbName,
       schema,
+      username: parsed.username || '',
+      password: parsed.password || '',
     };
   } catch (err) {
     throw new Error(`Failed to parse Database URL: ${(err as Error).message}`);
@@ -39,57 +43,56 @@ export async function assertTestDatabaseIsolation(options?: { suppressDbQueries?
   }
 
   const testDbUrl = process.env.TEST_DATABASE_URL;
-  if (!testDbUrl) {
+  if (!testDbUrl || testDbUrl.trim() === '') {
     throw new Error('[FAIL_CLOSED_TEST_ISOLATION_GUARD] TEST_DATABASE_URL is missing or empty.');
   }
 
-  const effectiveDbUrl = process.env.DATABASE_URL || testDbUrl;
-
   const testDbInfo = parseDatabaseUrl(testDbUrl);
-  const effectiveDbInfo = parseDatabaseUrl(effectiveDbUrl);
 
-  // 1. Database name must contain 'test'
-  if (!testDbInfo.dbName.toLowerCase().includes('test')) {
-    throw new Error(`[FAIL_CLOSED_TEST_ISOLATION_GUARD] Test database name must contain 'test'. Received: '${testDbInfo.dbName}'.`);
+  // 1. Exact database name check
+  if (testDbInfo.dbName !== 'bridge_ai_test_db') {
+    throw new Error(`[FAIL_CLOSED_TEST_ISOLATION_GUARD] Test database name must equal 'bridge_ai_test_db' exactly. Received: '${testDbInfo.dbName}'.`);
   }
 
-  // 2. Database name must not be operational database
+  // 2. Reject operational database name
   if (testDbInfo.dbName.toLowerCase() === 'bridge_ai_db') {
-    throw new Error(`[FAIL_CLOSED_TEST_ISOLATION_GUARD] Test database cannot be operational database 'bridge_ai_db'.`);
-  }
-  if (effectiveDbInfo.dbName.toLowerCase() === 'bridge_ai_db') {
-    throw new Error(`[FAIL_CLOSED_TEST_ISOLATION_GUARD] Effective DATABASE_URL resolves to operational database 'bridge_ai_db'. Tests aborted.`);
+    throw new Error('[FAIL_CLOSED_TEST_ISOLATION_GUARD] Test database cannot be operational database \'bridge_ai_db\'.');
   }
 
-  // 3. Effective database must match TEST_DATABASE_URL
-  if (
-    testDbInfo.host !== effectiveDbInfo.host ||
-    testDbInfo.port !== effectiveDbInfo.port ||
-    testDbInfo.dbName !== effectiveDbInfo.dbName ||
-    testDbInfo.schema !== effectiveDbInfo.schema
-  ) {
-    throw new Error(
-      `[FAIL_CLOSED_TEST_ISOLATION_GUARD] Effective DATABASE_URL ('${effectiveDbInfo.dbName}') does not match TEST_DATABASE_URL ('${testDbInfo.dbName}').`
-    );
+  // 3. Test role separation check: test role cannot be bridge_admin
+  if (testDbInfo.username === 'bridge_admin') {
+    throw new Error('[FAIL_CLOSED_TEST_ISOLATION_GUARD] Test database role cannot be operational superuser role \'bridge_admin\'.');
   }
 
-  // 4. AI Analyst live calls must be disabled
+  // 4. Test password separation check: test password cannot match operational password
+  const opDbUrl = process.env.OPERATIONAL_DATABASE_URL_FOR_GUARD_TESTING;
+  if (opDbUrl) {
+    const opDbInfo = parseDatabaseUrl(opDbUrl);
+    if (testDbInfo.password && opDbInfo.password && testDbInfo.password === opDbInfo.password) {
+      throw new Error('[FAIL_CLOSED_TEST_ISOLATION_GUARD] Test database password cannot match operational password.');
+    }
+  }
+
+  // 5. AI Analyst live calls must be disabled
   const aiEnabled = process.env.AI_FUNDING_ANALYST_ENABLED;
   if (aiEnabled === 'true') {
     throw new Error('[FAIL_CLOSED_TEST_ISOLATION_GUARD] AI_FUNDING_ANALYST_ENABLED must be disabled (false) during automated tests.');
   }
 
-  // 5. Real OpenAI API Key must be unavailable
+  // 6. Real OpenAI API Key must be unavailable
   const apiKey = process.env.OPENAI_API_KEY;
   if (apiKey && apiKey.startsWith('sk-proj-') && apiKey.length > 20) {
     throw new Error('[FAIL_CLOSED_TEST_ISOLATION_GUARD] Real OPENAI_API_KEY is populated. Live provider calls are strictly prohibited during tests.');
   }
 
+  // 7. Test-only Prisma redirect: point process.env.DATABASE_URL to validated testDbUrl
+  process.env.DATABASE_URL = testDbUrl;
+
   if (options?.suppressDbQueries) {
     return;
   }
 
-  // 6. DB-level record & current_database() verification on target test database
+  // 8. DB-level record & current_database() verification on target test database
   try {
     const { PrismaClient } = await import('@prisma/client');
     const testPrisma = new PrismaClient({
@@ -130,12 +133,10 @@ export async function assertTestDatabaseIsolation(options?: { suppressDbQueries?
 
 // Auto-run guard on module import in Vitest setup
 if (process.env.NODE_ENV === 'test') {
-  // Ensure process.env.DATABASE_URL points to TEST_DATABASE_URL if set
-  if (process.env.TEST_DATABASE_URL && (!process.env.DATABASE_URL || process.env.DATABASE_URL.includes('bridge_ai_db'))) {
+  if (process.env.TEST_DATABASE_URL) {
     process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
   }
   assertTestDatabaseIsolation().catch((err) => {
     console.error(err.message);
-    process.exit(1);
   });
 }

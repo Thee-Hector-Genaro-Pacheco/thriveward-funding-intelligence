@@ -9,10 +9,6 @@ const REVIEW_TOKEN = 'bridge_secret_review_token_change_in_production_2026';
 
 describe('Phase 1E — Candidate Seed & Discovery Provenance Test Suite', () => {
   beforeAll(async () => {
-    process.env.DATABASE_URL =
-      process.env.TEST_DATABASE_URL ||
-      process.env.DATABASE_URL ||
-      'postgresql://bridge_admin:bridge_secure_pass_2026@localhost:5432/bridge_ai_test_db?schema=public';
     process.env.BRIDGE_REVIEW_TOKEN = REVIEW_TOKEN;
 
     await SponsorDiscoveryService.runDiscovery();

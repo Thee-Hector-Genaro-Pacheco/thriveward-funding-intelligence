@@ -7,7 +7,7 @@ services:
     restart: always
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-bridge_admin}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-bridge_secure_pass_2026}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD environment variable is required}
       POSTGRES_DB: ${POSTGRES_DB:-bridge_ai_db}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
@@ -31,7 +31,7 @@ services:
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       PORT: 4000
-      DATABASE_URL: postgresql://${POSTGRES_USER:-bridge_admin}:${POSTGRES_PASSWORD:-bridge_secure_pass_2026}@postgres:5432/${POSTGRES_DB:-bridge_ai_db}?schema=public
+      DATABASE_URL: postgresql://${POSTGRES_USER:-bridge_admin}:${POSTGRES_PASSWORD:?POSTGRES_PASSWORD environment variable is required}@postgres:5432/${POSTGRES_DB:-bridge_ai_db}?schema=public
       FUNDING_AGENT_URL: http://funding-agent:8000
       AI_FUNDING_ANALYST_ENABLED: ${AI_FUNDING_ANALYST_ENABLED:-false}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
