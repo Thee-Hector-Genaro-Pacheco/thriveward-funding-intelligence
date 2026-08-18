@@ -81,6 +81,19 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
 
   const isViewer = currentUser?.role === 'VIEWER';
   const isIngestionDisabled = isIngestionEnabled === false || Boolean(error && (error.includes('DOCUMENT_INGESTION_NOT_CONFIGURED') || error.includes('FEATURE_DISABLED')));
+  const isIndexingDisabled = !isGroundingEnabled || isIngestionDisabled;
+
+  const getValidChunkCount = (idxStatus: any): number | null => {
+    if (!idxStatus) return null;
+    const rawCount = typeof idxStatus.chunkCount === 'number'
+      ? idxStatus.chunkCount
+      : (typeof idxStatus.index?.chunkCount === 'number' ? idxStatus.index.chunkCount : null);
+
+    if (rawCount !== null && typeof rawCount === 'number' && Number.isFinite(rawCount) && rawCount >= 0) {
+      return rawCount;
+    }
+    return null;
+  };
 
   const fetchIndexStatus = async (versionId: string) => {
     try {
@@ -124,6 +137,12 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
   };
 
   const handleStartIndexing = async (versionId: string) => {
+    if (isIndexingDisabled) {
+      setError('Re-indexing is unavailable because server-side document ingestion is disabled.');
+      setConfirmIndexingVerId(null);
+      return;
+    }
+
     setIndexingInProg(true);
     setError(null);
     try {
@@ -305,7 +324,7 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
 
       {/* Mandatory Disclaimer Box */}
       <div style={{ padding: '0.75rem 1rem', background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: '0.5rem', marginBottom: '1.25rem', fontSize: '0.82rem', color: '#94a3b8', lineHeight: 1.5 }}>
-        ℹ️ <strong>Document Evidence Notice:</strong> Extracted document text is preserved for evidence review and future grounded analysis. Verify critical requirements against the original official PDF. This phase does not perform AI retrieval or eligibility analysis.
+        ℹ️ <strong>Document Evidence Notice:</strong> Extracted document text and indexed retrieval evidence are available for grounded human review. Verify critical requirements against the original official PDF. New document ingestion and re-indexing are currently disabled; existing indexed evidence remains available.
       </div>
 
       {error && !isIngestionDisabled && (
@@ -440,8 +459,6 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
         </form>
       )}
 
-
-
       {/* Document List */}
       {loading ? (
         <div style={{ textAlign: 'center', padding: '1.5rem', color: '#94a3b8', fontSize: '0.85rem' }}>Loading funding documents...</div>
@@ -453,6 +470,8 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
         <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
           {documents.map((doc) => {
             const latestVersion = doc.versions[0];
+            const idxStatus = indexStatuses[latestVersion?.id];
+            const chunkCount = getValidChunkCount(idxStatus);
             return (
               <div key={doc.id} style={{ background: '#1e293b', border: '1px solid var(--border-color)', borderRadius: '0.5rem', padding: '1rem' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.5rem', marginBottom: '0.5rem' }}>
@@ -485,31 +504,38 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
                               padding: '0.2rem 0.5rem',
                               borderRadius: '0.25rem',
                               fontWeight: 700,
-                              background: indexStatuses[latestVersion.id]?.status === 'READY' ? '#15803d' : indexStatuses[latestVersion.id]?.status === 'PROCESSING' ? '#854d0e' : indexStatuses[latestVersion.id]?.status === 'FAILED' ? '#9f1239' : '#334155',
-                              color: indexStatuses[latestVersion.id]?.status === 'READY' ? '#bbf7d0' : indexStatuses[latestVersion.id]?.status === 'PROCESSING' ? '#fef08a' : indexStatuses[latestVersion.id]?.status === 'FAILED' ? '#fecdd3' : '#cbd5e1',
+                              background: idxStatus?.status === 'READY' ? '#15803d' : idxStatus?.status === 'PROCESSING' ? '#854d0e' : idxStatus?.status === 'FAILED' ? '#9f1239' : '#334155',
+                              color: idxStatus?.status === 'READY' ? '#bbf7d0' : idxStatus?.status === 'PROCESSING' ? '#fef08a' : idxStatus?.status === 'FAILED' ? '#fecdd3' : '#cbd5e1',
                               border: '1px solid rgba(255,255,255,0.1)',
                             }}
                           >
-                            INDEX: {indexStatuses[latestVersion.id]?.status || 'NOT_INDEXED'}
-                            {indexStatuses[latestVersion.id]?.status === 'READY' && ` (${indexStatuses[latestVersion.id]?.chunkCount} chunks)`}
+                            INDEX: {idxStatus?.status || 'NOT_INDEXED'}
+                            {idxStatus?.status === 'READY' && chunkCount !== null && ` (${chunkCount} chunks)`}
                           </span>
 
                           {!isViewer && (
                             <button
-                              onClick={() => setConfirmIndexingVerId(latestVersion.id)}
-                              disabled={indexingInProg}
+                              onClick={() => {
+                                if (isIndexingDisabled) return;
+                                setConfirmIndexingVerId(latestVersion.id);
+                              }}
+                              disabled={indexingInProg || isIndexingDisabled}
+                              aria-disabled={indexingInProg || isIndexingDisabled}
+                              title={isIndexingDisabled ? 'Re-indexing is unavailable because server-side document ingestion is disabled.' : undefined}
                               style={{
-                                background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                                background: (indexingInProg || isIndexingDisabled) ? '#475569' : 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
                                 color: '#ffffff',
                                 border: 'none',
                                 padding: '0.3rem 0.65rem',
                                 borderRadius: '0.25rem',
                                 fontSize: '0.75rem',
                                 fontWeight: 700,
-                                cursor: indexingInProg ? 'not-allowed' : 'pointer',
+                                cursor: (indexingInProg || isIndexingDisabled) ? 'not-allowed' : 'pointer',
+                                opacity: isIndexingDisabled ? 0.6 : 1,
+                                pointerEvents: isIndexingDisabled ? 'none' : 'auto',
                               }}
                             >
-                              {indexStatuses[latestVersion.id]?.status === 'READY' ? '🔄 Re-index Evidence' : '🧠 Prepare Grounded Evidence'}
+                              {isIndexingDisabled ? '🔒 Re-indexing Unavailable' : idxStatus?.status === 'READY' ? '🔄 Re-index Evidence' : '🧠 Prepare Grounded Evidence'}
                             </button>
                           )}
                         </div>
@@ -538,14 +564,15 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
                   <div style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', marginBottom: '0.4rem' }}>Version History ({doc.versions.length})</div>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '0.4rem' }}>
                     {doc.versions.map((ver) => {
-                      const idxStatus = indexStatuses[ver.id];
+                      const verIdxStatus = indexStatuses[ver.id];
+                      const verChunkCount = getValidChunkCount(verIdxStatus);
                       return (
                         <div key={ver.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.5rem', fontSize: '0.75rem', color: '#cbd5e1', background: 'rgba(15, 23, 42, 0.4)', padding: '0.4rem 0.6rem', borderRadius: '0.25rem' }}>
                           <div>
                             <strong>v{ver.version}</strong> — {ver.originalFileName} ({formatBytes(ver.sizeBytes)}) | {ver.pageCount} pages | Extraction: <code>{ver.extractionVersion}</code>
-                            {idxStatus?.status === 'READY' && (
+                            {verIdxStatus?.status === 'READY' && (
                               <span style={{ marginLeft: '0.5rem', color: '#38bdf8', fontWeight: 600 }}>
-                                • Vector Index: {idxStatus.embeddingModel} ({idxStatus.embeddingDimensions}d, {idxStatus.chunkCount} chunks)
+                                • Vector Index: {verIdxStatus.embeddingModel || verIdxStatus.index?.embeddingModel || 'text-embedding-3-small'} ({verIdxStatus.embeddingDimensions || verIdxStatus.index?.embeddingDimensions || 1536}d{verChunkCount !== null ? `, ${verChunkCount} chunks` : ''})
                               </span>
                             )}
                           </div>

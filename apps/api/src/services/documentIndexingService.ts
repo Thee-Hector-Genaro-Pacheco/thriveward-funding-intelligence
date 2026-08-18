@@ -373,6 +373,9 @@ export class DocumentIndexingService {
     return {
       indexed: latestIndex.status === 'READY',
       status: latestIndex.status,
+      chunkCount: latestIndex.chunkCount,
+      embeddingModel: latestIndex.embeddingModel,
+      embeddingDimensions: latestIndex.embeddingDimensions,
       index: {
         id: latestIndex.id,
         documentVersionId: latestIndex.documentVersionId,

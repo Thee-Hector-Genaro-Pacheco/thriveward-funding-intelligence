@@ -266,6 +266,12 @@ describe('Phase 2B — Document-Grounded Retrieval & Citation-Constrained Analys
         .set('x-test-role', 'VIEWER');
       expect(statusRes.status).toBe(200);
       expect(statusRes.body.success).toBe(true);
+      expect(statusRes.body.data.status).toBeDefined();
+      if (statusRes.body.data.status === 'READY') {
+        expect(typeof statusRes.body.data.chunkCount).toBe('number');
+        expect(Number.isFinite(statusRes.body.data.chunkCount)).toBe(true);
+        expect(statusRes.body.data.chunkCount).toBeGreaterThanOrEqual(0);
+      }
     });
   });
 
