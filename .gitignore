@@ -23,6 +23,7 @@ env/
 *.sqlite-journal
 prisma/migrations/
 .pgdata/
+apps/api/tmp_test_documents/
 
 
 # Logs

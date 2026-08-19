@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { GroundedEvidenceModal, RetrievedEvidenceData } from './GroundedEvidenceModal';
+import { formatProviderModelAttribution } from '../utils/aiAttribution';
+import { calculateRetrievalMetrics } from '../utils/retrievalMetrics';
 
 export interface AiEvaluationData {
   id: string;
@@ -17,8 +19,8 @@ export interface AiEvaluationData {
   limitations: string[];
   evidenceSnapshot: Array<{ id: string; category: string; label: string; value: string }>;
   inputSnapshot: any;
-  provider: string;
-  model: string;
+  provider?: string;
+  model?: string;
   promptVersion: string;
   createdAt: string;
   reviewedByUserId?: string | null;
@@ -68,6 +70,9 @@ export const AiEvaluationPanel: React.FC<AiEvaluationPanelProps> = ({
 
   const currentEval = evaluations[selectedVersionIndex] || null;
   const isViewer = currentUser?.role === 'VIEWER';
+
+  const attribution = formatProviderModelAttribution(currentEval?.provider, currentEval?.model);
+  const metrics = calculateRetrievalMetrics(retrievedEvidenceData?.evidenceItems);
 
   const handleReviewSubmit = async (decision: 'APPROVED' | 'REJECTED') => {
     if (!currentEval) return;
@@ -127,7 +132,7 @@ export const AiEvaluationPanel: React.FC<AiEvaluationPanelProps> = ({
               {isGroundedEval ? 'AI-2B DOCUMENT-GROUNDED ANALYST' : 'AI-1 STRUCTURED ANALYST'}
             </span>
             <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-              Model: <strong style={{ color: '#e2e8f0' }}>{currentEval?.model || 'gpt-5.6-luna'}</strong> (Prompt: {currentEval?.promptVersion || 'funding-analyst-v1'})
+              Provider: <strong style={{ color: '#e2e8f0' }}>{attribution.provider}</strong> | Model: <strong style={{ color: '#e2e8f0' }}>{attribution.model}</strong> (Prompt: {currentEval?.promptVersion || 'funding-analyst-v1'})
             </span>
           </div>
           <h3 style={{ fontSize: '1.15rem', fontWeight: 700, color: '#f8fafc', marginTop: '0.35rem' }}>
@@ -241,7 +246,7 @@ export const AiEvaluationPanel: React.FC<AiEvaluationPanelProps> = ({
                     cursor: 'pointer',
                   }}
                 >
-                  📜 View Retrieved Evidence ({retrievedEvidenceData?.evidenceItems.length || 'Ready'})
+                  📜 View Retrieved Evidence {retrievedEvidenceData?.evidenceItems ? `(${metrics.displayText})` : '(Ready)'}
                 </button>
               )}
 

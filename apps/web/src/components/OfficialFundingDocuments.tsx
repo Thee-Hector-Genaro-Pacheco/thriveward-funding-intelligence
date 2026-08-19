@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { deriveCapabilityNotice } from '../utils/capabilityNotice';
 
 export interface FundingDocumentVersion {
   id: string;
@@ -324,7 +325,8 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
 
       {/* Mandatory Disclaimer Box */}
       <div style={{ padding: '0.75rem 1rem', background: 'rgba(30, 41, 59, 0.7)', border: '1px solid rgba(56, 189, 248, 0.25)', borderRadius: '0.5rem', marginBottom: '1.25rem', fontSize: '0.82rem', color: '#94a3b8', lineHeight: 1.5 }}>
-        ℹ️ <strong>Document Evidence Notice:</strong> Extracted document text and indexed retrieval evidence are available for grounded human review. Verify critical requirements against the original official PDF. New document ingestion and re-indexing are currently disabled; existing indexed evidence remains available.
+        ℹ️ <strong>Document Evidence Notice:</strong> Extracted document text and indexed retrieval evidence are available for grounded human review.{' '}
+        <span>{deriveCapabilityNotice(isIngestionEnabled, isGroundingEnabled)}</span>
       </div>
 
       {error && !isIngestionDisabled && (

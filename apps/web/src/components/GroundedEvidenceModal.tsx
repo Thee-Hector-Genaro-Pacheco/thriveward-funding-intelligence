@@ -1,4 +1,5 @@
 import React from 'react';
+import { calculateRetrievalMetrics } from '../utils/retrievalMetrics';
 
 export interface RetrievedEvidenceItem {
   id: string;
@@ -180,9 +181,9 @@ export const GroundedEvidenceModal: React.FC<GroundedEvidenceModalProps> = ({
                   </strong>
                 </div>
                 <div>
-                  <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block' }}>EVIDENCE CHUNKS</span>
+                  <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block' }}>RETRIEVAL METRICS</span>
                   <strong style={{ fontSize: '0.85rem', color: '#34d399' }}>
-                    {evidenceData.evidenceItems.length} chunks
+                    {calculateRetrievalMetrics(evidenceData.evidenceItems).displayText}
                   </strong>
                 </div>
               </div>

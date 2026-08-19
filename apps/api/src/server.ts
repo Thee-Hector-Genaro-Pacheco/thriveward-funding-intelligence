@@ -15,8 +15,10 @@ import { documentIndexingRouter } from './routes/documentIndexingRoutes';
 import { organizationRouter } from './routes/organizationRoutes';
 import { requireAuth, csrfProtection } from './middleware/authMiddleware';
 import { BRIDGE_FORWARD_PROFILE } from '@thriveward/shared';
+import { initAiAcceptanceModeGuard } from './services/ai/aiAcceptanceModeGuard';
 
 dotenv.config();
+initAiAcceptanceModeGuard();
 
 const app: Express = express();
 const PORT = process.env.PORT || 4000;

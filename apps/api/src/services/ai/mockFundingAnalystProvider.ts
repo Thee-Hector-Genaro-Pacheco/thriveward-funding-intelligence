@@ -21,8 +21,8 @@ export class MockFundingAnalystProvider implements FundingAnalystProvider {
           evidenceRefs: ['OPP.title', 'ORG.mission', 'ORG.servicePopulation'],
         },
         {
-          text: 'Core training program Control to Code aligns with workforce technology objectives.',
-          evidenceRefs: ['OPP.agency', 'ORG.programs'],
+          text: 'The organization profile contains a documented mission and service population for comparison with this opportunity.',
+          evidenceRefs: ['OPP.title', 'ORG.mission', 'ORG.servicePopulation'],
         },
       ],
       risks: [
@@ -59,6 +59,7 @@ export class MockFundingAnalystProvider implements FundingAnalystProvider {
       limitations: [
         'Analysis based solely on static DB organization profile and opportunity text.',
         'Pre-incorporation status requires third-party fiscal sponsor execution.',
+        'Deterministic acceptance/test output; no live AI provider call occurred.',
       ],
     };
 
@@ -90,8 +91,8 @@ export class MockFundingAnalystProvider implements FundingAnalystProvider {
     return {
       result,
       meta: {
-        provider: 'MOCK_OPENAI',
-        model: 'gpt-5.6-luna',
+        provider: 'DETERMINISTIC_MOCK',
+        model: 'deterministic-mock-v1',
         promptVersion: snapshot.promptVersion || EvidenceCatalogBuilder.PROMPT_VERSION,
         providerResponseId: `mock-resp-${Date.now()}`,
         inputTokenCount: 420,

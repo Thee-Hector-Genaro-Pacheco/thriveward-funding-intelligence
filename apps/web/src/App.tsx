@@ -592,6 +592,8 @@ export function App() {
           pythonAgentStatus: agentUp ? 'UP' : agentStatusRaw.includes('UNREACHABLE') ? 'UNREACHABLE' : 'DOWN',
           overallStatus: overall,
           aiAnalyst: data.aiAnalyst,
+          documentIngestion: data.documentIngestion,
+          documentGrounding: data.documentGrounding,
         });
       } else {
         setHealth({ apiStatus: 'DOWN', databaseStatus: 'DOWN', pythonAgentStatus: 'DOWN', overallStatus: 'DOWN' });
