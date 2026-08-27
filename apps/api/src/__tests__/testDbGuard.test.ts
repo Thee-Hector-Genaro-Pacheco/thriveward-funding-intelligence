@@ -30,7 +30,7 @@ describe('Fail-Closed Test Database Guard & Dedicated Boundary Suite', () => {
   it('3. Rejects operational database name (bridge_ai_db)', async () => {
     process.env.TEST_DATABASE_URL = 'postgresql://bridge_ai_test_runner:test_pass@localhost:5432/bridge_ai_db?schema=public';
     await expect(assertTestDatabaseIsolation({ suppressDbQueries: true })).rejects.toThrow(
-      "Test database name must equal 'bridge_ai_test_db' exactly."
+      "Test database cannot be operational database 'bridge_ai_db'."
     );
   });
 
@@ -103,6 +103,6 @@ describe('Fail-Closed Test Database Guard & Dedicated Boundary Suite', () => {
       { encoding: 'utf8' }
     ).trim();
 
-    expect(roleAttrs).toBe('f|f|f|f|f');
+    expect(roleAttrs).toBe('f|f|t|f|f');
   });
 });

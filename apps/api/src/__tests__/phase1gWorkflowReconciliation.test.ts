@@ -3,11 +3,13 @@ import request from 'supertest';
 import { app } from '../server';
 import { prisma } from '../lib/prisma';
 import { StrategicPartnerService } from '../services/strategicPartnerService';
+import { OutreachTrackingService } from '../services/outreachTrackingService';
 import { PartnerMatchStatus } from '@prisma/client';
 
 describe('Phase 1G — CA-600 Workflow Status Source-of-Truth Reconciliation & Hardening', () => {
-  let ca600Id: string;
-  let ca602Id: string;
+  let ca600PartnerId: string;
+  let ca602PartnerId: string;
+  let ca600EngagementId: string;
 
   beforeAll(async () => {
     // 1. Ensure seeded partners exist & legacy statuses are reconciled via one-time data repair
@@ -17,12 +19,17 @@ describe('Phase 1G — CA-600 Workflow Status Source-of-Truth Reconciliation & H
     const ca600 = await prisma.strategicPartnerCandidate.findFirst({
       where: { cocNumber: 'CA-600' },
     });
-    ca600Id = ca600!.id;
+    ca600PartnerId = ca600!.id;
 
     const ca602 = await prisma.strategicPartnerCandidate.findFirst({
       where: { cocNumber: 'CA-602' },
     });
-    ca602Id = ca602!.id;
+    ca602PartnerId = ca602!.id;
+
+    const engagement = await OutreachTrackingService.getOrCreateEngagement({
+      partnerId: ca600PartnerId,
+    });
+    ca600EngagementId = engagement.id;
   });
 
   describe('1. Unified Canonical Status Source & Reconciliation', () => {
@@ -38,9 +45,9 @@ describe('Phase 1G — CA-600 Workflow Status Source-of-Truth Reconciliation & H
       expect(ca600Card.status).toBe('RESEARCH_REQUIRED');
       expect(ca600Card.opportunityMatches[0].status).toBe('RESEARCH_REQUIRED');
 
-      // Check Outreach Workspace engagement endpoint
+      // Check Outreach Workspace engagement endpoint by partner ID
       const engRes = await request(app)
-        .get(`/api/outreach/engagements/${ca600Id}`)
+        .get(`/api/outreach/engagements/${ca600PartnerId}`)
         .expect(200);
 
       expect(engRes.body.data.currentStatus).toBe('RESEARCH_REQUIRED');
@@ -48,7 +55,7 @@ describe('Phase 1G — CA-600 Workflow Status Source-of-Truth Reconciliation & H
 
     it('reconciles legacy POSSIBLE_MATCH without human history to RESEARCH_REQUIRED with SYSTEM_DATA_REPAIR classification', async () => {
       const ca600 = await prisma.strategicPartnerCandidate.findUnique({
-        where: { id: ca600Id },
+        where: { id: ca600PartnerId },
         include: { opportunityMatches: true, engagements: { include: { workflowHistory: true } } },
       });
 
@@ -142,7 +149,7 @@ describe('Phase 1G — CA-600 Workflow Status Source-of-Truth Reconciliation & H
   describe('3. Atomic Human Transitions and Authorization Invariants', () => {
     it('system repair event cannot authorize subsequent workflow stages (requires human action)', async () => {
       const engRes = await request(app)
-        .get(`/api/outreach/engagements/${ca600Id}`)
+        .get(`/api/outreach/engagements/${ca600PartnerId}`)
         .expect(200);
       const engagementId = engRes.body.data.id;
 
@@ -165,7 +172,7 @@ describe('Phase 1G — CA-600 Workflow Status Source-of-Truth Reconciliation & H
 
     it('failed status transition produces zero database mutations', async () => {
       const engRes = await request(app)
-        .get(`/api/outreach/engagements/${ca600Id}`)
+        .get(`/api/outreach/engagements/${ca600PartnerId}`)
         .expect(200);
       const engagementId = engRes.body.data.id;
 

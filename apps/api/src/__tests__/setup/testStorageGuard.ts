@@ -18,8 +18,11 @@ export function createIsolatedTestStorageDir(): string {
 
 export async function assertTestDatabaseIsolation(): Promise<void> {
   const dbRes = await prisma.$queryRawUnsafe<{ current_database: string }[]>('SELECT current_database()');
-  const currentDb = dbRes[0]?.current_database;
-  if (currentDb !== 'bridge_ai_test_db') {
-    throw new Error(`[FAIL_CLOSED_TEST_ISOLATION_GUARD] Test suite refused execution against non-test database '${currentDb}'. Required: 'bridge_ai_test_db'`);
+  const currentDb = dbRes[0]?.current_database || '';
+  if (currentDb === 'bridge_ai_db') {
+    throw new Error(`[FAIL_CLOSED_TEST_ISOLATION_GUARD] Test suite refused execution against operational database '${currentDb}'.`);
+  }
+  if (!currentDb.startsWith('bridge_ai_vitest_') && currentDb !== 'bridge_ai_test_db') {
+    throw new Error(`[FAIL_CLOSED_TEST_ISOLATION_GUARD] Test suite refused execution against non-test database '${currentDb}'.`);
   }
 }

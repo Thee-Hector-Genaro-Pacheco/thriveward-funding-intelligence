@@ -1,5 +1,6 @@
 import { URL } from 'url';
 import dotenv from 'dotenv';
+import { beforeAll } from 'vitest';
 
 // Pre-load .env environment
 dotenv.config({ path: '../../.env' });
@@ -49,22 +50,21 @@ export async function assertTestDatabaseIsolation(options?: { suppressDbQueries?
 
   const testDbInfo = parseDatabaseUrl(testDbUrl);
 
-  // 1. Exact database name check
-  if (testDbInfo.dbName !== 'bridge_ai_test_db') {
-    throw new Error(`[FAIL_CLOSED_TEST_ISOLATION_GUARD] Test database name must equal 'bridge_ai_test_db' exactly. Received: '${testDbInfo.dbName}'.`);
-  }
-
-  // 2. Reject operational database name
+  // 1. Database name isolation check: Reject operational database bridge_ai_db
   if (testDbInfo.dbName.toLowerCase() === 'bridge_ai_db') {
     throw new Error('[FAIL_CLOSED_TEST_ISOLATION_GUARD] Test database cannot be operational database \'bridge_ai_db\'.');
   }
 
-  // 3. Test role separation check: test role cannot be bridge_admin
+  if (!testDbInfo.dbName.startsWith('bridge_ai_vitest_') && testDbInfo.dbName !== 'bridge_ai_test_db') {
+    throw new Error(`[FAIL_CLOSED_TEST_ISOLATION_GUARD] Test database name must equal 'bridge_ai_test_db' or start with 'bridge_ai_vitest_'. Received: '${testDbInfo.dbName}'.`);
+  }
+
+  // 2. Test role separation check: test role cannot be bridge_admin
   if (testDbInfo.username === 'bridge_admin') {
     throw new Error('[FAIL_CLOSED_TEST_ISOLATION_GUARD] Test database role cannot be operational superuser role \'bridge_admin\'.');
   }
 
-  // 4. Test password separation check: test password cannot match operational password
+  // 3. Test password separation check: test password cannot match operational password
   const opDbUrl = process.env.OPERATIONAL_DATABASE_URL_FOR_GUARD_TESTING;
   if (opDbUrl) {
     const opDbInfo = parseDatabaseUrl(opDbUrl);
@@ -73,26 +73,26 @@ export async function assertTestDatabaseIsolation(options?: { suppressDbQueries?
     }
   }
 
-  // 5. AI Analyst live calls must be disabled
+  // 4. AI Analyst live calls must be disabled
   const aiEnabled = process.env.AI_FUNDING_ANALYST_ENABLED;
   if (aiEnabled === 'true') {
     throw new Error('[FAIL_CLOSED_TEST_ISOLATION_GUARD] AI_FUNDING_ANALYST_ENABLED must be disabled (false) during automated tests.');
   }
 
-  // 6. Real OpenAI API Key must be unavailable
+  // 5. Real OpenAI API Key must be unavailable
   const apiKey = process.env.OPENAI_API_KEY;
   if (apiKey && apiKey.startsWith('sk-proj-') && apiKey.length > 20) {
     throw new Error('[FAIL_CLOSED_TEST_ISOLATION_GUARD] Real OPENAI_API_KEY is populated. Live provider calls are strictly prohibited during tests.');
   }
 
-  // 7. Test-only Prisma redirect: point process.env.DATABASE_URL to validated testDbUrl
+  // 6. Test-only Prisma redirect: point process.env.DATABASE_URL to validated testDbUrl
   process.env.DATABASE_URL = testDbUrl;
 
   if (options?.suppressDbQueries) {
     return;
   }
 
-  // 8. DB-level record & current_database() verification on target test database
+  // 7. DB-level record & current_database() verification on target test database
   try {
     const { PrismaClient } = await import('@prisma/client');
     const testPrisma = new PrismaClient({
@@ -101,9 +101,9 @@ export async function assertTestDatabaseIsolation(options?: { suppressDbQueries?
 
     const dbRes: any = await testPrisma.$queryRawUnsafe('SELECT current_database()');
     const activeDbName = dbRes[0]?.current_database;
-    if (activeDbName !== 'bridge_ai_test_db') {
+    if (!activeDbName.startsWith('bridge_ai_vitest_') && activeDbName !== 'bridge_ai_test_db') {
       await testPrisma.$disconnect();
-      throw new Error(`[FAIL_CLOSED_TEST_ISOLATION_GUARD] current_database() must equal 'bridge_ai_test_db' exactly. Received: '${activeDbName}'.`);
+      throw new Error(`[FAIL_CLOSED_TEST_ISOLATION_GUARD] current_database() must equal 'bridge_ai_test_db' or start with 'bridge_ai_vitest_'. Received: '${activeDbName}'.`);
     }
 
     const liveEval = await testPrisma.aiEvaluation.findUnique({
@@ -131,12 +131,12 @@ export async function assertTestDatabaseIsolation(options?: { suppressDbQueries?
   }
 }
 
-// Auto-run guard on module import in Vitest setup
 if (process.env.NODE_ENV === 'test') {
   if (process.env.TEST_DATABASE_URL) {
     process.env.DATABASE_URL = process.env.TEST_DATABASE_URL;
   }
-  assertTestDatabaseIsolation().catch((err) => {
-    console.error(err.message);
+
+  beforeAll(async () => {
+    await assertTestDatabaseIsolation();
   });
 }

@@ -111,6 +111,10 @@ describe('Phase 1D — Runtime Contract, Proxy & Migration Audit Suite', () => {
     });
 
     it('verifies deterministic seed executes idempotently without duplicate records', async () => {
+      const orgBefore = await prisma.organizationProfile.findFirst({
+        where: { name: 'Project Thriveward' },
+      });
+
       const countBefore = await prisma.fundingOpportunity.count({ where: { isDemo: true } });
       expect(countBefore).toBeGreaterThanOrEqual(3);
 
@@ -119,6 +123,20 @@ describe('Phase 1D — Runtime Contract, Proxy & Migration Audit Suite', () => {
 
       const countAfter = await prisma.fundingOpportunity.count({ where: { isDemo: true } });
       expect(countAfter).toBe(countBefore);
+
+      if (orgBefore) {
+        await prisma.organizationProfile.update({
+          where: { id: orgBefore.id },
+          data: {
+            status: orgBefore.status,
+            taxStatus: orgBefore.taxStatus,
+            limitations: orgBefore.limitations,
+            primaryPopulations: orgBefore.primaryPopulations,
+            primaryOutcome: orgBefore.primaryOutcome,
+            coreModel: orgBefore.coreModel,
+          },
+        });
+      }
     });
   });
 });

@@ -8,12 +8,19 @@ import { AiFundingAnalystService } from '../services/aiFundingAnalystService';
 const prisma = new PrismaClient();
 
 describe('Operational Recovery Provenance & Audit Classification Suite', () => {
+  let activeDbName = 'bridge_ai_test_db';
+
   beforeAll(async () => {
     // Ensure we are operating strictly on test database
     const dbRes: any[] = await prisma.$queryRawUnsafe('SELECT current_database()');
-    if (dbRes[0]?.current_database !== 'bridge_ai_test_db') {
-      throw new Error(`[SAFETY_ABORT] Test suite must run against bridge_ai_test_db. Received: ${dbRes[0]?.current_database}`);
+    const currentDb = dbRes[0]?.current_database || '';
+    if (currentDb === 'bridge_ai_db') {
+      throw new Error(`[SAFETY_ABORT] Test suite refused execution against operational database '${currentDb}'.`);
     }
+    if (!currentDb.startsWith('bridge_ai_vitest_') && currentDb !== 'bridge_ai_test_db') {
+      throw new Error(`[SAFETY_ABORT] Test suite must run against a test database. Received: ${currentDb}`);
+    }
+    activeDbName = currentDb;
   });
 
   it('1. Repair command fails closed if wrong database name is provided', async () => {
@@ -31,7 +38,7 @@ describe('Operational Recovery Provenance & Audit Classification Suite', () => {
       runOperationalContaminationRepair({
         execute: true,
         confirmPhrase: 'INVALID_PHRASE',
-        allowedDatabases: ['bridge_ai_test_db']
+        allowedDatabases: [activeDbName, 'bridge_ai_test_db']
       })
     ).rejects.toThrow(/Invalid confirmation phrase/);
   });
@@ -41,7 +48,7 @@ describe('Operational Recovery Provenance & Audit Classification Suite', () => {
       runOperationalContaminationRepair({
         execute: true,
         confirmPhrase: 'RECONCILE_OPERATIONAL_CONTAMINATION_2026',
-        allowedDatabases: ['bridge_ai_test_db'],
+        allowedDatabases: [activeDbName, 'bridge_ai_test_db'],
         manifestPath: path.join(__dirname, 'non_existent_manifest.json')
       })
     ).rejects.toThrow(/Manifest file not found/);

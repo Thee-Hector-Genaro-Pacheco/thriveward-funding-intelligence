@@ -8,19 +8,17 @@ import { EvidenceCatalogBuilder } from '../services/ai/evidenceCatalogBuilder';
 import { OpenAiFundingAnalystProvider } from '../services/ai/openAiFundingAnalystProvider';
 
 describe('AI Acceptance Mode Guard & Provider Wiring Suite', () => {
-  const originalEnv = { ...process.env };
+  let savedEnv: NodeJS.ProcessEnv;
 
   beforeEach(() => {
-    process.env = { ...originalEnv };
+    savedEnv = { ...process.env };
     delete process.env.AI_ACCEPTANCE_MODE;
-    process.env.AI_FUNDING_ANALYST_ENABLED = 'false';
-    process.env.AI_DOCUMENT_GROUNDING_ENABLED = 'false';
     DocumentIndexingService.resetProvider();
     AiFundingAnalystService.resetProvider();
   });
 
   afterEach(() => {
-    process.env = { ...originalEnv };
+    process.env = savedEnv;
     DocumentIndexingService.resetProvider();
     AiFundingAnalystService.resetProvider();
   });
