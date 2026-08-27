@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { BRIDGE_FORWARD_PROFILE } from '@thriveward/shared';
 import { prisma } from '../lib/prisma';
 import { AiFundingAnalystService } from '../services/aiFundingAnalystService';
+import { DocumentIndexingService } from '../services/documentIndexingService';
 
 export const healthRouter = Router();
 
@@ -71,10 +72,11 @@ healthRouter.get('/', async (req: Request, res: Response) => {
       extractionVersion: process.env.DOCUMENT_EXTRACTION_VERSION || 'pdf-page-text-v1',
     },
     documentGrounding: {
-      enabled: process.env.AI_DOCUMENT_GROUNDING_ENABLED === 'true',
-      configured: process.env.AI_DOCUMENT_GROUNDING_ENABLED === 'true' && Boolean(process.env.OPENAI_API_KEY),
-      embeddingModel: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small',
-      embeddingDimensions: Number(process.env.OPENAI_EMBEDDING_DIMENSIONS) || 1536,
+      enabled: DocumentIndexingService.isGroundingEnabled(),
+      configured: DocumentIndexingService.isGroundingEnabled(),
+      provider: DocumentIndexingService.getActiveProvider().getProviderName(),
+      embeddingModel: DocumentIndexingService.getActiveProvider().getModelName(),
+      embeddingDimensions: DocumentIndexingService.getActiveProvider().getDimensions(),
       chunkingVersion: 'document-chunker-v1',
       retrievalVersion: 'document-retrieval-v1',
       promptVersion: 'funding-analyst-document-grounded-v1',

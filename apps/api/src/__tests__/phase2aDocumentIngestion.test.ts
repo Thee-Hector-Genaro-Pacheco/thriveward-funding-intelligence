@@ -118,13 +118,10 @@ describe('Phase AI-2A — Hardened Official Document Ingestion & Citation Suite'
     });
 
     it('rejects unauthenticated upload requests with HTTP 401', async () => {
-      const pdfBuffer = createMinimalPdfBuffer(['Unauthenticated Upload']);
       const res = await request(app)
         .post(`/api/opportunities/${testOppId}/funding-documents`)
         .set('x-test-unauthenticated', 'true')
-        .set('X-Thriveward-CSRF', '1')
-        .attach('file', pdfBuffer, 'unauth.pdf')
-        .field('title', 'Unauthenticated Notice');
+        .set('X-Thriveward-CSRF', '1');
 
       expect(res.status).toBe(401);
     });

@@ -158,10 +158,19 @@ aiEvaluationRouter.post(
     try {
       const opportunityId = req.params.opportunityId;
       const userId = req.user!.id;
+      const { documentVersionId } = req.body || {};
       const idempotencyKey = (req.headers['x-idempotency-key'] as string) || req.body?.idempotencyKey;
+
+      if (!documentVersionId || typeof documentVersionId !== 'string' || !documentVersionId.trim()) {
+        return res.status(400).json({
+          success: false,
+          error: 'INVALID_DOCUMENT_VERSION_ID: documentVersionId is required for grounded AI evaluation.',
+        });
+      }
 
       const evaluation = await AiFundingAnalystService.generateGroundedEvaluation({
         opportunityId,
+        documentVersionId: documentVersionId.trim(),
         userId,
         idempotencyKey,
         ipAddress: req.ip,
@@ -179,7 +188,15 @@ aiEvaluationRouter.post(
         return res.status(503).json({ success: false, error: msg });
       }
 
-      if (msg.includes('DOCUMENT_INDEX_NOT_READY')) {
+      if (msg.includes('DOCUMENT_VERSION_NOT_FOUND')) {
+        return res.status(404).json({ success: false, error: msg });
+      }
+
+      if (
+        msg.includes('DOCUMENT_VERSION_OPPORTUNITY_MISMATCH') ||
+        msg.includes('DOCUMENT_VERSION_NOT_READY') ||
+        msg.includes('DOCUMENT_INDEX_NOT_READY')
+      ) {
         return res.status(400).json({ success: false, error: msg });
       }
 

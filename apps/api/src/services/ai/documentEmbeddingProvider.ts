@@ -17,4 +17,6 @@ export interface DocumentEmbeddingProvider {
   embedQueries(input: EmbeddingBatchInput): Promise<EmbeddingBatchResult>;
   isConfigured(): boolean;
   getProviderName(): string;
+  getModelName(): string;
+  getDimensions(): number;
 }

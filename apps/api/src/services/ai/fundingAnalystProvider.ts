@@ -92,5 +92,8 @@ export interface AnalysisResponse {
 }
 
 export interface FundingAnalystProvider {
+  isConfigured(): boolean;
+  getProviderName(): string;
+  getModelName(): string;
   analyze(snapshot: InputSnapshot): Promise<AnalysisResponse>;
 }

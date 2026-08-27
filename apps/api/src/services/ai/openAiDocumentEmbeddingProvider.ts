@@ -36,6 +36,14 @@ export class OpenAiDocumentEmbeddingProvider implements DocumentEmbeddingProvide
     return 'OPENAI';
   }
 
+  public getModelName(): string {
+    return this.model;
+  }
+
+  public getDimensions(): number {
+    return this.dimensions;
+  }
+
   public async embedDocuments(input: EmbeddingBatchInput): Promise<EmbeddingBatchResult> {
     return this.executeEmbedding(input);
   }

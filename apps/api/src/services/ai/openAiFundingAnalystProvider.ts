@@ -36,6 +36,10 @@ export class OpenAiFundingAnalystProvider implements FundingAnalystProvider {
     return Boolean(isEnabled && this.client);
   }
 
+  public getProviderName(): string {
+    return 'OPENAI';
+  }
+
   public getModelName(): string {
     return this.model;
   }

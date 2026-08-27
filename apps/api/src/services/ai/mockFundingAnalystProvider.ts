@@ -7,6 +7,17 @@ import {
 import { EvidenceCatalogBuilder } from './evidenceCatalogBuilder';
 
 export class MockFundingAnalystProvider implements FundingAnalystProvider {
+  public isConfigured(): boolean {
+    return true;
+  }
+
+  public getProviderName(): string {
+    return 'DETERMINISTIC_MOCK';
+  }
+
+  public getModelName(): string {
+    return 'deterministic-mock-v1';
+  }
   public async analyze(snapshot: InputSnapshot): Promise<AnalysisResponse> {
     const oppTitle = snapshot.opportunity.title || 'Funding Opportunity';
     const isDirectEligible = snapshot.opportunity.candidateRoutingStatus === 'DIRECT_FEDERAL_ELIGIBLE';

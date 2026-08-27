@@ -52,7 +52,10 @@ describe('AI Acceptance Mode Guard & Provider Wiring Suite', () => {
 
     expect(indexingProvider).toBeInstanceOf(DeterministicDocumentEmbeddingProvider);
     expect(analystProvider).toBeInstanceOf(MockFundingAnalystProvider);
-    expect(AiFundingAnalystService.getConfigurationStatus().provider).toBe('MOCK_OPENAI');
+    const status = AiFundingAnalystService.getConfigurationStatus();
+    expect(status.provider).toBe('DETERMINISTIC_MOCK');
+    expect(status.model).toBe('deterministic-mock-v1');
+    expect(status.enabled).toBe(true);
   });
 
   it('4. Refuses to start for bridge_ai_db', () => {
@@ -133,5 +136,23 @@ describe('AI Acceptance Mode Guard & Provider Wiring Suite', () => {
     process.env.OPENAI_MODEL = 'gpt-5.6-luna';
     const provider = new OpenAiFundingAnalystProvider();
     expect(provider.getModelName()).toBe('gpt-5.6-luna');
+    expect(provider.getProviderName()).toBe('OPENAI');
+  });
+
+  it('11. FundingAnalystProvider contract & AiFundingAnalystService configuration status honesty', () => {
+    const openAiProvider = new OpenAiFundingAnalystProvider();
+    expect(openAiProvider.getProviderName()).toBe('OPENAI');
+    expect(openAiProvider.getModelName()).toBe(process.env.OPENAI_MODEL || 'gpt-5.6-luna');
+
+    const mockProvider = new MockFundingAnalystProvider();
+    expect(mockProvider.getProviderName()).toBe('DETERMINISTIC_MOCK');
+    expect(mockProvider.getModelName()).toBe('deterministic-mock-v1');
+    expect(mockProvider.isConfigured()).toBe(true);
+
+    AiFundingAnalystService.setProvider(mockProvider);
+    const status = AiFundingAnalystService.getConfigurationStatus();
+    expect(status.provider).toBe('DETERMINISTIC_MOCK');
+    expect(status.model).toBe('deterministic-mock-v1');
+    expect(status.enabled).toBe(true);
   });
 });

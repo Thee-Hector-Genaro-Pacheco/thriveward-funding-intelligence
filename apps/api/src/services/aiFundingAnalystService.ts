@@ -35,20 +35,16 @@ export class AiFundingAnalystService {
   }
 
   public static isConfigured(): boolean {
-    if (AiFundingAnalystService.providerOverride) return true;
-    return AiFundingAnalystService.defaultProvider.isConfigured();
+    return AiFundingAnalystService.getActiveProvider().isConfigured();
   }
 
   public static getConfigurationStatus() {
-    const isMock = Boolean(AiFundingAnalystService.providerOverride);
-    const provider = isMock ? 'MOCK_OPENAI' : 'OPENAI';
-    const isConfigured = AiFundingAnalystService.isConfigured();
-    const model = isMock ? 'gpt-5.6-luna' : AiFundingAnalystService.defaultProvider.getModelName();
+    const activeProvider = AiFundingAnalystService.getActiveProvider();
 
     return {
-      enabled: isConfigured,
-      provider,
-      model,
+      enabled: activeProvider.isConfigured(),
+      provider: activeProvider.getProviderName(),
+      model: activeProvider.getModelName(),
       promptVersion: EvidenceCatalogBuilder.PROMPT_VERSION,
     };
   }
@@ -219,13 +215,15 @@ export class AiFundingAnalystService {
 
   public static async generateGroundedEvaluation(params: {
     opportunityId: string;
+    documentVersionId?: string;
+    documentIndexId?: string;
     userId: string;
     idempotencyKey?: string;
     ipAddress?: string;
     userAgent?: string;
     provider?: FundingAnalystProvider;
   }): Promise<any> {
-    const { opportunityId, userId, idempotencyKey, ipAddress, userAgent } = params;
+    const { opportunityId, documentVersionId, documentIndexId, userId, idempotencyKey, ipAddress, userAgent } = params;
 
     if (!DocumentIndexingService.isGroundingEnabled()) {
       throw new Error(
@@ -275,7 +273,17 @@ export class AiFundingAnalystService {
         include: { programs: true },
       });
 
-      const retrievalResult = await DocumentRetrievalService.executeRetrieval(opportunityId);
+      const retrievalResult = await DocumentRetrievalService.executeRetrieval({
+        opportunityId,
+        documentVersionId,
+        documentIndexId,
+      });
+
+      if (retrievalResult.retrievedEvidence.length === 0) {
+        throw new Error(
+          'GROUNDED_RETRIEVAL_EVIDENCE_REQUIRED: Document-grounded evaluation requires at least one retrieved official-document evidence item.'
+        );
+      }
 
       const snapshot = EvidenceCatalogBuilder.buildGroundedSnapshot(
         opp,
@@ -431,7 +439,9 @@ export class AiFundingAnalystService {
       documentIndexId: run.documentIndexId,
       retrievalVersion: run.retrievalVersion,
       documentTitle: run.documentIndex.documentVersion.fundingDocument.title,
+      documentType: run.documentIndex.documentVersion.fundingDocument.documentType,
       documentVersionId: run.documentIndex.documentVersionId,
+      documentVersionNumber: run.documentIndex.documentVersion.version,
       querySnapshot: run.querySnapshot,
       retrievalConfiguration: run.retrievalConfiguration,
       retrievalHash: run.retrievalHash,
@@ -541,4 +551,3 @@ export class AiFundingAnalystService {
     };
   }
 }
-

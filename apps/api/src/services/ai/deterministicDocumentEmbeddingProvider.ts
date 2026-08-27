@@ -20,6 +20,14 @@ export class DeterministicDocumentEmbeddingProvider implements DocumentEmbedding
     return 'DETERMINISTIC_MOCK';
   }
 
+  public getModelName(): string {
+    return 'deterministic-mock-v1';
+  }
+
+  public getDimensions(): number {
+    return this.dimensions;
+  }
+
   public async embedDocuments(input: EmbeddingBatchInput): Promise<EmbeddingBatchResult> {
     return this.generateDeterministicBatch(input);
   }

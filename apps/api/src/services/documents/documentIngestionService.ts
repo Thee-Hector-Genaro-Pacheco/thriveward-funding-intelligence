@@ -3,7 +3,6 @@ import { prisma } from '../../lib/prisma';
 import { DocumentType, DocumentVersionStatus } from '@prisma/client';
 import { FundingDocumentStorage, LocalDockerDocumentStorage } from './fundingDocumentStorage';
 import { PdfExtractionService } from './pdfExtractionService';
-import { AuthService } from '../authService';
 
 export interface IngestDocumentParams {
   opportunityId: string;

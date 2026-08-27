@@ -3,6 +3,12 @@ import { prisma } from '../lib/prisma';
 import { DocumentChunkerService } from './ai/documentChunkerService';
 import { DocumentEmbeddingProvider } from './ai/documentEmbeddingProvider';
 import { OpenAiDocumentEmbeddingProvider } from './ai/openAiDocumentEmbeddingProvider';
+import {
+  computeFullIndexConfigurationHash,
+  DEFAULT_DOCUMENT_EMBEDDING_BATCH_SIZE,
+  DOCUMENT_INDEX_OVERLAP_TOKENS,
+  DOCUMENT_INDEX_TARGET_TOKENS,
+} from './ai/documentIndexingConfiguration';
 
 export interface IndexingRequestOptions {
   documentVersionId: string;
@@ -32,6 +38,17 @@ export class DocumentIndexingService {
     if (!isEnabled) return false;
     if (DocumentIndexingService.providerOverride) return true;
     return DocumentIndexingService.defaultProvider.isConfigured();
+  }
+
+  public static computeFullIndexConfigurationHash(
+    chunkConfigurationHash: string,
+    provider: DocumentEmbeddingProvider
+  ): string {
+    return computeFullIndexConfigurationHash(chunkConfigurationHash, {
+      provider: provider.getProviderName(),
+      model: provider.getModelName(),
+      dimensions: provider.getDimensions(),
+    });
   }
 
   /**
@@ -124,16 +141,22 @@ export class DocumentIndexingService {
     const manifestResult = DocumentChunkerService.generateChunks(
       documentVersionId,
       chunkInputs,
-      500, // target tokens
-      75 // overlap tokens
+      DOCUMENT_INDEX_TARGET_TOKENS,
+      DOCUMENT_INDEX_OVERLAP_TOKENS
     );
 
-    // 4. Check if an identical successful index already exists
+    // Compute full vector-index configuration identity (chunk config + embedding provider/model/dimensions)
+    const fullConfigurationHash = DocumentIndexingService.computeFullIndexConfigurationHash(
+      manifestResult.configurationHash,
+      provider
+    );
+
+    // 4. Check if an identical successful index already exists for this exact embedding configuration
     const existingIndex = await prisma.fundingDocumentIndex.findUnique({
       where: {
         documentVersionId_configurationHash: {
           documentVersionId,
-          configurationHash: manifestResult.configurationHash,
+          configurationHash: fullConfigurationHash,
         },
       },
     });
@@ -179,11 +202,11 @@ export class DocumentIndexingService {
         version: nextVersion,
         status: 'PROCESSING',
         sourceManifestHash: manifestResult.sourceManifestHash,
-        configurationHash: manifestResult.configurationHash,
+        configurationHash: fullConfigurationHash,
         chunkingVersion: manifestResult.chunkingVersion,
         embeddingProvider: provider.getProviderName(),
-        embeddingModel: process.env.OPENAI_EMBEDDING_MODEL || 'text-embedding-3-small',
-        embeddingDimensions: 1536,
+        embeddingModel: provider.getModelName(),
+        embeddingDimensions: provider.getDimensions(),
         pageCount: docVer.pages.length,
         chunkCount: manifestResult.chunks.length,
         inputTokenCount: manifestResult.totalTokenCount,
@@ -206,7 +229,7 @@ export class DocumentIndexingService {
 
     try {
       // 6. Embed chunks in bounded batches
-      const batchSize = Number(process.env.DOCUMENT_EMBEDDING_BATCH_SIZE) || 32;
+      const batchSize = Number(process.env.DOCUMENT_EMBEDDING_BATCH_SIZE) || DEFAULT_DOCUMENT_EMBEDDING_BATCH_SIZE;
       const chunks = manifestResult.chunks;
       let totalProviderRequests = 0;
 
@@ -222,11 +245,31 @@ export class DocumentIndexingService {
 
         totalProviderRequests += embedResult.providerRequestCount;
 
-        // Verify result vector count and dimensions
+        // Verify result vector count, model, and dimensions
         if (embedResult.vectors.length !== batch.length) {
           throw new Error(
             `EMBEDDING_BATCH_COUNT_MISMATCH: Batch expected ${batch.length} vectors, got ${embedResult.vectors.length}.`
           );
+        }
+
+        if (embedResult.model && embedResult.model !== indexRecord.embeddingModel) {
+          throw new Error(
+            `EMBEDDING_MODEL_MISMATCH: Expected model '${indexRecord.embeddingModel}', provider returned '${embedResult.model}'.`
+          );
+        }
+
+        if (embedResult.dimensions && embedResult.dimensions !== indexRecord.embeddingDimensions) {
+          throw new Error(
+            `EMBEDDING_DIMENSIONS_MISMATCH: Expected ${indexRecord.embeddingDimensions} dimensions, provider returned ${embedResult.dimensions}.`
+          );
+        }
+
+        for (let b = 0; b < embedResult.vectors.length; b++) {
+          if (embedResult.vectors[b].length !== indexRecord.embeddingDimensions) {
+            throw new Error(
+              `EMBEDDING_VECTOR_DIMENSION_MISMATCH: Expected vector length ${indexRecord.embeddingDimensions}, received ${embedResult.vectors[b].length} at batch index ${b}.`
+            );
+          }
         }
 
         // Save chunk rows with embeddings using parameterized raw query

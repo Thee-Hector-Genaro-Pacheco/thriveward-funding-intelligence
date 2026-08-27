@@ -39,6 +39,60 @@ export interface RetrievalResult {
   retrievedEvidence: RetrievedChunkEvidence[];
 }
 
+interface RawRetrievedChunk {
+  id: string;
+  documentIndexId: string;
+  documentPageId: string;
+  pageNumber: number;
+  chunkIndex: number;
+  text: string;
+  textHash: string;
+  tokenCount: number;
+  citationRef: string;
+  similarity: number;
+}
+
+export function assembleRetrievedEvidence(
+  queryDefinitions: ControlledQueryDefinition[],
+  hitsByQuery: RawRetrievedChunk[][],
+  maxContextTokens: number
+): { retrievedEvidence: RetrievedChunkEvidence[]; totalRetrievedTokens: number } {
+  const retrievedEvidence: RetrievedChunkEvidence[] = [];
+  const seenChunkIds = new Set<string>();
+  let accumulatedTokens = 0;
+
+  for (let queryIndex = 0; queryIndex < queryDefinitions.length; queryIndex++) {
+    const query = queryDefinitions[queryIndex];
+    const hits = hitsByQuery[queryIndex] || [];
+    let rank = 1;
+
+    for (const hit of hits) {
+      if (seenChunkIds.has(hit.id)) continue;
+      if (accumulatedTokens + hit.tokenCount > maxContextTokens) break;
+
+      seenChunkIds.add(hit.id);
+      accumulatedTokens += hit.tokenCount;
+      retrievedEvidence.push({
+        chunkId: hit.id,
+        documentIndexId: hit.documentIndexId,
+        documentPageId: hit.documentPageId,
+        queryLabel: query.label,
+        rank,
+        cosineSimilarity: Number(hit.similarity) || 0,
+        citationRef: hit.citationRef,
+        pageNumber: hit.pageNumber,
+        chunkIndex: hit.chunkIndex,
+        text: hit.text,
+        textHash: hit.textHash,
+        tokenCount: hit.tokenCount,
+      });
+      rank++;
+    }
+  }
+
+  return { retrievedEvidence, totalRetrievedTokens: accumulatedTokens };
+}
+
 export class DocumentRetrievalService {
   public static readonly RETRIEVAL_VERSION = 'document-retrieval-v1';
 
@@ -74,9 +128,15 @@ export class DocumentRetrievalService {
    * Executes controlled semantic retrieval against a READY document index.
    */
   public static async executeRetrieval(
-    opportunityId: string,
-    provider?: DocumentEmbeddingProvider
+    opportunityIdOrParams: string | { opportunityId: string; documentVersionId?: string; documentIndexId?: string; provider?: DocumentEmbeddingProvider },
+    documentVersionIdParam?: string,
+    providerParam?: DocumentEmbeddingProvider
   ): Promise<RetrievalResult> {
+    const opportunityId = typeof opportunityIdOrParams === 'string' ? opportunityIdOrParams : opportunityIdOrParams.opportunityId;
+    const documentVersionId = typeof opportunityIdOrParams === 'string' ? documentVersionIdParam : opportunityIdOrParams.documentVersionId;
+    const documentIndexId = typeof opportunityIdOrParams === 'string' ? undefined : opportunityIdOrParams.documentIndexId;
+    const provider = typeof opportunityIdOrParams === 'string' ? providerParam : opportunityIdOrParams.provider;
+
     const activeProvider = provider || DocumentIndexingService.getActiveProvider();
 
     if (!DocumentIndexingService.isGroundingEnabled()) {
@@ -85,28 +145,101 @@ export class DocumentRetrievalService {
       );
     }
 
-    // 1. Find official notice documents for opportunity
-    const docVersion = await prisma.fundingDocumentVersion.findFirst({
-      where: {
-        fundingDocument: {
-          fundingOpportunityId: opportunityId,
-        },
-        status: 'READY',
-      },
-      orderBy: { createdAt: 'desc' },
-      include: {
-        indices: {
-          where: { status: 'READY' },
-          orderBy: { version: 'desc' },
-          take: 1,
-        },
-      },
-    });
+    const expectedProvider = activeProvider.getProviderName();
+    const expectedModel = activeProvider.getModelName();
+    const expectedDimensions = activeProvider.getDimensions();
 
-    if (!docVersion || docVersion.indices.length === 0) {
-      throw new Error(
-        `DOCUMENT_INDEX_NOT_READY: No READY official notice document index exists for opportunity '${opportunityId}'. Indexing is required before grounded analysis.`
-      );
+    let docVersion: any;
+
+    if (documentVersionId) {
+      // AI-2C: Explicit Grounding Source Selection
+      docVersion = await prisma.fundingDocumentVersion.findUnique({
+        where: { id: documentVersionId },
+        include: {
+          fundingDocument: true,
+          indices: {
+            where: {
+              ...(documentIndexId ? { id: documentIndexId } : {}),
+              status: 'READY',
+              embeddingProvider: expectedProvider,
+              embeddingModel: expectedModel,
+              embeddingDimensions: expectedDimensions,
+            },
+            orderBy: { version: 'desc' },
+            take: 1,
+          },
+        },
+      });
+
+      if (!docVersion) {
+        throw new Error(
+          `DOCUMENT_VERSION_NOT_FOUND: Requested document version '${documentVersionId}' does not exist.`
+        );
+      }
+
+      if (docVersion.fundingDocument.fundingOpportunityId !== opportunityId) {
+        throw new Error(
+          `DOCUMENT_VERSION_OPPORTUNITY_MISMATCH: Requested document version '${documentVersionId}' does not belong to opportunity '${opportunityId}'.`
+        );
+      }
+
+      if (docVersion.status !== 'READY') {
+        throw new Error(
+          `DOCUMENT_VERSION_NOT_READY: Requested document version '${documentVersionId}' is in status '${docVersion.status}' (expected READY).`
+        );
+      }
+
+      if (docVersion.indices.length === 0) {
+        const anyReadyIndex = await prisma.fundingDocumentIndex.findFirst({
+          where: {
+            documentVersionId,
+            status: 'READY',
+          },
+        });
+
+        if (anyReadyIndex) {
+          throw new Error(
+            `DOCUMENT_INDEX_NOT_READY: Document version '${documentVersionId}' has no READY document index compatible with active provider '${expectedProvider}' (${expectedModel}, ${expectedDimensions}d). Found index created with provider '${anyReadyIndex.embeddingProvider}' (${anyReadyIndex.embeddingModel}, ${anyReadyIndex.embeddingDimensions}d).`
+          );
+        } else {
+          throw new Error(
+            `DOCUMENT_INDEX_NOT_READY: Requested document version '${documentVersionId}' has no READY document index.`
+          );
+        }
+      }
+      if (documentIndexId && docVersion.indices[0].id !== documentIndexId) {
+        throw new Error(`DOCUMENT_INDEX_NOT_READY: Exact requested document index '${documentIndexId}' was not selected.`);
+      }
+    } else {
+      // Fallback selection for legacy internal callers
+      docVersion = await prisma.fundingDocumentVersion.findFirst({
+        where: {
+          fundingDocument: {
+            fundingOpportunityId: opportunityId,
+          },
+          status: 'READY',
+        },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          fundingDocument: true,
+          indices: {
+            where: {
+              status: 'READY',
+              embeddingProvider: expectedProvider,
+              embeddingModel: expectedModel,
+              embeddingDimensions: expectedDimensions,
+            },
+            orderBy: { version: 'desc' },
+            take: 1,
+          },
+        },
+      });
+
+      if (!docVersion || docVersion.indices.length === 0) {
+        throw new Error(
+          `DOCUMENT_INDEX_NOT_READY: No compatible READY official notice document index exists for opportunity '${opportunityId}' with provider '${expectedProvider}' (${expectedModel}, ${expectedDimensions}d). Indexing is required before grounded analysis.`
+        );
+      }
     }
 
     const docIndex = docVersion.indices[0];
@@ -123,18 +256,13 @@ export class DocumentRetrievalService {
       dimensions: docIndex.embeddingDimensions,
     });
 
-    const retrievedEvidence: RetrievedChunkEvidence[] = [];
-    const seenChunkIds = new Set<string>();
-    let accumulatedTokens = 0;
+    const hitsByQuery: RawRetrievedChunk[][] = [];
 
     // 3. Perform pgvector cosine similarity search per query
     for (let qIdx = 0; qIdx < DocumentRetrievalService.CONTROLLED_QUERIES.length; qIdx++) {
-      const qDef = DocumentRetrievalService.CONTROLLED_QUERIES[qIdx];
       const qVec = queryEmbedResult.vectors[qIdx];
       const vecStr = `[${qVec.join(',')}]`;
-      const querySeenChunkIds = new Set<string>();
-
-      const rawHits: any[] = await prisma.$queryRaw`
+      const rawHits = await prisma.$queryRaw<RawRetrievedChunk[]>`
         SELECT 
           c.id,
           c."documentIndexId",
@@ -153,38 +281,14 @@ export class DocumentRetrievalService {
         ORDER BY c.embedding <=> ${vecStr}::vector ASC, c."pageNumber" ASC, c."chunkIndex" ASC
         LIMIT ${topK}
       `;
-
-      let rank = 1;
-      for (const hit of rawHits) {
-        if (querySeenChunkIds.has(hit.id)) {
-          continue; // Deduplicate chunks within query
-        }
-
-        if (accumulatedTokens + hit.tokenCount > maxContextTokens) {
-          break; // Respect total context token budget
-        }
-
-        querySeenChunkIds.add(hit.id);
-        accumulatedTokens += hit.tokenCount;
-
-        retrievedEvidence.push({
-          chunkId: hit.id,
-          documentIndexId: hit.documentIndexId,
-          documentPageId: hit.documentPageId,
-          queryLabel: qDef.label,
-          rank,
-          cosineSimilarity: Number(hit.similarity) || 0.0,
-          citationRef: hit.citationRef,
-          pageNumber: hit.pageNumber,
-          chunkIndex: hit.chunkIndex,
-          text: hit.text,
-          textHash: hit.textHash,
-          tokenCount: hit.tokenCount,
-        });
-
-        rank++;
-      }
+      hitsByQuery.push(rawHits);
     }
+
+    const { retrievedEvidence, totalRetrievedTokens } = assembleRetrievedEvidence(
+      DocumentRetrievalService.CONTROLLED_QUERIES,
+      hitsByQuery,
+      maxContextTokens
+    );
 
     // 4. Sort evidence deterministically by query order then rank
     retrievedEvidence.sort((a, b) => {
@@ -209,7 +313,7 @@ export class DocumentRetrievalService {
       },
       retrievalHash,
       totalRetrievedChunks: retrievedEvidence.length,
-      totalRetrievedTokens: accumulatedTokens,
+      totalRetrievedTokens,
       retrievedEvidence,
     };
   }
