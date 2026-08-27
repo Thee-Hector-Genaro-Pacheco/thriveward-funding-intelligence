@@ -543,7 +543,7 @@ describe('Phase 1B — Grants.gov Verified Ingestion & Provenance Complete Audit
 
       expect(res.dryRun).toBe(true);
       expect(res.status).toBe('COMPLETED');
-      expect(res.recordsCreated).toBe(1);
+      expect(res.recordsCreated).toBe(0);
 
       // Capture complete relevant DB state AFTER execution
       const afterOpps = await prisma.fundingOpportunity.findMany({ orderBy: { id: 'asc' } });

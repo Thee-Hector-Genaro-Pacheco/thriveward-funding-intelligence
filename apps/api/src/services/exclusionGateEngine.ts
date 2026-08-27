@@ -1,6 +1,8 @@
 import { MappedOpportunity } from '../integrations/grantsGov/grantsGovMapper';
 import { sanitizeHtmlToText } from '@thriveward/shared';
 
+import { OrganizationReadinessSnapshot } from './organizationProfileService';
+
 export type ExclusionReason =
   | 'EXCLUDED_FOREIGN_PLACE_OF_PERFORMANCE'
   | 'EXCLUDED_RESEARCH_ONLY'
@@ -424,7 +426,8 @@ export class ExclusionGateEngine {
     mapped: MappedOpportunity,
     rawDetail: any,
     matchedLanes: MissionLane[],
-    profile?: string
+    profile?: string,
+    readinessSnapshot?: OrganizationReadinessSnapshot
   ): {
     routingStatus: CandidateRoutingStatus;
     applicantReadiness: ApplicantReadinessStatus;
@@ -438,8 +441,41 @@ export class ExclusionGateEngine {
     const desc = sanitizeHtmlToText(mapped.description || '');
     const fullText = `${title} ${desc} ${oppNum} ${JSON.stringify(rawDetail || {})}`.toLowerCase();
 
+    const isBridgeForwardProfile = profile === 'bridge-forward' || profile === 'project-thriveward' || Boolean(readinessSnapshot);
+
+    if (!isBridgeForwardProfile) {
+      return {
+        routingStatus: 'CURRENTLY_ACTIONABLE',
+        applicantReadiness: 'READY',
+        recommendedPathway: 'registration',
+        explanation: 'CURRENTLY_ACTIONABLE: General ingestion mode.',
+      };
+    }
+
+    const formationStatus = readinessSnapshot?.formationStatus || 'PRE_INCORPORATION';
+    const isIncorporated = formationStatus === 'INCORPORATED';
+    const samStatus = readinessSnapshot?.samGovUeiStatus || 'NOT_REGISTERED';
+    const grantsGovStatus = readinessSnapshot?.grantsGovStatus || 'NOT_REGISTERED';
+    const c3Status = readinessSnapshot?.irs501c3Status || 'NOT_OBTAINED';
+    const entityNum = readinessSnapshot?.californiaEntityNumber || null;
+
+    const incLabel = entityNum ? `California incorporation is verified (${entityNum})` : 'California incorporation is verified';
+    const samLabel = `SAM.gov/UEI registration is ${samStatus}`;
+    const grantsGovLabel = `Grants.gov organization registration is ${grantsGovStatus}`;
+    const c3Label = `501(c)(3) status is ${c3Status}`;
+
     // Specific Rule 1: HHS-2026-ACF-ACYF-YO-0044 (Street Outreach Program)
     if (oppNum.includes('HHS-2026-ACF-ACYF-YO-0044') || fullText.includes('street outreach program')) {
+      if (isIncorporated) {
+        return {
+          routingStatus: 'FISCAL_SPONSOR_REQUIRED',
+          applicantReadiness: 'NEEDS_REGISTRATIONS',
+          recommendedPathway: 'fiscal sponsor',
+          blockingReason: 'NEEDS_REGISTRATIONS: Direct submission requires active SAM.gov/UEI registration, Grants.gov AOR, and established 501(c)(3) status or fiscal sponsor.',
+          capacityNotes: `Street Outreach Program for runaway and homeless youth. ${incLabel}, but direct submission requires active SAM.gov/UEI registration and Grants.gov organization registration.`,
+          explanation: `FISCAL_SPONSOR_REQUIRED: Mission relevant. Official eligibility includes nonprofits with and without 501(c)(3) tax status. ${incLabel}, but direct submission remains blocked because ${samLabel}, ${grantsGovLabel}, and ${c3Label}.`,
+        };
+      }
       return {
         routingStatus: 'FISCAL_SPONSOR_REQUIRED',
         applicantReadiness: 'NOT_READY_PRE_INCORPORATION',
@@ -457,13 +493,25 @@ export class ExclusionGateEngine {
         applicantReadiness: 'NEEDS_REGISTRATIONS',
         recommendedPathway: 'partnership',
         blockingReason: 'PARTNERSHIP_REQUIRED: Requires submission through official Continuum of Care (CoC) Collaborative Applicant via e-snaps.',
-        capacityNotes: 'HUD CoC/YHDP competition requires submission via local CoC Collaborative Applicant portal.',
+        capacityNotes: isIncorporated
+          ? `HUD CoC/YHDP competition requires submission via local CoC Collaborative Applicant portal. ${incLabel}.`
+          : 'HUD CoC/YHDP competition requires submission via local CoC Collaborative Applicant portal.',
         explanation: 'PARTNERSHIP_REQUIRED: Mission relevant, but requires local Continuum of Care (CoC) Collaborative Applicant partnership.',
       };
     }
 
     // Specific Rule 3: VPL-01-23 (Announcement of Stand Down Grants - Correct Title!)
     if (oppNum.includes('VPL-01-23') || fullText.includes('stand down')) {
+      if (isIncorporated) {
+        return {
+          routingStatus: 'FISCAL_SPONSOR_REQUIRED',
+          applicantReadiness: 'NEEDS_REGISTRATIONS',
+          recommendedPathway: 'fiscal sponsor',
+          blockingReason: 'NEEDS_REGISTRATIONS: Stand Down event grants require established 501(c)(3) or veteran service organization with active SAM.gov/UEI registration.',
+          capacityNotes: `DOL VETS Stand Down grant notice. ${incLabel}, but requires 501(c)(3) status or SAM.gov/UEI registration.`,
+          explanation: `FISCAL_SPONSOR_REQUIRED: Mission relevant. ${incLabel}, but ${samLabel} and ${c3Label}.`,
+        };
+      }
       return {
         routingStatus: 'FISCAL_SPONSOR_REQUIRED',
         applicantReadiness: 'NOT_READY_PRE_INCORPORATION',
@@ -511,6 +559,16 @@ export class ExclusionGateEngine {
 
     // Specific Rule 6: HHS-2026-ACF-ACYF-CY-0016 (FY 2026 Basic Center Program - Correct Title!)
     if (oppNum.includes('HHS-2026-ACF-ACYF-CY-0016') || fullText.includes('basic center program')) {
+      if (isIncorporated) {
+        return {
+          routingStatus: 'FISCAL_SPONSOR_REQUIRED',
+          applicantReadiness: 'NEEDS_REGISTRATIONS',
+          recommendedPathway: 'fiscal sponsor',
+          blockingReason: 'NEEDS_REGISTRATIONS: Basic Center Program requires 501(c)(3) tax status, active SAM.gov/UEI registration, and emergency shelter facility capacity.',
+          capacityNotes: 'ACF Basic Center Program requires 501(c)(3) status, active SAM.gov/UEI, and emergency shelter facility capacity.',
+          explanation: `FISCAL_SPONSOR_REQUIRED: Mission relevant. ${incLabel}, but ${c3Label}, ${samLabel}, and shelter facility capacity is required.`,
+        };
+      }
       return {
         routingStatus: 'FISCAL_SPONSOR_REQUIRED',
         applicantReadiness: 'NOT_READY_PRE_INCORPORATION',
@@ -523,6 +581,16 @@ export class ExclusionGateEngine {
 
     // Specific Rule 7: DCT-DCT-26-001 (Drug Court TTA)
     if (oppNum.includes('DCT-DCT-26-001') || fullText.includes('drug court training and technical assistance')) {
+      if (isIncorporated) {
+        return {
+          routingStatus: 'FUTURE_OPPORTUNITY',
+          applicantReadiness: 'NEEDS_REGISTRATIONS',
+          recommendedPathway: 'future capacity',
+          blockingReason: 'NEEDS_REGISTRATIONS: Requires established 501(c)(3) tax-exempt status, SAM.gov/UEI registration, and national TTA capacity.',
+          capacityNotes: 'Requires established 501(c)(3) tax-exempt status and national drug court TTA capacity.',
+          explanation: `FUTURE_OPPORTUNITY: Has partial reentry subject-matter alignment. ${incLabel}, but requires established 501(c)(3) tax status (${c3Status}), SAM.gov/UEI registration (${samStatus}), and national TTA capacity.`,
+        };
+      }
       return {
         routingStatus: 'FUTURE_OPPORTUNITY',
         applicantReadiness: 'NOT_READY_PRE_INCORPORATION',
@@ -545,32 +613,33 @@ export class ExclusionGateEngine {
       };
     }
 
-    // Default check for profile mode vs general mode:
-    const isBridgeForwardProfile = profile === 'bridge-forward' || profile === 'project-thriveward';
+    // Ground Truth for Project Thriveward Profile:
+    const requires501c3 =
+      /\b501\(c\)\(3\)/i.test(fullText) ||
+      /\bincorporated non-profit\b/i.test(fullText) ||
+      /\boperating history\b/i.test(fullText);
 
-    if (!isBridgeForwardProfile) {
+    const isFullyRegistered = samStatus === 'REGISTERED' && grantsGovStatus === 'REGISTERED' && (c3Status === 'VERIFIED' || !requires501c3);
+
+    if (isFullyRegistered && isIncorporated) {
       return {
         routingStatus: 'CURRENTLY_ACTIONABLE',
         applicantReadiness: 'READY',
         recommendedPathway: 'registration',
-        explanation: 'CURRENTLY_ACTIONABLE: General ingestion mode.',
+        capacityNotes: `${incLabel}. Required registrations verified.`,
+        explanation: `CURRENTLY_ACTIONABLE: Mission relevant. ${incLabel}, ${samLabel}, and ${grantsGovLabel}.`,
       };
     }
 
-    // Ground Truth for Project Thriveward Profile (PRE_INCORPORATION):
-    const requires501c3 =
-      /\b501\(c\)\(3\)\b/i.test(fullText) ||
-      /\bincorporated non-profit\b/i.test(fullText) ||
-      /\boperating history\b/i.test(fullText);
-
-    if (requires501c3) {
+    if (isIncorporated) {
+      const c3Clause = c3Status !== 'VERIFIED' ? `, and ${c3Label}` : '';
       return {
         routingStatus: 'FUTURE_OPPORTUNITY',
-        applicantReadiness: 'NOT_READY_PRE_INCORPORATION',
-        recommendedPathway: 'incorporation',
-        blockingReason: 'PRE_INCORPORATION: Direct federal submission requires incorporated 501(c)(3) entity with active SAM.gov/UEI.',
-        capacityNotes: 'Requires incorporated 501(c)(3) tax-exempt status.',
-        explanation: 'FUTURE_OPPORTUNITY: Mission relevant, but requires 501(c)(3) tax status not currently held by Project Thriveward.',
+        applicantReadiness: 'NEEDS_REGISTRATIONS',
+        recommendedPathway: 'registration',
+        blockingReason: `NEEDS_REGISTRATIONS: Direct federal submission requires active SAM.gov/UEI registration and Grants.gov organization registration.`,
+        capacityNotes: `${incLabel}. Direct submission requires active SAM.gov/UEI registration and Grants.gov organization registration.`,
+        explanation: `FUTURE_OPPORTUNITY: Mission relevant. ${incLabel}, but ${samLabel}, ${grantsGovLabel}${c3Clause}.`,
       };
     }
 
@@ -580,14 +649,22 @@ export class ExclusionGateEngine {
       recommendedPathway: 'fiscal sponsor',
       blockingReason: 'PRE_INCORPORATION: Federal grant submission requires active SAM.gov registration, UEI, and Grants.gov AOR.',
       capacityNotes: 'Project Thriveward is currently PRE_INCORPORATION without SAM.gov/UEI registration.',
-      explanation: 'FISCAL_SPONSOR_REQUIRED: Mission relevant, but requires fiscal sponsor or incorporation + SAM.gov/UEI registrations.',
+      explanation: 'FISCAL_SPONSOR_REQUIRED: Mission relevant, but Project Thriveward is PRE_INCORPORATION and requires fiscal sponsor or incorporation + SAM.gov/UEI registrations.',
     };
   }
 
   /**
    * Master candidate evaluation pipeline combining negative exclusions, positive evidence, and direct-applicant capacity routing.
    */
-  public static evaluateAll(mapped: MappedOpportunity, rawDetail: any, profile?: string): CandidateEvaluationResult {
+  public static evaluateAll(
+    mapped: MappedOpportunity,
+    rawDetail: any,
+    profile?: string,
+    readinessSnapshot?: OrganizationReadinessSnapshot
+  ): CandidateEvaluationResult {
+    const isIncorporated = readinessSnapshot?.formationStatus === 'INCORPORATED';
+    const defaultReadiness: ApplicantReadinessStatus = isIncorporated ? 'NEEDS_REGISTRATIONS' : 'NOT_READY_PRE_INCORPORATION';
+
     // Step 1: Negative Exclusions
     const exclRes = this.evaluateExclusions(mapped, rawDetail);
     if (exclRes.isExcluded) {
@@ -595,8 +672,8 @@ export class ExclusionGateEngine {
         isExcluded: true,
         exclusionReason: exclRes.exclusionReason,
         routingStatus: 'EXCLUDED',
-        applicantReadiness: exclRes.exclusionReason === 'EXCLUDED_APPLICANT_TYPE' ? 'INELIGIBLE_APPLICANT_TYPE' : 'NOT_READY_PRE_INCORPORATION',
-        recommendedPathway: exclRes.exclusionReason === 'EXCLUDED_APPLICANT_TYPE' ? 'none' : 'none',
+        applicantReadiness: exclRes.exclusionReason === 'EXCLUDED_APPLICANT_TYPE' ? 'INELIGIBLE_APPLICANT_TYPE' : defaultReadiness,
+        recommendedPathway: 'none',
         blockingReason: exclRes.explanation,
         explanation: exclRes.explanation || 'Excluded by negative domain/applicant exclusion gate.',
         matchedLanes: [],
@@ -611,7 +688,7 @@ export class ExclusionGateEngine {
         isExcluded: true,
         exclusionReason: 'NO_MISSION_LANE_MATCH',
         routingStatus: 'EXCLUDED',
-        applicantReadiness: 'NOT_READY_PRE_INCORPORATION',
+        applicantReadiness: defaultReadiness,
         recommendedPathway: 'none',
         blockingReason: 'EXCLUDED: Opportunity lacks affirmative evidence matching any of Project Thriveward\'s 6 program lanes.',
         explanation: 'EXCLUDED: Opportunity lacks affirmative evidence matching any of Project Thriveward\'s 6 program lanes.',
@@ -621,7 +698,7 @@ export class ExclusionGateEngine {
     }
 
     // Step 3: Direct Applicant Readiness and Capacity Routing
-    const capacityRes = this.evaluateCapacityAndRouting(mapped, rawDetail, missionRes.matchedLanes, profile);
+    const capacityRes = this.evaluateCapacityAndRouting(mapped, rawDetail, missionRes.matchedLanes, profile, readinessSnapshot);
 
     if (capacityRes.routingStatus === 'EXCLUDED') {
       return {
@@ -654,8 +731,13 @@ export class ExclusionGateEngine {
   /**
    * Backward-compatible evaluation entry point.
    */
-  static evaluate(mapped: MappedOpportunity, rawDetail: any, profile?: string) {
-    const res = this.evaluateAll(mapped, rawDetail, profile);
+  static evaluate(
+    mapped: MappedOpportunity,
+    rawDetail: any,
+    profile?: string,
+    readinessSnapshot?: OrganizationReadinessSnapshot
+  ) {
+    const res = this.evaluateAll(mapped, rawDetail, profile, readinessSnapshot);
     return {
       isExcluded: res.isExcluded,
       exclusionReason: res.exclusionReason,

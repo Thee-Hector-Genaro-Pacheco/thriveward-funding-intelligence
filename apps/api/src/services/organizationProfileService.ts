@@ -12,7 +12,101 @@ function createServiceError(message: string, statusCode: number): ServiceError {
   return err;
 }
 
+export type FormationStatus = 'INCORPORATED' | 'PRE_INCORPORATION' | 'UNKNOWN' | string;
+export type TaxStatus = 'VERIFIED' | 'NOT_OBTAINED' | 'NOT_VERIFIED' | 'UNKNOWN' | string;
+export type Irs501c3Status = 'VERIFIED' | 'NOT_OBTAINED' | 'NOT_VERIFIED' | 'UNKNOWN' | string;
+export type RegistrationStatus = 'REGISTERED' | 'NOT_REGISTERED' | 'UNKNOWN' | string;
+
+export interface OrganizationReadinessSnapshot {
+  organizationName: string;
+  formationStatus: FormationStatus;
+  taxStatus: TaxStatus;
+  irs501c3Status: Irs501c3Status;
+  samGovUeiStatus: RegistrationStatus;
+  grantsGovStatus: RegistrationStatus;
+  californiaEntityNumber?: string | null;
+}
+
 export class OrganizationProfileService {
+  /**
+   * Retrieves the authoritative Project Thriveward readiness snapshot from the database.
+   * Dynamically derives formation, registration, and entity facts from persisted evidence.
+   */
+  public static async getReadinessSnapshot(): Promise<OrganizationReadinessSnapshot> {
+    let org = await prisma.organizationProfile.findFirst({
+      where: { name: 'Project Thriveward' },
+    });
+
+    if (!org) {
+      org = await prisma.organizationProfile.findFirst({
+        orderBy: { createdAt: 'asc' },
+      });
+    }
+
+    const formationStatus = org?.status || 'PRE_INCORPORATION';
+    const isIncorporated = formationStatus === 'INCORPORATED';
+    const taxStatus = org?.taxStatus || 'NOT_OBTAINED';
+    const limitations = org?.limitations || [];
+
+    // Parse entity number dynamically from limitations or profile evidence
+    let californiaEntityNumber: string | null = null;
+    if (isIncorporated) {
+      for (const lim of limitations) {
+        const match = lim.match(/(?:Entity #|Entity Number:?\s*|B)([0-9A-Z]{7,15})/i);
+        if (match) {
+          californiaEntityNumber = match[1].startsWith('B') ? match[1] : `B${match[1]}`;
+          break;
+        }
+      }
+    }
+
+    // Parse 501(c)(3) status from limitations/taxStatus (default UNKNOWN)
+    let irs501c3Status: Irs501c3Status = 'UNKNOWN';
+    const c3Lim = limitations.find((l) => /501\(c\)\(3\)/i.test(l));
+    if (c3Lim) {
+      if (/\bVERIFIED\b|verified|obtained|approved/i.test(c3Lim) && !/not/i.test(c3Lim)) {
+        irs501c3Status = 'VERIFIED';
+      } else if (/not/i.test(c3Lim)) {
+        irs501c3Status = 'NOT_OBTAINED';
+      }
+    } else if (taxStatus === 'VERIFIED') {
+      irs501c3Status = 'VERIFIED';
+    } else if (taxStatus === 'NOT_OBTAINED') {
+      irs501c3Status = 'NOT_OBTAINED';
+    }
+
+    // Parse SAM.gov/UEI status from limitations (default UNKNOWN)
+    let samGovUeiStatus: RegistrationStatus = 'UNKNOWN';
+    const samLim = limitations.find((l) => /sam\.gov/i.test(l) || /uei/i.test(l));
+    if (samLim) {
+      if (/NOT_REGISTERED|not registered|unregistered/i.test(samLim)) {
+        samGovUeiStatus = 'NOT_REGISTERED';
+      } else if (/\bREGISTERED\b|registered/i.test(samLim) && !/not/i.test(samLim)) {
+        samGovUeiStatus = 'REGISTERED';
+      }
+    }
+
+    // Parse Grants.gov status from limitations (default UNKNOWN)
+    let grantsGovStatus: RegistrationStatus = 'UNKNOWN';
+    const grantsLim = limitations.find((l) => /grants\.gov/i.test(l));
+    if (grantsLim) {
+      if (/NOT_REGISTERED|not registered|unregistered/i.test(grantsLim)) {
+        grantsGovStatus = 'NOT_REGISTERED';
+      } else if (/\bREGISTERED\b|registered/i.test(grantsLim) && !/not/i.test(grantsLim)) {
+        grantsGovStatus = 'REGISTERED';
+      }
+    }
+
+    return {
+      organizationName: 'Project Thriveward',
+      formationStatus,
+      taxStatus,
+      irs501c3Status,
+      samGovUeiStatus,
+      grantsGovStatus,
+      californiaEntityNumber,
+    };
+  }
   /**
    * Reconciles verified California incorporation formation evidence.
    * Controlled, authenticated ADMIN-only workflow.
@@ -92,9 +186,6 @@ export class OrganizationProfileService {
         ],
       },
     });
-
-    // Update in-memory profile representation
-    BRIDGE_FORWARD_PROFILE.organizationStage = 'INCORPORATED';
 
     // 2. Log audit event idempotently
     if (!isAlreadyReconciled) {

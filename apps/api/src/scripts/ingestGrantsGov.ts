@@ -5,7 +5,8 @@ import { IngestionService } from '../services/ingestionService';
 dotenv.config();
 
 export function parseArgs(args: string[]) {
-  let keyword = 'reentry';
+  let keyword: string | undefined;
+  let externalOpportunityId: string | undefined;
   let profile: string | undefined;
   let statuses = 'forecasted|posted';
   let limit = 3;
@@ -21,6 +22,12 @@ export function parseArgs(args: string[]) {
         throw new Error('Option --keyword requires a non-empty string value');
       }
       keyword = val;
+    } else if (arg === '--external-opportunity-id') {
+      const val = args[++i];
+      if (!val || !/^\d+$/.test(val)) {
+        throw new Error('Option --external-opportunity-id requires a numeric ID');
+      }
+      externalOpportunityId = val;
     } else if (arg === '--profile') {
       const val = args[++i];
       if (!val || val.startsWith('--')) {
@@ -46,11 +53,23 @@ export function parseArgs(args: string[]) {
     } else if (arg === '--verbose') {
       verbose = true;
     } else {
-      throw new Error(`Unsupported option: '${arg}'. Supported options: --keyword, --profile, --statuses, --limit, --dry-run, --persist, --verbose`);
+      throw new Error(`Unsupported option: '${arg}'. Supported options: --external-opportunity-id, --keyword, --profile, --statuses, --limit, --dry-run, --persist, --verbose`);
     }
   }
 
-  return { keyword, profile, statuses, limit, dryRun: !persist, verbose };
+  if (externalOpportunityId && keyword) {
+    throw new Error('Option --external-opportunity-id cannot be combined with --keyword');
+  }
+
+  return {
+    keyword: externalOpportunityId ? undefined : (keyword || 'reentry'),
+    externalOpportunityId,
+    profile,
+    statuses,
+    limit,
+    dryRun: !persist,
+    verbose,
+  };
 }
 
 async function main() {
@@ -60,7 +79,7 @@ async function main() {
   try {
     const options = parseArgs(args);
     console.log(
-      `📋 Configuration: ${options.profile ? `Profile="${options.profile}"` : `Keyword="${options.keyword}"`}, Statuses="${options.statuses}", Limit=${options.limit}, Mode=${options.dryRun ? 'DRY RUN (No DB changes)' : 'PERSIST (Save to DB)'}`
+      `📋 Configuration: ${options.externalOpportunityId ? `External Opportunity ID="${options.externalOpportunityId}"` : `Keyword="${options.keyword}"`}${options.profile ? `, Profile="${options.profile}"` : ''}, Statuses="${options.statuses}", Limit=${options.limit}, Mode=${options.dryRun ? 'DRY RUN (No DB changes)' : 'PERSIST (Save to DB)'}`
     );
 
     const service = new IngestionService();

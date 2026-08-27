@@ -4,13 +4,16 @@ import { GrantsGovClient } from '../integrations/grantsGov/grantsGovClient';
 import { GrantsGovMapper } from '../integrations/grantsGov/grantsGovMapper';
 import { GrantsGovSearchHit } from '../integrations/grantsGov/grantsGovTypes';
 import { ExclusionGateEngine, CandidateRoutingStatus, ExclusionReason } from './exclusionGateEngine';
+import { OrganizationProfileService, OrganizationReadinessSnapshot } from './organizationProfileService';
 
 export interface IngestionOptions {
   keyword?: string;
+  externalOpportunityId?: string;
   profile?: string;
   statuses?: string;
   limit?: number;
   dryRun?: boolean;
+  verbose?: boolean;
 }
 
 export interface IngestionSummary {
@@ -47,9 +50,16 @@ export class IngestionService {
 
   async ingestFromGrantsGov(options: IngestionOptions = {}): Promise<IngestionSummary> {
     const startTime = Date.now();
-    const keywordInput = options.keyword || 'reentry';
+    const externalOpportunityId = options.externalOpportunityId;
+    if (externalOpportunityId !== undefined && !/^\d+$/.test(externalOpportunityId)) {
+      throw new Error('externalOpportunityId must contain only numeric digits');
+    }
+    if (externalOpportunityId && options.keyword) {
+      throw new Error('externalOpportunityId cannot be combined with keyword');
+    }
+    const keywordInput = externalOpportunityId ? '' : (options.keyword || 'reentry');
     const rawKeywords = keywordInput.split('|').map((k) => k.trim()).filter((k) => k.length > 0);
-    const keywords = rawKeywords.length > 0 ? rawKeywords : ['reentry'];
+    const keywords = externalOpportunityId ? [] : (rawKeywords.length > 0 ? rawKeywords : ['reentry']);
 
     const targetLimit = options.limit ? Math.min(options.limit, 10) : 3;
     const isDryRun = options.dryRun ?? false;
@@ -60,7 +70,7 @@ export class IngestionService {
         data: {
           sourceSystem: 'GRANTS_GOV',
           searchParameters: {
-            keywords,
+            ...(externalOpportunityId ? { externalOpportunityId } : { keywords }),
             statuses: options.statuses || 'forecasted|posted',
             limit: targetLimit,
             profile: options.profile,
@@ -90,23 +100,40 @@ export class IngestionService {
     try {
       const hitsMap = new Map<string, { hit: GrantsGovSearchHit; searchTerms: Set<string> }>();
 
-      for (const keyword of keywords) {
-        const result = await this.client.searchOpportunities({
-          keyword,
-          oppStatuses: options.statuses || 'forecasted|posted',
-          rows: 50,
+      if (externalOpportunityId) {
+        hitsMap.set(externalOpportunityId, {
+          hit: { id: externalOpportunityId } as GrantsGovSearchHit,
+          searchTerms: new Set(),
         });
+      } else {
+        for (const keyword of keywords) {
+          const result = await this.client.searchOpportunities({
+            keyword,
+            oppStatuses: options.statuses || 'forecasted|posted',
+            rows: 50,
+          });
 
-        const hits = result.opportunityHits || (result as any).oppHits || [];
-        rawSearchHitsCount += hits.length;
+          const hits = result.opportunityHits || (result as any).oppHits || [];
+          rawSearchHitsCount += hits.length;
 
-        for (const h of hits) {
-          const extId = String(h.id);
-          hitsMap.set(extId, { hit: h, searchTerms: new Set([keyword]) });
+          for (const h of hits) {
+            const extId = String(h.id);
+            const existingEntry = hitsMap.get(extId);
+            if (existingEntry) {
+              existingEntry.searchTerms.add(keyword);
+            } else {
+              hitsMap.set(extId, { hit: h, searchTerms: new Set([keyword]) });
+            }
+          }
         }
       }
 
       const uniqueHits = Array.from(hitsMap.values());
+
+      let readinessSnapshot: OrganizationReadinessSnapshot | undefined;
+      if (options.profile === 'bridge-forward' || options.profile === 'project-thriveward') {
+        readinessSnapshot = await OrganizationProfileService.getReadinessSnapshot();
+      }
 
       for (const { hit, searchTerms } of uniqueHits) {
         if (recordsAccepted >= targetLimit) {
@@ -142,8 +169,27 @@ export class IngestionService {
             throw new Error(`Source Identity Mismatch: Requested opp ID '${hitId}' does not match detail ID '${mapped.externalOpportunityId}'`);
           }
 
-          // Master Candidate Evaluation with Profile Option
-          const evalRes = ExclusionGateEngine.evaluateAll(mapped, detail, options.profile);
+          // Master Candidate Evaluation with Profile Option & Authoritative Readiness Snapshot
+          const evalRes = ExclusionGateEngine.evaluateAll(mapped, detail, options.profile, readinessSnapshot);
+
+          if (options.verbose) {
+            const displayNum = mapped.fundingOpportunityNumber || mapped.externalOpportunityId;
+            const statusStr = evalRes.routingStatus || (evalRes.isExcluded ? 'EXCLUDED' : 'CURRENTLY_ACTIONABLE');
+            const readinessStr = evalRes.applicantReadiness || 'N/A';
+            const pathwayStr = evalRes.recommendedPathway || 'N/A';
+            const reasonStr = evalRes.blockingReason || evalRes.explanation || 'N/A';
+            const lanesStr = (evalRes.matchedLanes && evalRes.matchedLanes.length > 0) ? evalRes.matchedLanes.join(', ') : 'None';
+
+            console.log(`\n🔎 Candidate Routing Detail [${displayNum}]:`);
+            console.log(`   • Title:                ${mapped.title}`);
+            console.log(`   • External ID:          ${mapped.externalOpportunityId}`);
+            console.log(`   • Opportunity Number:   ${mapped.fundingOpportunityNumber || 'N/A'}`);
+            console.log(`   • Candidate Routing:    ${statusStr}`);
+            console.log(`   • Applicant Readiness:  ${readinessStr}`);
+            console.log(`   • Recommended Pathway:  ${pathwayStr}`);
+            console.log(`   • Explanation / Reason: ${reasonStr}`);
+            console.log(`   • Matched Mission Lanes:${lanesStr}`);
+          }
 
           if (evalRes.isExcluded) {
             recordsExcluded++;
@@ -151,7 +197,7 @@ export class IngestionService {
             exclusionReasonsCount[reasonKey] = (exclusionReasonsCount[reasonKey] || 0) + 1;
 
             if (isDryRun) {
-              recordsCreated++;
+              // Dry run: no database persistence
             } else {
               const res = await this.persistNonActionableRecord({
                 runId,
@@ -177,7 +223,7 @@ export class IngestionService {
             exclusionReasonsCount['FISCAL_SPONSOR_REQUIRED'] = (exclusionReasonsCount['FISCAL_SPONSOR_REQUIRED'] || 0) + 1;
 
             if (isDryRun) {
-              recordsCreated++;
+              // Dry run: no database persistence
             } else {
               const rawReason = evalRes.blockingReason || evalRes.explanation;
               const cleanReason = rawReason.startsWith('FISCAL_SPONSOR_REQUIRED') ? rawReason : `FISCAL_SPONSOR_REQUIRED: ${rawReason}`;
@@ -208,7 +254,7 @@ export class IngestionService {
             exclusionReasonsCount['PARTNERSHIP_REQUIRED'] = (exclusionReasonsCount['PARTNERSHIP_REQUIRED'] || 0) + 1;
 
             if (isDryRun) {
-              recordsCreated++;
+              // Dry run: no database persistence
             } else {
               const rawReason = evalRes.blockingReason || evalRes.explanation;
               const cleanReason = rawReason.startsWith('PARTNERSHIP_REQUIRED') ? rawReason : `PARTNERSHIP_REQUIRED: ${rawReason}`;
@@ -239,19 +285,17 @@ export class IngestionService {
             exclusionReasonsCount['FUTURE_OPPORTUNITY'] = (exclusionReasonsCount['FUTURE_OPPORTUNITY'] || 0) + 1;
 
             if (isDryRun) {
-              recordsCreated++;
+              // Dry run: no database persistence
             } else {
-              const rawReason = evalRes.blockingReason || evalRes.explanation;
-              const cleanReason = rawReason.startsWith('FUTURE_OPPORTUNITY') ? rawReason : `FUTURE_OPPORTUNITY: ${rawReason}`;
               const res = await this.persistNonActionableRecord({
                 runId,
                 mapped,
                 detail,
                 hitId,
                 termsArray,
-                pursuitStage: 'DISMISSED',
+                pursuitStage: 'NEW',
                 candidateRoutingStatus: 'FUTURE_OPPORTUNITY',
-                dismissedReason: cleanReason,
+                dismissedReason: null,
                 relevanceStatus: 'POSSIBLY_RELEVANT',
                 evalRes,
               });
@@ -267,13 +311,14 @@ export class IngestionService {
 
           // Candidate is CURRENTLY_ACTIONABLE!
           recordsAccepted++;
-          if (mapped.fundingOpportunityNumber && !persistedOpportunityNumbers.includes(mapped.fundingOpportunityNumber)) {
-            persistedOpportunityNumbers.push(mapped.fundingOpportunityNumber);
-          }
 
           if (isDryRun) {
-            recordsCreated++;
+            // Dry run: no database persistence
             continue;
+          }
+
+          if (mapped.fundingOpportunityNumber && !persistedOpportunityNumbers.includes(mapped.fundingOpportunityNumber)) {
+            persistedOpportunityNumbers.push(mapped.fundingOpportunityNumber);
           }
 
           const payloadHash = crypto.createHash('sha256').update(JSON.stringify(detail)).digest('hex');
@@ -517,9 +562,9 @@ export class IngestionService {
     detail: any;
     hitId: string;
     termsArray: string[];
-    pursuitStage: 'DISMISSED';
+    pursuitStage: 'DISMISSED' | 'NEW';
     candidateRoutingStatus: 'EXCLUDED' | 'FISCAL_SPONSOR_REQUIRED' | 'PARTNERSHIP_REQUIRED' | 'FUTURE_OPPORTUNITY';
-    dismissedReason: string;
+    dismissedReason: string | null;
     relevanceStatus: 'IRRELEVANT' | 'RELEVANT' | 'POSSIBLY_RELEVANT';
     evalRes: any;
   }): Promise<{ action: 'CREATED' | 'UPDATED' | 'UNCHANGED'; oppId: string }> {
@@ -657,7 +702,7 @@ export class IngestionService {
         },
         update: {
           relevanceStatus,
-          explanation: dismissedReason,
+          explanation: dismissedReason ?? evalRes.explanation ?? '',
           isCurrent: true,
         },
         create: {
@@ -666,8 +711,8 @@ export class IngestionService {
           relevanceStatus,
           relevanceScore: relevanceStatus === 'IRRELEVANT' ? 0 : 80,
           positiveReasons: evalRes.matchedLanes || [],
-          exclusionReasons: [dismissedReason],
-          explanation: dismissedReason ?? '',
+          exclusionReasons: dismissedReason ? [dismissedReason] : [],
+          explanation: dismissedReason ?? evalRes.explanation ?? '',
           evidenceFields: ['title', 'description'],
           profileVersion: '1.1.1-phase1d',
           profileHash: 'ac72cc0322b3b6840e78998b26791261a27424f3af8f912167fb9de5953776c6',

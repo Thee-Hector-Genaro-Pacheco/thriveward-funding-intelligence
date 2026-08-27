@@ -61,7 +61,7 @@ export class RelevanceService {
       opportunityTitle: titleText,
       fundingAgency: agencyText,
       description: descText,
-    });
+    }, 'project-thriveward');
 
     const positiveReasons: string[] = [];
     const exclusionReasons: string[] = [];

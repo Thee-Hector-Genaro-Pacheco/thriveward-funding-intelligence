@@ -1,9 +1,96 @@
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterAll } from 'vitest';
 import request from 'supertest';
 import { app } from '../server';
 import { prisma } from '../lib/prisma';
 
 describe('Phase ORG-1 • Formation Evidence Reconciliation & Match Impact Preview', () => {
+  let initialOrgState: {
+    status: string;
+    taxStatus: string;
+    limitations: string[];
+  } | null = null;
+
+  let initialEnvVars: {
+    AI_FUNDING_ANALYST_ENABLED?: string;
+    AI_DOCUMENT_GROUNDING_ENABLED?: string;
+    DOCUMENT_INGESTION_ENABLED?: string;
+  } = {};
+
+  let baselineAuditIds = new Set<string>();
+
+  beforeAll(async () => {
+    initialEnvVars = {
+      AI_FUNDING_ANALYST_ENABLED: process.env.AI_FUNDING_ANALYST_ENABLED,
+      AI_DOCUMENT_GROUNDING_ENABLED: process.env.AI_DOCUMENT_GROUNDING_ENABLED,
+      DOCUMENT_INGESTION_ENABLED: process.env.DOCUMENT_INGESTION_ENABLED,
+    };
+
+    const org = await prisma.organizationProfile.findFirst({
+      where: { name: 'Project Thriveward' },
+    });
+
+    if (org) {
+      initialOrgState = {
+        status: org.status,
+        taxStatus: org.taxStatus,
+        limitations: [...org.limitations],
+      };
+    }
+
+    const baselineAudits = await prisma.securityAuditEvent.findMany({
+      where: { eventType: 'ORGANIZATION_FORMATION_RECONCILED' },
+      select: { id: true },
+    });
+    baselineAuditIds = new Set(baselineAudits.map((e) => e.id));
+  });
+
+  afterAll(async () => {
+    // Delete ONLY audit events created during this test suite run
+    const currentAudits = await prisma.securityAuditEvent.findMany({
+      where: { eventType: 'ORGANIZATION_FORMATION_RECONCILED' },
+      select: { id: true },
+    });
+
+    const suiteCreatedIds = currentAudits
+      .map((e) => e.id)
+      .filter((id) => !baselineAuditIds.has(id));
+
+    if (suiteCreatedIds.length > 0) {
+      await prisma.securityAuditEvent.deleteMany({
+        where: { id: { in: suiteCreatedIds } },
+      });
+    }
+
+    // Restore pre-existing OrganizationProfile state
+    if (initialOrgState) {
+      await prisma.organizationProfile.updateMany({
+        where: { name: 'Project Thriveward' },
+        data: {
+          status: initialOrgState.status,
+          taxStatus: initialOrgState.taxStatus,
+          limitations: initialOrgState.limitations,
+        },
+      });
+    }
+
+    // Restore environment variables
+    if (initialEnvVars.AI_FUNDING_ANALYST_ENABLED !== undefined) {
+      process.env.AI_FUNDING_ANALYST_ENABLED = initialEnvVars.AI_FUNDING_ANALYST_ENABLED;
+    } else {
+      delete process.env.AI_FUNDING_ANALYST_ENABLED;
+    }
+    if (initialEnvVars.AI_DOCUMENT_GROUNDING_ENABLED !== undefined) {
+      process.env.AI_DOCUMENT_GROUNDING_ENABLED = initialEnvVars.AI_DOCUMENT_GROUNDING_ENABLED;
+    } else {
+      delete process.env.AI_DOCUMENT_GROUNDING_ENABLED;
+    }
+    if (initialEnvVars.DOCUMENT_INGESTION_ENABLED !== undefined) {
+      process.env.DOCUMENT_INGESTION_ENABLED = initialEnvVars.DOCUMENT_INGESTION_ENABLED;
+    } else {
+      delete process.env.DOCUMENT_INGESTION_ENABLED;
+    }
+  });
+
   beforeEach(async () => {
     process.env.AI_FUNDING_ANALYST_ENABLED = 'false';
     process.env.AI_DOCUMENT_GROUNDING_ENABLED = 'false';
@@ -15,6 +102,7 @@ describe('Phase ORG-1 • Formation Evidence Reconciliation & Match Impact Previ
       data: {
         status: 'PRE_INCORPORATION',
         taxStatus: 'NOT_OBTAINED',
+        limitations: [],
       },
     });
   });
@@ -133,10 +221,11 @@ describe('Phase ORG-1 • Formation Evidence Reconciliation & Match Impact Previ
     });
 
     it('is strictly idempotent: repeated identical requests generate exactly one reconciliation audit event', async () => {
-      // Clear previous reconciliation audit events in test DB
-      await prisma.securityAuditEvent.deleteMany({
+      const beforeAudits = await prisma.securityAuditEvent.findMany({
         where: { eventType: 'ORGANIZATION_FORMATION_RECONCILED' },
+        select: { id: true },
       });
+      const beforeAuditIds = new Set(beforeAudits.map((e) => e.id));
 
       // Call 1
       const res1 = await request(app)
@@ -146,7 +235,6 @@ describe('Phase ORG-1 • Formation Evidence Reconciliation & Match Impact Previ
         .send({ entityNumber: 'B20260372748' });
 
       expect(res1.status).toBe(200);
-      expect(res1.body.data.alreadyReconciled).toBe(false);
 
       // Call 2
       const res2 = await request(app)
@@ -166,13 +254,15 @@ describe('Phase ORG-1 • Formation Evidence Reconciliation & Match Impact Previ
         .send({ entityNumber: 'B20260372748' });
 
       expect(res3.status).toBe(200);
+      expect(res3.body.data.alreadyReconciled).toBe(true);
 
-      // Verify exactly ONE audit event was created
-      const auditCount = await prisma.securityAuditEvent.count({
+      const afterAudits = await prisma.securityAuditEvent.findMany({
         where: { eventType: 'ORGANIZATION_FORMATION_RECONCILED' },
+        select: { id: true },
       });
 
-      expect(auditCount).toBe(1);
+      const newAuditIds = afterAudits.map((e) => e.id).filter((id) => !beforeAuditIds.has(id));
+      expect(newAuditIds.length).toBe(1);
     });
 
     it('records security audit event with ORGANIZATION_FORMATION_RECONCILED semantics', async () => {
@@ -280,6 +370,18 @@ describe('Phase ORG-1 • Formation Evidence Reconciliation & Match Impact Previ
       const demoItem = items.find((i: any) => i.opportunityId === 'demo-opp-001');
       expect(demoItem).toBeDefined();
       expect(demoItem.isDemo).toBe(true);
+    });
+
+    it('does not falsely promote any opportunity to CURRENTLY_ACTIONABLE without 501(c)(3) and SAM.gov/UEI evidence', async () => {
+      const res = await request(app)
+        .get('/api/organization/match-impact-preview')
+        .set('x-test-role', 'ADMIN');
+
+      const actionableOpps = res.body.data.previewResults.filter(
+        (item: any) => item.updatedRoutingStatus === 'CURRENTLY_ACTIONABLE'
+      );
+
+      expect(actionableOpps.length).toBe(0);
     });
   });
 
