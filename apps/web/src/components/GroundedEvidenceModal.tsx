@@ -21,7 +21,9 @@ export interface RetrievedEvidenceData {
   documentIndexId: string;
   retrievalVersion: string;
   documentTitle: string;
+  documentType?: string;
   documentVersionId: string;
+  documentVersionNumber?: number;
   querySnapshot: Array<{ label: string; queryText: string }>;
   retrievalConfiguration: { topK: number; maxContextTokens: number; embeddingModel: string };
   retrievalHash: string;
@@ -165,8 +167,17 @@ export const GroundedEvidenceModal: React.FC<GroundedEvidenceModalProps> = ({
                 }}
               >
                 <div>
+                  <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block' }}>GROUNDING SOURCE</span>
+                  <strong style={{ fontSize: '0.85rem', color: '#38bdf8' }}>
+                    {evidenceData.documentTitle} {evidenceData.documentVersionNumber ? `(v${evidenceData.documentVersionNumber})` : ''}
+                  </strong>
+                  <span style={{ fontSize: '0.68rem', color: '#64748b', display: 'block' }}>
+                    Version ID: {evidenceData.documentVersionId ? `${evidenceData.documentVersionId.substring(0, 8)}...` : 'N/A'}
+                  </span>
+                </div>
+                <div>
                   <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block' }}>RETRIEVAL VERSION</span>
-                  <strong style={{ fontSize: '0.85rem', color: '#38bdf8' }}>{evidenceData.retrievalVersion}</strong>
+                  <strong style={{ fontSize: '0.85rem', color: '#cbd5e1' }}>{evidenceData.retrievalVersion}</strong>
                 </div>
                 <div>
                   <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block' }}>EMBEDDING MODEL</span>

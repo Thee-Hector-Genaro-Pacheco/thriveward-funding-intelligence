@@ -29,13 +29,24 @@ export interface AiEvaluationData {
   reviewReason?: string | null;
 }
 
+export interface SourceDocumentVersionOption {
+  id: string;
+  version: number;
+  documentType: string;
+  title: string;
+  status: string;
+  isIndexReady: boolean;
+  createdAt: string;
+}
+
 interface AiEvaluationPanelProps {
   evaluations: AiEvaluationData[];
   currentUser: any;
   isAiConfigured: boolean;
   isGroundingEnabled?: boolean;
+  documentVersions?: SourceDocumentVersionOption[];
   onGenerateAiAnalysis: () => Promise<void>;
-  onGenerateGroundedAiAnalysis?: () => Promise<void>;
+  onGenerateGroundedAiAnalysis?: (documentVersionId: string) => Promise<void>;
   onReviewAiAnalysis: (evaluationId: string, decision: 'APPROVED' | 'REJECTED', reason: string) => Promise<void>;
   onFetchRetrievedEvidence?: (evaluationId: string) => Promise<RetrievedEvidenceData>;
   generating: boolean;
@@ -48,6 +59,7 @@ export const AiEvaluationPanel: React.FC<AiEvaluationPanelProps> = ({
   currentUser,
   isAiConfigured,
   isGroundingEnabled = false,
+  documentVersions = [],
   onGenerateAiAnalysis,
   onGenerateGroundedAiAnalysis,
   onReviewAiAnalysis,
@@ -57,10 +69,13 @@ export const AiEvaluationPanel: React.FC<AiEvaluationPanelProps> = ({
   onSelectPage,
 }) => {
   const [selectedVersionIndex, setSelectedVersionIndex] = useState<number>(0);
+  const [selectedDocumentVersionId, setSelectedDocumentVersionId] = useState<string>('');
   const [reviewReason, setReviewReason] = useState<string>('');
   const [reviewSubmitting, setReviewSubmitting] = useState<boolean>(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
   const [showEvidenceMap, setShowEvidenceMap] = useState<boolean>(false);
+  const activeDocOpt = documentVersions?.find((v) => v.id === selectedDocumentVersionId);
+  const isDocSelectionEligible = Boolean(activeDocOpt && activeDocOpt.status === 'READY' && activeDocOpt.isIndexReady);
 
   // Evidence Modal State
   const [isEvidenceModalOpen, setIsEvidenceModalOpen] = useState<boolean>(false);
@@ -175,26 +190,74 @@ export const AiEvaluationPanel: React.FC<AiEvaluationPanelProps> = ({
             {generating ? '⏳ Analyzing...' : '✨ Analyze with AI'}
           </button>
 
-          {/* AI-2B Document Grounded Analysis Action */}
+          {/* AI-2C Explicit Grounding Source Selection Action */}
           {onGenerateGroundedAiAnalysis && (
-            <button
-              onClick={onGenerateGroundedAiAnalysis}
-              disabled={generating || isViewer || !isGroundingEnabled}
-              title={!isGroundingEnabled ? 'AI Document Grounding is disabled (AI_DOCUMENT_GROUNDING_ENABLED=false)' : isViewer ? 'VIEWER role cannot generate AI evaluations' : 'Generate document-grounded AI evaluation using semantic retrieval'}
-              style={{
-                background: generating ? '#475569' : !isGroundingEnabled || isViewer ? 'rgba(255,255,255,0.05)' : 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
-                color: !isGroundingEnabled || isViewer ? '#64748b' : '#ffffff',
-                border: '1px solid rgba(255,255,255,0.1)',
-                padding: '0.5rem 1rem',
-                borderRadius: '0.375rem',
-                fontWeight: 700,
-                fontSize: '0.85rem',
-                cursor: generating || isViewer || !isGroundingEnabled ? 'not-allowed' : 'pointer',
-                boxShadow: isGroundingEnabled && !isViewer ? '0 4px 12px rgba(2, 132, 199, 0.3)' : 'none',
-              }}
-            >
-              {generating ? '⏳ Grounding Evidence...' : '📜 Analyze with Official Notice'}
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+              {documentVersions && documentVersions.length > 0 && (
+                <select
+                  value={selectedDocumentVersionId}
+                  onChange={(e) => setSelectedDocumentVersionId(e.target.value)}
+                  style={{
+                    background: '#0f172a',
+                    color: '#f8fafc',
+                    border: '1px solid #0284c7',
+                    padding: '0.45rem 0.6rem',
+                    borderRadius: '0.375rem',
+                    fontSize: '0.8rem',
+                    maxWidth: '280px',
+                  }}
+                  title="Select official document version for document-grounded AI evaluation"
+                >
+                  <option value="">Select source document version…</option>
+                  {documentVersions.map((v) => {
+                    const isEligible = v.status === 'READY' && v.isIndexReady;
+                    const statusLabel = isEligible
+                      ? 'READY (Indexed)'
+                      : v.status !== 'READY'
+                      ? `Not Ready (${v.status})`
+                      : 'Index Pending';
+                    return (
+                      <option key={v.id} value={v.id} disabled={!isEligible}>
+                        [v{v.version} {v.documentType}] {v.title} — {statusLabel}
+                      </option>
+                    );
+                  })}
+                </select>
+              )}
+
+              <button
+                onClick={() => selectedDocumentVersionId && onGenerateGroundedAiAnalysis(selectedDocumentVersionId)}
+                disabled={generating || isViewer || !isGroundingEnabled || !selectedDocumentVersionId || !isDocSelectionEligible}
+                title={
+                  !isGroundingEnabled
+                    ? 'AI Document Grounding is disabled (AI_DOCUMENT_GROUNDING_ENABLED=false)'
+                    : isViewer
+                    ? 'VIEWER role cannot generate AI evaluations'
+                    : !selectedDocumentVersionId
+                    ? 'Select a READY source document version to enable grounded analysis'
+                    : !isDocSelectionEligible
+                    ? 'Selected document version is not READY or has no READY vector index'
+                    : `Generate document-grounded AI evaluation using source document version (v${activeDocOpt?.version || ''})`
+                }
+                style={{
+                  background: generating
+                    ? '#475569'
+                    : !isGroundingEnabled || isViewer || !isDocSelectionEligible
+                    ? 'rgba(255,255,255,0.05)'
+                    : 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                  color: !isGroundingEnabled || isViewer || !isDocSelectionEligible ? '#64748b' : '#ffffff',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  padding: '0.5rem 1rem',
+                  borderRadius: '0.375rem',
+                  fontWeight: 700,
+                  fontSize: '0.85rem',
+                  cursor: generating || isViewer || !isGroundingEnabled || !isDocSelectionEligible ? 'not-allowed' : 'pointer',
+                  boxShadow: isGroundingEnabled && !isViewer && isDocSelectionEligible ? '0 4px 12px rgba(2, 132, 199, 0.3)' : 'none',
+                }}
+              >
+                {generating ? '⏳ Grounding Evidence...' : '📜 Analyze with Official Notice'}
+              </button>
+            </div>
           )}
         </div>
       </div>

@@ -574,7 +574,7 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
                             <strong>v{ver.version}</strong> — {ver.originalFileName} ({formatBytes(ver.sizeBytes)}) | {ver.pageCount} pages | Extraction: <code>{ver.extractionVersion}</code>
                             {verIdxStatus?.status === 'READY' && (
                               <span style={{ marginLeft: '0.5rem', color: '#38bdf8', fontWeight: 600 }}>
-                                • Vector Index: {verIdxStatus.embeddingModel || verIdxStatus.index?.embeddingModel || 'text-embedding-3-small'} ({verIdxStatus.embeddingDimensions || verIdxStatus.index?.embeddingDimensions || 1536}d{verChunkCount !== null ? `, ${verChunkCount} chunks` : ''})
+                                • Vector Index: {verIdxStatus.embeddingProvider ? `${verIdxStatus.embeddingProvider} / ` : ''}{verIdxStatus.embeddingModel || verIdxStatus.index?.embeddingModel || 'Server Configured'} ({verIdxStatus.embeddingDimensions || verIdxStatus.index?.embeddingDimensions || 1536}d{verChunkCount !== null ? `, ${verChunkCount} chunks` : ''})
                               </span>
                             )}
                           </div>
@@ -601,7 +601,7 @@ export const OfficialFundingDocuments: React.FC<OfficialFundingDocumentsProps> =
             </h3>
 
             <p style={{ fontSize: '0.85rem', color: '#cbd5e1', lineHeight: 1.5, marginBottom: '1rem' }}>
-              This action will process the extracted document pages for document version <code style={{ color: '#38bdf8' }}>{confirmIndexingVerId}</code>, partition them into deterministic page-bounded chunks (<code style={{ color: '#a7f3d0' }}>document-chunker-v1</code>), and request vector embeddings from the server-configured provider (<code style={{ color: '#fef08a' }}>text-embedding-3-small</code>, 1536 dimensions).
+              This action will process the extracted document pages for document version <code style={{ color: '#38bdf8' }}>{confirmIndexingVerId}</code>, partition them into deterministic page-bounded chunks (<code style={{ color: '#a7f3d0' }}>document-chunker-v1</code>), and request vector embeddings from the server-configured provider.
             </p>
 
             <div style={{ padding: '0.75rem', background: 'rgba(234, 179, 8, 0.1)', border: '1px solid rgba(234, 179, 8, 0.25)', borderRadius: '0.375rem', color: '#fef08a', fontSize: '0.75rem', marginBottom: '1.25rem', lineHeight: 1.4 }}>

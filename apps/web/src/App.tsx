@@ -6,7 +6,7 @@ import { LoginModal } from './components/LoginModal';
 import { UserHeaderBadge } from './components/UserHeaderBadge';
 import { ChangePasswordModal } from './components/ChangePasswordModal';
 import { AdminUserManagementModal } from './components/AdminUserManagementModal';
-import { AiEvaluationPanel, AiEvaluationData } from './components/AiEvaluationPanel';
+import { AiEvaluationPanel, AiEvaluationData, SourceDocumentVersionOption } from './components/AiEvaluationPanel';
 import { OfficialFundingDocuments } from './components/OfficialFundingDocuments';
 import { OrganizationReadinessCard } from './components/OrganizationReadinessCard';
 
@@ -457,19 +457,52 @@ export function App() {
     }
   };
 
-  const handleGenerateGroundedAiAnalysis = async () => {
-    if (!selectedOppForDrawer) return;
+  const [availableDocumentVersions, setAvailableDocumentVersions] = useState<SourceDocumentVersionOption[]>([]);
+
+  const fetchOpportunityDocumentVersions = async (oppId: string) => {
+    try {
+      const res = await apiFetch(`/api/opportunities/${oppId}/funding-documents`);
+      if (res.ok) {
+        const json = await res.json();
+        const docs = json.data || [];
+        const opts: SourceDocumentVersionOption[] = [];
+        for (const doc of docs) {
+          for (const ver of (doc.versions || [])) {
+            const hasReadyIndex = Array.isArray(ver.indices)
+              ? ver.indices.some((idx: any) => idx.status === 'READY')
+              : ver.status === 'READY';
+            opts.push({
+              id: ver.id,
+              version: ver.version,
+              documentType: doc.documentType,
+              title: doc.title || ver.originalFileName,
+              status: ver.status,
+              isIndexReady: hasReadyIndex,
+              createdAt: ver.createdAt,
+            });
+          }
+        }
+        opts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setAvailableDocumentVersions(opts);
+      }
+    } catch (err) {
+      console.error('Failed to fetch opportunity document versions:', err);
+    }
+  };
+
+  const handleGenerateGroundedAiAnalysis = async (documentVersionId: string) => {
+    if (!selectedOppForDrawer || !documentVersionId) return;
     setAiGenerating(true);
     setAiError(null);
     try {
-      const idempotencyKey = `ui_grounded_${selectedOppForDrawer.id}_${Date.now()}`;
+      const idempotencyKey = `ui_grounded_${selectedOppForDrawer.id}_${documentVersionId}_${Date.now()}`;
       const res = await apiFetch(`/api/opportunities/${selectedOppForDrawer.id}/document-grounded-ai-evaluations`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Idempotency-Key': idempotencyKey,
         },
-        body: JSON.stringify({ idempotencyKey }),
+        body: JSON.stringify({ documentVersionId, idempotencyKey }),
       });
 
       const json = await res.json();
@@ -478,6 +511,7 @@ export function App() {
       }
 
       await fetchAiEvaluations(selectedOppForDrawer.id);
+      await fetchOpportunityDocumentVersions(selectedOppForDrawer.id);
       setActionMessage(`✓ Generated new document-grounded AI evaluation (v${json.data.version}) for "${selectedOppForDrawer.title}"`);
     } catch (err: any) {
       setAiError(err.message || 'Failed to generate document-grounded AI evaluation');
@@ -875,6 +909,10 @@ export function App() {
       if (!oppRes.ok) throw new Error(`HTTP ${oppRes.status} loading opportunity details`);
       const fullOpp: FundingOpportunity = await oppRes.json();
       setSelectedOppForDrawer(fullOpp);
+
+      // 1b. Fetch AI Evaluations & Document Versions
+      await fetchAiEvaluations(opp.id);
+      await fetchOpportunityDocumentVersions(opp.id);
 
       // 2. Fetch analysis graph if exists
       const analysisRes = await fetch(`/api/opportunities/${opp.id}/analysis`);
@@ -1983,6 +2021,7 @@ export function App() {
                   currentUser={currentUser}
                   isAiConfigured={Boolean(health.aiAnalyst?.enabled)}
                   isGroundingEnabled={Boolean(health.documentGrounding?.enabled)}
+                  documentVersions={availableDocumentVersions}
                   onGenerateAiAnalysis={handleGenerateAiAnalysis}
                   onGenerateGroundedAiAnalysis={handleGenerateGroundedAiAnalysis}
                   onReviewAiAnalysis={handleReviewAiAnalysis}
