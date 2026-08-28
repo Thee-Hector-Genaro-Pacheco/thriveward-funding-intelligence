@@ -54,9 +54,9 @@ enum CandidateRoutingStatus {
 
 model OrganizationProfile {
   id                 String   @id @default(uuid())
-  name               String   @default("Project Thriveward")
-  status             String   @default("PRE_INCORPORATION")
-  taxStatus          String   @default("NOT_OBTAINED")
+  name               String
+  status             String
+  taxStatus          String
   primaryPopulations String[]
   primaryOutcome     String
   coreModel          String
