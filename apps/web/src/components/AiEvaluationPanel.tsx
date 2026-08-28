@@ -1,7 +1,13 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { GroundedEvidenceModal, RetrievedEvidenceData } from './GroundedEvidenceModal';
 import { formatProviderModelAttribution } from '../utils/aiAttribution';
 import { calculateRetrievalMetrics } from '../utils/retrievalMetrics';
+import {
+  getCurrentReadinessLabel,
+  getEvaluationFormationStatus,
+  hasStaleReadinessState,
+  OrganizationReadinessSummary,
+} from '../utils/readinessPresentation';
 
 export interface AiEvaluationData {
   id: string;
@@ -52,6 +58,7 @@ interface AiEvaluationPanelProps {
   generating: boolean;
   error: string | null;
   onSelectPage?: (pageNumber: number) => void;
+  organizationReadiness?: OrganizationReadinessSummary | null;
 }
 
 export const AiEvaluationPanel: React.FC<AiEvaluationPanelProps> = ({
@@ -67,12 +74,14 @@ export const AiEvaluationPanel: React.FC<AiEvaluationPanelProps> = ({
   generating,
   error,
   onSelectPage,
+  organizationReadiness = null,
 }) => {
   const [selectedVersionIndex, setSelectedVersionIndex] = useState<number>(0);
   const [selectedDocumentVersionId, setSelectedDocumentVersionId] = useState<string>('');
   const [reviewReason, setReviewReason] = useState<string>('');
   const [reviewSubmitting, setReviewSubmitting] = useState<boolean>(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
+  const [staleReviewAcknowledged, setStaleReviewAcknowledged] = useState<boolean>(false);
   const [showEvidenceMap, setShowEvidenceMap] = useState<boolean>(false);
   const activeDocOpt = documentVersions?.find((v) => v.id === selectedDocumentVersionId);
   const isDocSelectionEligible = Boolean(activeDocOpt && activeDocOpt.status === 'READY' && activeDocOpt.isIndexReady);
@@ -85,12 +94,30 @@ export const AiEvaluationPanel: React.FC<AiEvaluationPanelProps> = ({
 
   const currentEval = evaluations[selectedVersionIndex] || null;
   const isViewer = currentUser?.role === 'VIEWER';
+  const isGroundedEval = currentEval?.promptVersion === 'funding-analyst-document-grounded-v1';
+  const evaluationFormationStatus = getEvaluationFormationStatus(
+    currentEval?.inputSnapshot,
+    currentEval?.evidenceSnapshot
+  );
+  const isStaleGroundedEvaluation = Boolean(
+    isGroundedEval
+    && hasStaleReadinessState(organizationReadiness, evaluationFormationStatus)
+  );
+
+  useEffect(() => {
+    setStaleReviewAcknowledged(false);
+    setReviewError(null);
+  }, [currentEval?.id, isStaleGroundedEvaluation]);
 
   const attribution = formatProviderModelAttribution(currentEval?.provider, currentEval?.model);
   const metrics = calculateRetrievalMetrics(retrievedEvidenceData?.evidenceItems);
 
   const handleReviewSubmit = async (decision: 'APPROVED' | 'REJECTED') => {
     if (!currentEval) return;
+    if (isStaleGroundedEvaluation && !staleReviewAcknowledged) {
+      setReviewError('Acknowledge the stale organization profile warning before submitting a review decision.');
+      return;
+    }
     if (!reviewReason || reviewReason.trim().length < 5) {
       setReviewError('Please enter a detailed review reason (minimum 5 characters).');
       return;
@@ -135,8 +162,6 @@ export const AiEvaluationPanel: React.FC<AiEvaluationPanelProps> = ({
       setLoadingEvidence(false);
     }
   };
-
-  const isGroundedEval = currentEval?.promptVersion === 'funding-analyst-document-grounded-v1';
 
   return (
     <div className="card" style={{ marginTop: '1.5rem', background: 'rgba(15, 23, 42, 0.75)', border: '1px solid var(--border-color)', borderRadius: '0.75rem', padding: '1.25rem' }}>
@@ -288,6 +313,12 @@ export const AiEvaluationPanel: React.FC<AiEvaluationPanelProps> = ({
 
       {currentEval && (
         <div>
+          {isStaleGroundedEvaluation && (
+            <div role="alert" style={{ padding: '0.85rem 1rem', marginBottom: '1rem', background: 'rgba(245, 158, 11, 0.16)', border: '2px solid #f59e0b', borderRadius: '0.5rem', color: '#fde68a', lineHeight: 1.45 }}>
+              <strong>⚠️ Stale organization profile:</strong> This evaluation was generated using an earlier organization profile. Current organization readiness has changed. Re-analysis is recommended before human approval. <strong>Current readiness: {getCurrentReadinessLabel(organizationReadiness)}.</strong>
+            </div>
+          )}
+
           {/* Header Banner & Disclaimer */}
           <div style={{ padding: '0.6rem 0.85rem', background: isGroundedEval ? 'rgba(2, 132, 199, 0.15)' : 'rgba(234, 179, 8, 0.12)', border: isGroundedEval ? '1px solid #0284c7' : '1px solid rgba(234, 179, 8, 0.3)', borderRadius: '0.375rem', marginBottom: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '0.5rem' }}>
             <span style={{ fontWeight: 800, fontSize: '0.75rem', color: isGroundedEval ? '#7dd3fc' : '#fef08a', letterSpacing: '0.04em' }}>
@@ -498,6 +529,17 @@ export const AiEvaluationPanel: React.FC<AiEvaluationPanelProps> = ({
               </div>
             ) : (
               <div>
+                {isStaleGroundedEvaluation && (
+                  <label style={{ display: 'flex', alignItems: 'flex-start', gap: '0.55rem', marginBottom: '0.75rem', padding: '0.65rem 0.75rem', background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.45)', borderRadius: '0.375rem', color: '#fde68a', fontSize: '0.8rem', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={staleReviewAcknowledged}
+                      onChange={(event) => setStaleReviewAcknowledged(event.target.checked)}
+                    />
+                    I acknowledge that this grounded evaluation uses an earlier organization profile and must be interpreted against the current readiness state.
+                  </label>
+                )}
+
                 <textarea
                   value={reviewReason}
                   onChange={(e) => setReviewReason(e.target.value)}
@@ -515,7 +557,7 @@ export const AiEvaluationPanel: React.FC<AiEvaluationPanelProps> = ({
                 <div style={{ display: 'flex', gap: '0.75rem' }}>
                   <button
                     onClick={() => handleReviewSubmit('APPROVED')}
-                    disabled={reviewSubmitting}
+                    disabled={reviewSubmitting || (isStaleGroundedEvaluation && !staleReviewAcknowledged)}
                     style={{
                       background: 'linear-gradient(135deg, #16a34a 0%, #15803d 100%)',
                       color: '#fff',
@@ -524,7 +566,7 @@ export const AiEvaluationPanel: React.FC<AiEvaluationPanelProps> = ({
                       borderRadius: '0.35rem',
                       fontWeight: 700,
                       fontSize: '0.8rem',
-                      cursor: reviewSubmitting ? 'not-allowed' : 'pointer',
+                      cursor: reviewSubmitting || (isStaleGroundedEvaluation && !staleReviewAcknowledged) ? 'not-allowed' : 'pointer',
                     }}
                   >
                     {reviewSubmitting ? 'Submitting...' : '✓ Approve AI Evaluation'}
@@ -532,7 +574,7 @@ export const AiEvaluationPanel: React.FC<AiEvaluationPanelProps> = ({
 
                   <button
                     onClick={() => handleReviewSubmit('REJECTED')}
-                    disabled={reviewSubmitting}
+                    disabled={reviewSubmitting || (isStaleGroundedEvaluation && !staleReviewAcknowledged)}
                     style={{
                       background: 'linear-gradient(135deg, #dc2626 0%, #b91c1c 100%)',
                       color: '#fff',
@@ -541,7 +583,7 @@ export const AiEvaluationPanel: React.FC<AiEvaluationPanelProps> = ({
                       borderRadius: '0.35rem',
                       fontWeight: 700,
                       fontSize: '0.8rem',
-                      cursor: reviewSubmitting ? 'not-allowed' : 'pointer',
+                      cursor: reviewSubmitting || (isStaleGroundedEvaluation && !staleReviewAcknowledged) ? 'not-allowed' : 'pointer',
                     }}
                   >
                     {reviewSubmitting ? 'Submitting...' : '✕ Reject AI Evaluation'}

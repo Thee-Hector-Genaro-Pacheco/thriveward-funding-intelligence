@@ -85,6 +85,61 @@ describe('AiEvaluationPanel Component Attribution Suite', () => {
     expect(screen.queryByText('gpt-5.6-luna')).not.toBeInTheDocument();
   });
 
+  it('warns and gates review decisions when a grounded evaluation uses stale organization readiness', () => {
+    const onReview = vi.fn().mockResolvedValue(undefined);
+    const staleEvaluation: AiEvaluationData = {
+      id: 'eval-stale-grounded',
+      opportunityId: 'opp-bja',
+      version: 1,
+      status: 'GENERATED',
+      alignmentScore: 70,
+      eligibility: 'UNLIKELY_ELIGIBLE',
+      summary: 'Historical grounded summary',
+      strengths: [],
+      risks: [],
+      requirements: [],
+      recommendedNextAction: 'Re-analyze against current readiness',
+      confidence: 0.8,
+      limitations: [],
+      evidenceSnapshot: [{ id: 'ORG.formationStatus', category: 'ORGANIZATION', label: 'Formation', value: 'PRE_INCORPORATION' }],
+      inputSnapshot: { organization: { name: 'Project Thriveward' } },
+      promptVersion: 'funding-analyst-document-grounded-v1',
+      createdAt: '2026-08-01T10:00:00Z',
+    };
+
+    render(
+      <AiEvaluationPanel
+        evaluations={[staleEvaluation]}
+        currentUser={dummyUser}
+        isAiConfigured={true}
+        onGenerateAiAnalysis={vi.fn()}
+        onReviewAiAnalysis={onReview}
+        generating={false}
+        error={null}
+        organizationReadiness={{
+          status: 'INCORPORATED',
+          californiaIncorporation: 'VERIFIED',
+          samGovUeiStatus: 'NOT_REGISTERED',
+          grantsGovStatus: 'NOT_REGISTERED',
+        }}
+      />
+    );
+
+    expect(screen.getByRole('alert')).toHaveTextContent('This evaluation was generated using an earlier organization profile');
+    expect(screen.getByRole('alert')).toHaveTextContent('Current organization readiness has changed');
+    expect(screen.getByRole('alert')).toHaveTextContent('INCORPORATED — REGISTRATIONS PENDING');
+
+    const approveButton = screen.getByRole('button', { name: /Approve AI Evaluation/i });
+    const rejectButton = screen.getByRole('button', { name: /Reject AI Evaluation/i });
+    expect(approveButton).toBeDisabled();
+    expect(rejectButton).toBeDisabled();
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /I acknowledge that this grounded evaluation/i }));
+    expect(approveButton).not.toBeDisabled();
+    expect(rejectButton).not.toBeDisabled();
+    expect(onReview).not.toHaveBeenCalled();
+  });
+
   describe('AI-2C Grounding Source Selection Suite', () => {
     const mockVersions = [
       {

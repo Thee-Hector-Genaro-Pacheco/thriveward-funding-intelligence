@@ -9,6 +9,12 @@ import { AdminUserManagementModal } from './components/AdminUserManagementModal'
 import { AiEvaluationPanel, AiEvaluationData, SourceDocumentVersionOption } from './components/AiEvaluationPanel';
 import { OfficialFundingDocuments } from './components/OfficialFundingDocuments';
 import { OrganizationReadinessCard } from './components/OrganizationReadinessCard';
+import {
+  getAnalysisFormationStatus,
+  getCurrentReadinessLabel,
+  hasStaleReadinessState,
+  OrganizationReadinessSummary,
+} from './utils/readinessPresentation';
 
 
 const formatEligibilityText = (val: string | undefined | null) => {
@@ -285,6 +291,7 @@ export function App() {
   const [partners, setPartners] = useState<StrategicPartnerCandidate[]>([]);
   const [readinessPlans, setReadinessPlans] = useState<OpportunityReadinessPlan[]>([]);
   const [calendarItems, setCalendarItems] = useState<GrantCalendarItem[]>([]);
+  const [organizationReadiness, setOrganizationReadiness] = useState<OrganizationReadinessSummary | null>(null);
 
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -298,6 +305,7 @@ export function App() {
     setPartners([]);
     setReadinessPlans([]);
     setCalendarItems([]);
+    setOrganizationReadiness(null);
     setOutreachDashboard(null);
     setOutreachEngagement(null);
     setLoading(false);
@@ -676,6 +684,18 @@ export function App() {
     }
   };
 
+  const fetchOrganizationReadiness = async () => {
+    if (authStatus !== 'AUTHENTICATED') return;
+    try {
+      const res = await apiFetch('/api/organization/readiness');
+      if (!res.ok) return;
+      const json = await res.json();
+      setOrganizationReadiness(json.data || null);
+    } catch (err) {
+      console.error('Failed to load current organization readiness:', err);
+    }
+  };
+
   const fetchSponsors = async () => {
     if (authStatus !== 'AUTHENTICATED') return;
     setLoading(true);
@@ -842,6 +862,10 @@ export function App() {
   };
 
   // STRICT REQUIREMENT: Only invoke protected data requests when AUTHENTICATED
+  useEffect(() => {
+    if (authStatus === 'AUTHENTICATED') fetchOrganizationReadiness();
+  }, [authStatus]);
+
   useEffect(() => {
     if (authStatus !== 'AUTHENTICATED') {
       return;
@@ -1232,7 +1256,7 @@ export function App() {
                     No directly actionable opportunities currently available.
                   </h3>
                   <p style={{ color: '#cbd5e1', fontSize: '0.9rem', lineHeight: 1.5 }}>
-                    Project Thriveward is pre-incorporation. Mission-aligned opportunities requiring a fiscal sponsor or partner are available under <strong>Potential Pathways</strong>.
+                    Project Thriveward is incorporated. Direct federal eligibility still depends on opportunity-specific requirements and completing registrations. Mission-aligned future pathways remain available under <strong>Potential Pathways</strong>.
                   </p>
                 </div>
               ) : (
@@ -1250,17 +1274,23 @@ export function App() {
 
                 const analysis = opp.opportunityAnalyses?.[0];
                 const relevance = opp.relevanceAnalyses?.[0];
+                const analysisFormationStatus = getAnalysisFormationStatus(analysis?.profileSnapshot);
+                const readinessIsStale = hasStaleReadinessState(
+                  organizationReadiness,
+                  analysisFormationStatus,
+                  opp.dismissedReason
+                );
 
                 const analyzeState = analyzingStatus[opp.id] || 'IDLE';
 
                 return (
-                    <div className="opp-card" onClick={(e) => handleOpenDrawer(opp, e)} style={{ background: 'rgba(15, 23, 42, 0.65)', border: '1px solid var(--border-color)', borderRadius: '0.85rem', padding: '1.35rem', cursor: 'pointer' }}>
+                    <div key={opp.id} className="opp-card" onClick={(e) => handleOpenDrawer(opp, e)} style={{ background: 'rgba(15, 23, 42, 0.65)', border: '1px solid var(--border-color)', borderRadius: '0.85rem', padding: '1.35rem', cursor: 'pointer' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '0.75rem' }}>
                       <div style={{ flex: 1 }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', marginBottom: '0.55rem', flexWrap: 'wrap' }}>
                           <span className="badge badge-purple">{opp.isDemo ? 'DEMO FIXTURE' : 'OFFICIAL SOURCE'}</span>
                           <span className="badge badge-rose" style={{ background: '#881337', color: '#fecdd3' }}>Direct Eligibility: NOT_CURRENTLY_ELIGIBLE</span>
-                          <span className="badge badge-amber" style={{ background: '#78350f' }}>Readiness: PRE-INCORPORATION</span>
+                          <span className="badge badge-amber" style={{ background: '#78350f' }}>Current Org Readiness: {getCurrentReadinessLabel(organizationReadiness)}</span>
                           <span className="badge badge-blue">Required Pathway: {opp.candidateRoutingStatus || 'POTENTIAL_PATHWAY'}</span>
                           <span className="badge badge-purple" style={{ background: '#4c1d95' }}>Recommendation: {opp.candidateRoutingStatus === 'PARTNERSHIP_REQUIRED' ? 'PARTNER_DISCOVERY' : opp.candidateRoutingStatus === 'FISCAL_SPONSOR_REQUIRED' ? 'FISCAL_SPONSOR_DISCOVERY' : 'FUTURE_CYCLE_PREPARATION'}</span>
                         </div>
@@ -1270,6 +1300,16 @@ export function App() {
                         </p>
                       </div>
                     </div>
+
+                    {readinessIsStale && (
+                      <div style={{ marginTop: '0.75rem', fontSize: '0.8rem', background: 'rgba(245, 158, 11, 0.14)', border: '1px solid rgba(245, 158, 11, 0.4)', color: '#fde68a', padding: '0.6rem 0.85rem', borderRadius: '0.5rem' }}>
+                        ⚠️ <strong>Readiness state changed:</strong>{' '}
+                        {analysisFormationStatus
+                          ? `Analysis-time readiness was ${analysisFormationStatus}. `
+                          : 'Persisted routing text reflects an earlier readiness state. '}
+                        Current organization readiness is {getCurrentReadinessLabel(organizationReadiness)}. Re-analysis is required before relying on readiness-sensitive conclusions.
+                      </div>
+                    )}
 
                     <p style={{ fontSize: '0.9rem', color: '#cbd5e1', marginTop: '0.75rem' }}>{sanitizeHtmlToText(opp.description)}</p>
 
@@ -1996,8 +2036,8 @@ export function App() {
                         <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: '0.75rem' }}>
                           <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#93c5fd', marginBottom: '0.5rem' }}>Dimension Breakdown (Points Awarded / Weight)</div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                            {drawerAnalysis.analysisDimensions.map((dim: any, idx: number) => (
-                              <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#cbd5e1' }}>
+                            {drawerAnalysis.analysisDimensions.map((dim: any) => (
+                              <div key={dim.dimensionKey} style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem', color: '#cbd5e1' }}>
                                 <span>• {dim.dimensionKey} ({dim.matchStatus})</span>
                                 <strong style={{ color: dim.matchStatus === 'MATCH' ? '#34d399' : dim.matchStatus === 'MISMATCH' ? '#f87171' : '#fbbf24' }}>
                                   {dim.scoreAwarded} / {dim.weight}
@@ -2028,6 +2068,7 @@ export function App() {
                   onFetchRetrievedEvidence={handleFetchRetrievedEvidence}
                   generating={aiGenerating}
                   error={aiError}
+                  organizationReadiness={organizationReadiness}
                 />
 
                 {/* AI-2A Official Funding Documents & Citation Foundation Panel */}
@@ -2126,8 +2167,8 @@ export function App() {
                   🎯 Opportunity-Specific Positioning
                 </div>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.5rem' }}>
-                  {briefingPacket.selectedNarrativeLenses.map((lens: string, idx: number) => (
-                    <span key={idx} className="badge badge-purple" style={{ fontSize: '0.725rem' }}>Lens: {lens}</span>
+                  {briefingPacket.selectedNarrativeLenses.map((lens: string) => (
+                    <span key={lens} className="badge badge-purple" style={{ fontSize: '0.725rem' }}>Lens: {lens}</span>
                   ))}
                 </div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.4rem', color: '#cbd5e1', fontSize: '0.78rem' }}>
