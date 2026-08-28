@@ -7,6 +7,8 @@ export default defineConfig({
       'src/__tests__/developmentGroundedEvaluationWorkflow.test.ts',
       'src/__tests__/documentRetrievalAssembly.test.ts',
       'src/__tests__/groundedEvaluationFailClosed.test.ts',
+      'src/__tests__/groundedEvaluationConsistency.test.ts',
+      'src/__tests__/evidenceCatalogOrganizationConsistency.test.ts',
     ],
   },
 });

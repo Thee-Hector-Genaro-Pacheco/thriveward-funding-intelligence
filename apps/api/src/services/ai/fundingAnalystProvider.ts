@@ -65,6 +65,8 @@ export interface InputSnapshot {
     name: string;
     status: string;
     taxStatus: string;
+    samGovUeiStatus: string;
+    grantsGovStatus: string;
     mission: string;
     primaryPopulations: string[];
     primaryOutcome: string;
