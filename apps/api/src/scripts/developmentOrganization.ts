@@ -1,5 +1,6 @@
 import dotenv from 'dotenv';
 import path from 'path';
+import { createOrganizationProfile } from '../services/organizationProfilePersistenceService';
 
 dotenv.config({
   path: path.resolve(process.cwd(), '../../.env.development.local'),
@@ -31,8 +32,7 @@ async function main(): Promise<void> {
       });
     },
     createProjectThriveward(input) {
-      return prisma.organizationProfile.create({
-        data: {
+      return createOrganizationProfile(prisma.organizationProfile, {
           name: input.name,
           status: input.status,
           taxStatus: input.taxStatus,
@@ -40,8 +40,6 @@ async function main(): Promise<void> {
           primaryOutcome: input.primaryOutcome,
           coreModel: input.coreModel,
           limitations: [...input.limitations],
-        },
-        select: { id: true, name: true, status: true, taxStatus: true, limitations: true },
       });
     },
   };

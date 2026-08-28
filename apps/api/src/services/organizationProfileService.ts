@@ -1,5 +1,4 @@
 import { prisma } from '../lib/prisma';
-import { BRIDGE_FORWARD_PROFILE } from '../config/bridgeForwardProfile';
 import { AnalysisService } from './analysisService';
 
 export interface ServiceError extends Error {
@@ -25,6 +24,16 @@ export interface OrganizationReadinessSnapshot {
   samGovUeiStatus: RegistrationStatus;
   grantsGovStatus: RegistrationStatus;
   californiaEntityNumber?: string | null;
+  californiaIncorporation?: string;
+  entityType?: string;
+  filingDate?: string;
+  approvalDate?: string;
+  californiaTaxExemption?: string;
+  einStatus?: string;
+  si100Status?: string;
+  californiaCharitableRegistration?: string;
+  fiscalSponsorStatus?: string;
+  noticeText?: string;
 }
 
 export class OrganizationProfileService {
@@ -43,10 +52,23 @@ export class OrganizationProfileService {
       });
     }
 
-    const formationStatus = org?.status || 'PRE_INCORPORATION';
+    const formationStatus = org?.status || 'UNKNOWN';
     const isIncorporated = formationStatus === 'INCORPORATED';
-    const taxStatus = org?.taxStatus || 'NOT_OBTAINED';
+    const taxStatus = org?.taxStatus || 'UNKNOWN';
     const limitations = org?.limitations || [];
+
+    const statusFromEvidence = (pattern: RegExp): string => {
+      const evidence = limitations.find((value) => pattern.test(value));
+      if (!evidence) return 'UNKNOWN';
+      if (/\bNOT_REGISTERED\b|\bnot registered\b|\bunregistered\b/i.test(evidence)) return 'NOT_REGISTERED';
+      if (/\bNOT_OBTAINED\b|\bnot (?:yet )?(?:been )?obtained\b/i.test(evidence)) return 'NOT_OBTAINED';
+      if (/\bNOT_VERIFIED\b|\bnot verified\b/i.test(evidence)) return 'NOT_VERIFIED';
+      if (/\bNOT_FILED\b|\bnot filed\b/i.test(evidence)) return 'NOT_FILED';
+      if (/\bREGISTERED\b|\bregistered\b/i.test(evidence)) return 'REGISTERED';
+      if (/\bVERIFIED\b|\bverified\b|\bobtained\b|\bapproved\b/i.test(evidence)) return 'VERIFIED';
+      if (/\bFILED\b|\bfiled\b/i.test(evidence)) return 'FILED';
+      return 'UNKNOWN';
+    };
 
     // Parse entity number dynamically from limitations or profile evidence
     let californiaEntityNumber: string | null = null;
@@ -60,7 +82,7 @@ export class OrganizationProfileService {
       }
     }
 
-    // Parse 501(c)(3) status from limitations/taxStatus (default UNKNOWN)
+    // Federal exemption status requires explicit 501(c)(3) evidence.
     let irs501c3Status: Irs501c3Status = 'UNKNOWN';
     const c3Lim = limitations.find((l) => /501\(c\)\(3\)/i.test(l));
     if (c3Lim) {
@@ -69,10 +91,6 @@ export class OrganizationProfileService {
       } else if (/not/i.test(c3Lim)) {
         irs501c3Status = 'NOT_OBTAINED';
       }
-    } else if (taxStatus === 'VERIFIED') {
-      irs501c3Status = 'VERIFIED';
-    } else if (taxStatus === 'NOT_OBTAINED') {
-      irs501c3Status = 'NOT_OBTAINED';
     }
 
     // Parse SAM.gov/UEI status from limitations (default UNKNOWN)
@@ -98,13 +116,25 @@ export class OrganizationProfileService {
     }
 
     return {
-      organizationName: 'Project Thriveward',
+      organizationName: org?.name || 'UNKNOWN',
       formationStatus,
       taxStatus,
       irs501c3Status,
       samGovUeiStatus,
       grantsGovStatus,
       californiaEntityNumber,
+      californiaIncorporation: isIncorporated
+        ? 'VERIFIED'
+        : formationStatus === 'PRE_INCORPORATION' ? 'NOT_VERIFIED' : 'UNKNOWN',
+      entityType: 'UNKNOWN',
+      filingDate: 'UNKNOWN',
+      approvalDate: 'UNKNOWN',
+      californiaTaxExemption: statusFromEvidence(/(?:california|ftb).*(?:tax[- ]exempt|exemption)/i),
+      einStatus: statusFromEvidence(/\bein\b/i),
+      si100Status: statusFromEvidence(/\bsi[- ]?100\b/i),
+      californiaCharitableRegistration: statusFromEvidence(/(?:attorney general|charitable registration)/i),
+      fiscalSponsorStatus: statusFromEvidence(/fiscal sponsor/i),
+      noticeText: 'Readiness states reflect persisted organization-profile evidence; UNKNOWN means the state is not established by current evidence.',
     };
   }
   /**
@@ -217,38 +247,12 @@ export class OrganizationProfileService {
    * Retrieves readiness and formation status for Project Thriveward.
    */
   public static async getReadinessStatus() {
-    let org = await prisma.organizationProfile.findFirst({
-      where: { name: 'Project Thriveward' },
-    });
+    const snapshot = await OrganizationProfileService.getReadinessSnapshot();
+    return { ...snapshot, status: snapshot.formationStatus };
+  }
 
-    if (!org) {
-      org = await prisma.organizationProfile.findFirst({
-        orderBy: { createdAt: 'asc' },
-      });
-    }
-
-    const isIncorporated = org?.status === 'INCORPORATED';
-
-    return {
-      organizationName: 'Project Thriveward',
-      status: org?.status || 'PRE_INCORPORATION',
-      californiaIncorporation: isIncorporated ? 'VERIFIED' : 'NOT_VERIFIED',
-      entityType: isIncorporated ? 'Nonprofit Public Benefit Corporation' : 'PRE_INCORPORATION',
-      californiaEntityNumber: isIncorporated ? 'B20260372748' : 'NOT_VERIFIED',
-      filingDate: isIncorporated ? 'August 15, 2026' : 'NOT_VERIFIED',
-      approvalDate: isIncorporated ? 'August 17, 2026' : 'NOT_VERIFIED',
-      irs501c3Status: 'NOT_VERIFIED',
-      californiaTaxExemption: 'NOT_VERIFIED',
-      einStatus: 'NOT_OBTAINED',
-      si100Status: 'NOT_FILED',
-      californiaCharitableRegistration: 'NOT_REGISTERED',
-      samGovUeiStatus: 'NOT_REGISTERED',
-      grantsGovStatus: 'NOT_REGISTERED',
-      fiscalSponsorStatus: 'NOT_VERIFIED',
-      taxStatus: 'NOT_OBTAINED',
-      noticeText:
-        'California incorporation has been verified. Incorporation does not establish federal 501(c)(3) status, California tax exemption, SAM.gov registration, or direct eligibility for every funding opportunity.',
-    };
+  public static async getProfile() {
+    return OrganizationProfileService.getReadinessStatus();
   }
 
   /**

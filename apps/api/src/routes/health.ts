@@ -1,16 +1,33 @@
 import { Router, Request, Response } from 'express';
-import { BRIDGE_FORWARD_PROFILE } from '@thriveward/shared';
 import { prisma } from '../lib/prisma';
 import { AiFundingAnalystService } from '../services/aiFundingAnalystService';
 import { DocumentIndexingService } from '../services/documentIndexingService';
+import { OrganizationProfileService, OrganizationReadinessSnapshot } from '../services/organizationProfileService';
 
 export const healthRouter = Router();
+
+export function buildHealthOrganizationStatus(readiness: OrganizationReadinessSnapshot | null) {
+  return {
+    name: readiness?.organizationName || 'UNKNOWN',
+    status: readiness?.formationStatus || 'UNKNOWN',
+    taxStatus: readiness?.taxStatus || 'UNKNOWN',
+    irs501c3Status: readiness?.irs501c3Status || 'UNKNOWN',
+    einStatus: readiness?.einStatus || 'UNKNOWN',
+    californiaIncorporation: readiness?.californiaIncorporation || 'UNKNOWN',
+    californiaTaxExemption: readiness?.californiaTaxExemption || 'UNKNOWN',
+    si100Status: readiness?.si100Status || 'UNKNOWN',
+    californiaCharitableRegistration: readiness?.californiaCharitableRegistration || 'UNKNOWN',
+    samGovUeiStatus: readiness?.samGovUeiStatus || 'UNKNOWN',
+    grantsGovStatus: readiness?.grantsGovStatus || 'UNKNOWN',
+  };
+}
 
 healthRouter.get('/', async (req: Request, res: Response) => {
   const pythonAgentUrl = process.env.FUNDING_AGENT_URL || 'http://localhost:8000';
   let pythonAgentStatus = 'UNKNOWN';
   let dbStatus = 'UNKNOWN';
   let isDbHealthy = false;
+  let readiness: OrganizationReadinessSnapshot | null = null;
 
   try {
     const controller = new AbortController();
@@ -30,6 +47,7 @@ healthRouter.get('/', async (req: Request, res: Response) => {
   try {
     await prisma.$queryRaw`SELECT 1`;
     const oppCount = await prisma.fundingOpportunity.count();
+    readiness = await OrganizationProfileService.getReadinessSnapshot();
     dbStatus = `UP (PostgreSQL 16, ${oppCount} opportunities persisted)`;
     isDbHealthy = true;
   } catch (err: any) {
@@ -44,11 +62,7 @@ healthRouter.get('/', async (req: Request, res: Response) => {
     service: 'Thriveward Funding Intelligence Core API',
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV || 'development',
-    organization: {
-      name: BRIDGE_FORWARD_PROFILE.name,
-      status: BRIDGE_FORWARD_PROFILE.status,
-      taxStatus: BRIDGE_FORWARD_PROFILE.taxStatus,
-    },
+    organization: buildHealthOrganizationStatus(readiness),
     integrations: {
       fundingAgent: {
         url: pythonAgentUrl,

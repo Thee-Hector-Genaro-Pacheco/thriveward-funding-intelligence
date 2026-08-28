@@ -452,11 +452,11 @@ export class ExclusionGateEngine {
       };
     }
 
-    const formationStatus = readinessSnapshot?.formationStatus || 'PRE_INCORPORATION';
+    const formationStatus = readinessSnapshot?.formationStatus || 'UNKNOWN';
     const isIncorporated = formationStatus === 'INCORPORATED';
-    const samStatus = readinessSnapshot?.samGovUeiStatus || 'NOT_REGISTERED';
-    const grantsGovStatus = readinessSnapshot?.grantsGovStatus || 'NOT_REGISTERED';
-    const c3Status = readinessSnapshot?.irs501c3Status || 'NOT_OBTAINED';
+    const samStatus = readinessSnapshot?.samGovUeiStatus || 'UNKNOWN';
+    const grantsGovStatus = readinessSnapshot?.grantsGovStatus || 'UNKNOWN';
+    const c3Status = readinessSnapshot?.irs501c3Status || 'UNKNOWN';
     const entityNum = readinessSnapshot?.californiaEntityNumber || null;
 
     const incLabel = entityNum ? `California incorporation is verified (${entityNum})` : 'California incorporation is verified';

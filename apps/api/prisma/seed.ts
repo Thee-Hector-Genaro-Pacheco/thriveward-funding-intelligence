@@ -1,4 +1,5 @@
 import { PrismaClient, TriStateStatus, OpportunityStatus, EligibilityStatus } from '@prisma/client';
+import { ensureSeedOrganizationProfile } from '../src/services/organizationProfilePersistenceService';
 
 const prisma = new PrismaClient();
 
@@ -6,18 +7,7 @@ async function main() {
   console.log('🌱 Seeding deterministic Bridge AI demonstration records...');
 
   // 1. Organization Profile (Project Thriveward)
-  const orgProfile = await prisma.organizationProfile.upsert({
-    where: { id: 'demo-org-profile-001' },
-    update: {
-      name: 'Project Thriveward',
-      status: 'PRE_INCORPORATION',
-      taxStatus: 'NOT_OBTAINED',
-      primaryPopulations: ['Justice-involved adults', 'System-impacted young people'],
-      primaryOutcome: 'Successful reentry and long-term independence',
-      coreModel:
-        'Project Thriveward advances successful reentry and long-term independence for justice-involved adults and system-impacted young people through housing and basic-needs stabilization, individualized reentry support, career-connected education, technology and skilled-trades training, mentorship, employment pathways, and sustained community support.',
-    },
-    create: {
+  const orgProfile = await ensureSeedOrganizationProfile(prisma.organizationProfile, {
       id: 'demo-org-profile-001',
       name: 'Project Thriveward',
       status: 'PRE_INCORPORATION',
@@ -46,7 +36,6 @@ async function main() {
           { id: 'demo-prog-006', name: 'Future Construction & Trades Pathway', description: 'Trades instruction (Painting, skilled trades).', isOperational: false, keyFocus: 'Trades' },
         ],
       },
-    },
   });
 
   // 2. Demonstration Funding Sources

@@ -4,6 +4,16 @@ import { OrganizationProfileService } from '../services/organizationProfileServi
 
 export const organizationRouter = Router();
 
+organizationRouter.get('/profile', requireAuth, async (_req: Request, res: Response) => {
+  try {
+    return res.status(200).json(await OrganizationProfileService.getProfile());
+  } catch (err: any) {
+    return res.status(500).json({
+      error: err.message || 'Failed to retrieve organization profile',
+    });
+  }
+});
+
 /**
  * POST /api/organization/reconcile-formation
  * Reconciles official California incorporation formation evidence.

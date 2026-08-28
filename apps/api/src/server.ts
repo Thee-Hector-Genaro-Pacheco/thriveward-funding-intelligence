@@ -14,7 +14,6 @@ import { fundingDocumentRouter } from './routes/fundingDocumentRoutes';
 import { documentIndexingRouter } from './routes/documentIndexingRoutes';
 import { organizationRouter } from './routes/organizationRoutes';
 import { requireAuth, csrfProtection } from './middleware/authMiddleware';
-import { BRIDGE_FORWARD_PROFILE } from '@thriveward/shared';
 import { initAiAcceptanceModeGuard } from './services/ai/aiAcceptanceModeGuard';
 
 dotenv.config();
@@ -46,12 +45,6 @@ app.use('/api', requireAuth, aiEvaluationRouter);
 app.use(fundingDocumentRouter);
 app.use('/api', requireAuth, documentIndexingRouter);
 app.use('/api', requireAuth, organizationRouter);
-
-
-// Organization profile route (Protected)
-app.get('/api/profile', requireAuth, (req: Request, res: Response) => {
-  res.json(BRIDGE_FORWARD_PROFILE);
-});
 
 // Root API Info
 app.get('/', (req: Request, res: Response) => {
